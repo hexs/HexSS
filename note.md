@@ -17,3 +17,28 @@ pip install setuptools wheel twine
 ```shell
 python setup.py sdist bdist_wheel
 ```
+
+4. Set the proxy environment variables. if you need to use proxy:
+
+- For Windows (Command Prompt):
+  ```shell
+  set HTTPS_PROXY=http://<user>:<pass>@<ip>:<port>
+  ```
+  ```shell
+  set HTTP_PROXY=hhttp://<user>:<pass>@<ip>:<port>
+  ```
+
+- For Windows (PowerShell):
+
+  ```shell
+  $env:HTTPS_PROXY = "http://<user>:<pass>@<ip>:<port>"
+  ```
+  ```shell
+  $env:HTTP_PROXY = "http://<user>:<pass>@<ip>:<port>"
+  ```
+
+5. upload 
+
+```shell
+twine upload dist/*
+```

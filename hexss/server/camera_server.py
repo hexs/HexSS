@@ -100,7 +100,7 @@ def index():
             'height': data['camera'][camera_id]['width_height_from_cap'][1]
         } for camera_id in range(len(data['camera']))
     ]
-    return render_template('index.html', camera_states=camera_states)
+    return render_template('simulate_CCTV.html', camera_states=camera_states)
 
 
 @app.route('/update_cameras', methods=['POST'])
@@ -164,7 +164,7 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 
-def start_camera_server():
+def run():
     multiprocessing.freeze_support()
     manager = multiprocessing.Manager()
     config = json_load('camera_server_config.json', {
@@ -215,4 +215,4 @@ def start_camera_server():
 
 
 if __name__ == "__main__":
-    start_camera_server()
+    run()

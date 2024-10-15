@@ -1,7 +1,0 @@
-.idea/
-.venv/
-__pycache__/
-*/__pycache__/
-output/
-config.json
-*.mp4

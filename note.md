@@ -25,7 +25,7 @@ python setup.py sdist bdist_wheel
   set HTTPS_PROXY=http://<user>:<pass>@<ip>:<port>
   ```
   ```shell
-  set HTTP_PROXY=hhttp://<user>:<pass>@<ip>:<port>
+  set HTTP_PROXY=http://<user>:<pass>@<ip>:<port>
   ```
 
 - For Windows (PowerShell):

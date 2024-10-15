@@ -7,17 +7,20 @@ class Multicore:
         self.processes = []
         self.manager = Manager()
         self.data = self.manager.dict()
+        self.func_join = []
 
     def set_data(self, data: dict):
         self.data = dict_to_manager_dict(self.manager, data)
 
-    def add_func(self, func):
+    def add_func(self, func, join=True):
         self.processes.append(Process(target=func, args=(self.data,)))
+        self.func_join.append(join)
 
     def start(self):
         for process in self.processes:
             process.start()
 
     def join(self):
-        for process in self.processes:
-            process.join()
+        for i, process in enumerate(self.processes):
+            if self.func_join[i]:
+                process.join()

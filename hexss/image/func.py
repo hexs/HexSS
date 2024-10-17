@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import urllib.request
 from typing import Optional, Union, Literal
+import os
+
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 
 

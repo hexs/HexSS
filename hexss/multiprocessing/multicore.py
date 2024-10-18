@@ -12,8 +12,8 @@ class Multicore:
     def set_data(self, data: dict):
         self.data = dict_to_manager_dict(self.manager, data)
 
-    def add_func(self, func, join=True):
-        self.processes.append(Process(target=func, args=(self.data,)))
+    def add_func(self, func, *args, join=True):
+        self.processes.append(Process(target=func, args=(self.data,*args)))
         self.func_join.append(join)
 
     def start(self):

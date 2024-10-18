@@ -100,7 +100,7 @@ def index():
             'height': data['camera'][camera_id]['width_height_from_cap'][1]
         } for camera_id in range(len(data['camera']))
     ]
-    return render_template('simulate_CCTV.html', camera_states=camera_states)
+    return render_template('camera.html', camera_states=camera_states)
 
 
 @app.route('/update_cameras', methods=['POST'])

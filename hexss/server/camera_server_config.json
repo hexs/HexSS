@@ -1,0 +1,12 @@
+{
+    "ipv4": "auto",
+    "port": 2000,
+    "camera": [
+        {
+            "width_height": [
+                640,
+                480
+            ]
+        }
+    ]
+}

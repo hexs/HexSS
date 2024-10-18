@@ -3,7 +3,7 @@ import json
 from typing import Dict, Any
 
 
-def json_load(file_path: str, default: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def json_load(file_path: str, default: Dict[str, Any] | None = None, dump=False) -> Dict[str, Any]:
     if not file_path.lower().endswith('.json'):
         raise ValueError("File extension must be .json")
 
@@ -15,6 +15,8 @@ def json_load(file_path: str, default: Dict[str, Any] | None = None) -> Dict[str
                 data.update(json.load(f))
             except json.JSONDecodeError as e:
                 raise json.JSONDecodeError(f"Invalid JSON in {file_path}: {str(e)}", e.doc, e.pos) from e
+    if dump:
+        json_dump(file_path, data)
 
     return data
 
@@ -54,10 +56,10 @@ def json_update(file_path: str, new_data: Dict[str, Any], indent: int = 4) -> Di
 
 
 if __name__ == '__main__':
-    config = json_load('config.json', default={
+    config = json_load('config.json', {
         'device': 'PC',
         'model_name': '-',
         '2': '1'
-    })
-    json_update('config.json', config)
+    },True)
+    # json_update('config.json', config)
     print(config)

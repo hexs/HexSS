@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Explorer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<header>
+    <form id="upload-form" method="post" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
+        <input type="file" name="file" id="file-upload">
+        <input type="hidden" name="current_path" value="{{ current_path }}">
+        <button type="submit" class="btn">Upload</button>
+        <button type="button" id="create-file-btn" class="btn">Create file</button>
+        <button type="button" id="create-folder-btn" class="btn">Create folder</button>
+    </form>
+</header>
+<div class="main-content">
+    <p>Current Path: {{ current_path.replace('\\', '/') }}</p>
+    <h3>Directories:</h3>
+    <ul id="directory-list">
+        {% if current_path %}
+            <li>
+                <a href="{{ url_for('path', subpath='/'.join(current_path.replace('\\', '/').split('/')[:-1])) }}">..</a>
+            </li>
+        {% endif %}
+        {% for directory in directories %}
+            <li><a href="{{ url_for('path', subpath=(current_path + '/' + directory).replace('\\', '/')) }}"
+                   data-path="{{ (current_path + '/' + directory).replace('\\', '/') }}">{{ directory }}</a></li>
+        {% endfor %}
+    </ul>
+    <h3>Files:</h3>
+    <ul id="file-list">
+        {% for file in files %}
+            <li><a href="{{ url_for('path', subpath=(current_path + '/' + file).replace('\\', '/')) }}"
+                   data-path="{{ (current_path + '/' + file).replace('\\', '/') }}">{{ file }}</a></li>
+        {% endfor %}
+    </ul>
+</div>
+<div id="context-menu" class="context-menu">
+    <ul>
+        <li id="download-option">Download</li>
+        <li id="rename-option">Rename</li>
+        <li id="delete-option">Delete</li>
+        <li id="edit-option">Edit</li>
+        <li id="extract-option">Extract</li>
+    </ul>
+</div>
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <label for="file-name">File name:</label>
+        <input type="text" id="file-name">
+        <textarea id="edit-content"></textarea>
+        <div class="btn-container">
+            <button id="save-edit" class="btn">Save</button>
+            <button id="cancel-edit" class="btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

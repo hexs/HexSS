@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        button {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            button {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+<h1>Running Processes</h1>
+<button onclick="startSubprocess()">Start Subprocess</button>
+<button onclick="countToTen()">Count to Ten</button>
+<button onclick="exitApp()">Exit App</button>
+<ul id='process-list'></ul>
+
+<script>
+    async function updateProcessList() {
+        const response = await fetch('/show_running_processes');
+        const data = await response.json();
+        const processList = document.getElementById('process-list');
+        processList.innerHTML = '';
+        data.running_processes.forEach(process => {
+            const li = document.createElement('li');
+            li.textContent = `${process.name} (${process.key})`;
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Close Process';
+            closeButton.onclick = () => closeProcess(process.key);
+            li.appendChild(closeButton);
+            processList.appendChild(li);
+        });
+    }
+
+    setInterval(updateProcessList, 1000); // Update every second
+
+    async function startSubprocess() {
+        try {
+            const response = await fetch('/exe/auto-py-to-exe');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log(data.message);
+            updateProcessList();
+        } catch (error) {
+            console.error('Error starting subprocess:', error);
+        }
+    }
+
+    async function countToTen() {
+        const response = await fetch('/10');
+        const data = await response.json();
+        console.log(data.message);
+        updateProcessList();
+    }
+
+    async function closeProcess(key) {
+        const response = await fetch(`/close/${key}`);
+        const data = await response.json();
+        console.log(data.message);
+        updateProcessList();
+    }
+
+    async function exitApp() {
+        const response = await fetch('/exit');
+        const data = await response.json();
+        console.log(data.message);
+        updateProcessList();
+    }
+</script>
+</body>
+</html>

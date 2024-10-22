@@ -150,11 +150,10 @@ def extract_file():
 
 def run():
     config = json_load('file_manager_server_config.json', {
-        'ipv4': 'auto',
+        'ipv4': get_ipv4(),
         'port': 2001
     }, True)
-    if config['ipv4'] == 'auto':
-        config['ipv4'] = get_ipv4()
+
     app.run(config['ipv4'], config['port'], debug=True)
 
 

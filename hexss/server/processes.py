@@ -1,9 +1,9 @@
 import subprocess
 import time
-import random
 import os
 from threading import Thread, Event
 from flask import Flask, jsonify, render_template, request, redirect, url_for
+from flask_socketio import SocketIO
 from hexss import random_str
 
 
@@ -32,22 +32,27 @@ def run_exe(stop_event, script_path):
 
 def run_python(stop_event, script_path):
     try:
-        process = subprocess.Popen(['python', script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen(['python', script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True, bufsize=1, universal_newlines=True)
         while not stop_event.is_set():
             if process.poll() is not None:
                 break
-            output = process.stdout.readline()
-            if output:
-                print(output.strip())
+            line = process.stdout.readline()
+            if line:
+                print(line.strip())  # For server-side logging
+                socketio.emit('output', {'data': line.strip(), 'key': script_path})
             time.sleep(0.1)
         if process.poll() is None:
             process.terminate()
         return_code = process.wait()
         if return_code != 0:
             print(f"Python script exited with error code {return_code}")
-            print(process.stderr.read())
+            error_output = process.stderr.read()
+            print(error_output)
+            socketio.emit('output', {'data': error_output, 'key': script_path})
     except Exception as e:
         print(f"Error running Python script: {e}")
+        socketio.emit('output', {'data': str(e), 'key': script_path})
 
 
 processes = {}
@@ -94,6 +99,7 @@ def close_all_processes():
 
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 
 @app.route('/')
@@ -114,7 +120,6 @@ def show_processes():
 
 @app.route('/exe/<program_name>')
 def start_exe(program_name):
-
     key = start_process(run_exe, 'run_subprocess', program_name)
     return jsonify({"message": f"Subprocess started with key: {key}", "key": key})
 
@@ -148,4 +153,4 @@ def exit_app():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)

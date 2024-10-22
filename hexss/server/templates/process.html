@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Process Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,35 +23,51 @@
         }
 
         li {
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
         }
 
         button {
             margin-right: 10px;
             cursor: pointer;
+            padding: 5px 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
         }
 
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-
-            button {
-                display: block;
-                width: 100%;
-                margin-bottom: 10px;
-            }
+        .terminal {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #f8f8f8;
         }
     </style>
 </head>
 <body>
-<h1>Running Processes</h1>
+<h1>Process Manager</h1>
 <button onclick="startSubprocess()">Start Subprocess</button>
 <button onclick="countToTen()">Count to Ten</button>
+<button onclick="startPythonScript()">Start Python Script</button>
 <button onclick="exitApp()">Exit App</button>
 <ul id='process-list'></ul>
 
 <script>
+    const socket = io();
+    socket.on('connect', function () {
+        console.log('Connected to server');
+    });
+
+    socket.on('connect_error', function (error) {
+        console.error('Connection error:', error);
+    });
+
     async function updateProcessList() {
         const response = await fetch('/show_running_processes');
         const data = await response.json();
@@ -58,16 +75,37 @@
         processList.innerHTML = '';
         data.running_processes.forEach(process => {
             const li = document.createElement('li');
-            li.textContent = `${process.name} (${process.key})`;
+            li.innerHTML = `<strong>${process.name}</strong> (${process.key})`;
+
             const closeButton = document.createElement('button');
             closeButton.textContent = 'Close Process';
             closeButton.onclick = () => closeProcess(process.key);
             li.appendChild(closeButton);
+
+            if (process.name.startsWith('run_python:')) {
+                const terminalBox = document.createElement('div');
+                terminalBox.className = 'terminal';
+                terminalBox.id = `terminal-${process.key}`;
+                li.appendChild(terminalBox);
+                console.log('Created terminal for:', process.key);  // For debugging
+            }
             processList.appendChild(li);
         });
     }
 
     setInterval(updateProcessList, 1000); // Update every second
+
+    socket.on('output', function (data) {
+        console.log('Received output:', data);
+        const terminalId = `terminal-${data.key}`;
+        const terminal = document.getElementById(terminalId);
+        if (terminal) {
+            terminal.textContent += data.data + '\n';
+            terminal.scrollTop = terminal.scrollHeight;
+        } else {
+            console.error('Terminal not found for key:', data.key);
+        }
+    });
 
     async function startSubprocess() {
         try {
@@ -88,6 +126,23 @@
         const data = await response.json();
         console.log(data.message);
         updateProcessList();
+    }
+
+    async function startPythonScript() {
+        const scriptPath = prompt("Enter the path to the Python script:");
+        if (scriptPath) {
+            try {
+                const response = await fetch(`/python/${scriptPath}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log(data.message);
+                updateProcessList();
+            } catch (error) {
+                console.error('Error starting Python script:', error);
+            }
+        }
     }
 
     async function closeProcess(key) {

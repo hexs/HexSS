@@ -87,16 +87,15 @@
                 terminalBox.className = 'terminal';
                 terminalBox.id = `terminal-${process.key}`;
                 li.appendChild(terminalBox);
-                console.log('Created terminal for:', process.key);  // For debugging
+                console.log('Created terminal for:', process.key);
             }
             processList.appendChild(li);
         });
     }
 
-    setInterval(updateProcessList, 1000); // Update every second
+    setInterval(updateProcessList, 1000);
 
     socket.on('output', function (data) {
-        console.log('Received output:', data);
         const terminalId = `terminal-${data.key}`;
         const terminal = document.getElementById(terminalId);
         if (terminal) {

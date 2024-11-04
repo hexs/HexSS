@@ -4,12 +4,9 @@ import shutil
 import zipfile
 import io
 from werkzeug.utils import secure_filename
-
-from hexss.json import json_load
-from hexss import get_ipv4
+from hexss import json_load, get_ipv4
 
 app = Flask(__name__)
-
 ROOT_DIR = "/"
 
 

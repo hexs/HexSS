@@ -1,15 +1,13 @@
-import multiprocessing
 import time
 from typing import Dict, Any, List
 import numpy as np
 from flask import Flask, render_template, Response, request, redirect, url_for
-import socket
 import cv2
 from datetime import datetime
-from hexss import json_load, json_update, dict_to_manager_dict
+from hexss import json_load, json_update, get_ipv4
+from hexss.threading import Multithread
 import platform
 import logging
-import signal
 import sys
 
 if platform.system() == "Windows":
@@ -165,23 +163,18 @@ def signal_handler(signum, frame):
 
 
 def run():
-    multiprocessing.freeze_support()
-    manager = multiprocessing.Manager()
-    config = json_load('camera_server_config.json', {
-        "ipv4": "auto",
+    # multiprocessing.freeze_support()
+    data = json_load('camera_server_config.json', {
+        "ipv4": get_ipv4(),
         "port": 2000,
         "camera": [
             {
                 "width_height": [640, 480]
             }
         ]
-    })
-    json_update('camera_server_config.json', config)
-    data = dict_to_manager_dict(manager, config)
-    if data['ipv4'] == 'auto':
-        hostname = socket.gethostname()
-        data['ipv4'] = socket.gethostbyname(hostname)
+    }, dump=True)
 
+    m = Multithread()
     for camera_id in range(len(data['camera'])):
         data['camera'][camera_id]['status'] = False
         data['camera'][camera_id]['img'] = np.full((480, 640, 3), (50, 50, 50), dtype=np.uint8)
@@ -190,28 +183,13 @@ def run():
         data['camera'][camera_id]['setup'] = False
     data['display_capture'] = np.full((480, 640, 3), (50, 50, 50), dtype=np.uint8)
 
-    processes: List[multiprocessing.Process] = [
-        multiprocessing.Process(target=video_capture, args=(data, camera_id))
-        for camera_id in range(len(data['camera']))
-    ]
-    processes.append(multiprocessing.Process(target=display_capture, args=(data,)))
-    processes.append(multiprocessing.Process(target=run_server, args=(data,)))
+    for camera_id in range(len(data['camera'])):
+        m.add_func(video_capture, args=(data, camera_id))
+    m.add_func(display_capture, args=(data,))
+    m.add_func(run_server, args=(data,), join=False)
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    for process in processes:
-        process.start()
-
-    try:
-        for process in processes:
-            process.join()
-    except KeyboardInterrupt:
-        logging.info("Keyboard interrupt received. Terminating processes...")
-    finally:
-        for process in processes:
-            process.terminate()
-            process.join()
+    m.start()
+    m.join()
 
 
 if __name__ == "__main__":

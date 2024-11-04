@@ -1,7 +1,6 @@
 from multiprocessing import Process, Manager
 from hexss.multiprocessing.func import dict_to_manager_dict
-import os
-import signal
+import hexss
 
 
 class Multicore:
@@ -28,4 +27,4 @@ class Multicore:
                 process.join()
 
     def kill(self):
-        os.kill(os.getpid(), signal.SIGINT)
+        hexss.kill()

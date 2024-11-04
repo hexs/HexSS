@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multithread Status</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+<h1>Multithread Status</h1>
+<table id="statusTable">
+    <thead>
+    <tr>
+        <th>Thread Name</th>
+        <th>Status</th>
+        <th>Join</th>
+    </tr>
+    </thead>
+    <tbody id="statusBody">
+    </tbody>
+</table>
+<button id="closeButton">Close Application</button>
+
+<script>
+    //for send data from python
+    const statusBody = document.getElementById('statusBody');
+    const eventSource = new EventSource('/status');
+
+    eventSource.onmessage = function (event) {
+        const status = JSON.parse(event.data);
+        statusBody.innerHTML = '';
+        status.forEach(thread => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                    <td>${thread.name}</td>
+                    <td>${thread.status}</td>
+                    <td>${thread.join}</td>
+                `;
+            statusBody.appendChild(row);
+        });
+    };
+
+    // for use with javascript to request data
+    // const statusBody = document.getElementById('statusBody');
+    //
+    // function updateStatus() {
+    //     fetch('/api/status')
+    //         .then(response => response.json())
+    //         .then(status => {
+    //             statusBody.innerHTML = '';
+    //             status.forEach(thread => {
+    //                 const row = document.createElement('tr');
+    //                 row.innerHTML = `
+    //                         <td>${thread.name}</td>
+    //                         <td>${thread.status}</td>
+    //                         <td>${thread.join}</td>
+    //                      `;
+    //                 statusBody.appendChild(row);
+    //             });
+    //         })
+    //         .catch(error => console.error('Error fetching status:', error));
+    // }
+    //
+    // setInterval(updateStatus, 500);
+
+    document.getElementById('closeButton').addEventListener('click', function () {
+        fetch('/shutdown', {method: 'POST'})
+            .then(() => {
+                eventSource.close();
+                window.close();
+            });
+    });
+</script>
+</body>
+</html>

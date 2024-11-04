@@ -1,3 +1,5 @@
 include hexss/server/templates/*.html
 include hexss/server/static/*.js
 include hexss/server/static/*.css
+
+include hexss/example/templates/index.html

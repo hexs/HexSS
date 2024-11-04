@@ -38,15 +38,33 @@ def close_port_(ip, port):
         print(f"Error closing port: {e}")
 
 
-def close_port(ip: str, port: int):
+def is_port_available(ip: str, port: int) -> bool:
     """
-    Close a specific port on a given IP address.
+    Check if a specific port on a given IP address is available.
 
-    :param ip: IP address
-    :param port: Port number
+    :param ip: IP address as a string
+    :param port: Port number as an integer
+    :return: True if the port is available, False otherwise
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2)  # Set a 2-second timeout
+            result = sock.connect_ex((ip, port))
+            print(result)
+            return result != 0
+    except (OSError, ValueError):
+        return False
+
+
+def close_port(ip: str, port: int) -> None:
+    """
+    Close a specific TCP port on a given IP address.
+
+    :param ip: IP address as a string
+    :param port: Port number as an integer
     :return: None
 
-    Example: close_port("192.168.225.137", 2002)
+    Example: close_tcp_port("192.168.225.137", 2002)
     """
     try:
         if not isinstance(port, int) or port < 0 or port > 65535:

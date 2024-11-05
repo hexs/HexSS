@@ -4,7 +4,7 @@ from hexss.control_robot import app
 
 
 def run():
-    config = json_load('config.json', {
+    config = json_load('control_robot_server_config.json', {
         "ipv4": get_ipv4(),
         "port": 2002,
     }, True)

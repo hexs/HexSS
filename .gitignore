@@ -6,5 +6,7 @@ build/
 dist/
 *egg-info/
 
+*config.json
+
 test.py
 note2.md

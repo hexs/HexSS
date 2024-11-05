@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Control Panel</title>
+    <script src="static/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button, input {
+            margin: 5px;
+            padding: 5px;
+        }
+        .jog-control {
+            margin-bottom: 10px;
+        }
+        h2 {
+            margin: 30px 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Robot Control Panel</h1>
+
+    <section aria-labelledby="jog-control-heading">
+        <h2 id="jog-control-heading">Jog Control</h2>
+        <div id="jog-controls"></div>
+    </section>
+
+    <section aria-labelledby="other-controls-heading">
+        <h2 id="other-controls-heading">Other Controls</h2>
+        <div>
+            <button id="servo-on">Servo ON</button>
+            <button id="servo-off">Servo OFF</button>
+        </div>
+        <div>
+            <button id="pause-on">Pause ON</button>
+            <button id="pause-off">Pause OFF</button>
+        </div>
+        <div>
+            <button id="alarm-reset">Alarm Reset</button>
+            <button id="home">Home</button>
+            <button id="current-position">Current Position</button>
+        </div>
+    </section>
+
+    <section aria-labelledby="move-to-heading">
+        <h2 id="move-to-heading">Move To</h2>
+        <div>
+            <input type="number" id="move-to-row" placeholder="Row" aria-label="Row number">
+            <button id="move-to">Move To</button>
+        </div>
+    </section>
+
+    <section aria-labelledby="set-to-heading">
+        <h2 id="set-to-heading">Set To</h2>
+        <div>
+            <input type="text" id="set-to-slave" placeholder="Slave" aria-label="Slave ID">
+            <input type="number" id="set-to-row" placeholder="Row" aria-label="Row number">
+            <input type="number" id="set-to-position" placeholder="Position" aria-label="Position">
+            <input type="number" id="set-to-speed" placeholder="Speed" aria-label="Speed">
+            <input type="number" id="set-to-acc" placeholder="Acceleration" aria-label="Acceleration">
+            <input type="number" id="set-to-dec" placeholder="Deceleration" aria-label="Deceleration">
+            <button id="set-to">Set To</button>
+        </div>
+    </section>
+
+    <section aria-labelledby="status-heading">
+        <h2 id="status-heading">Status</h2>
+        <pre id="status" aria-live="polite"></pre>
+        <pre id="error_status" aria-live="polite"></pre>
+    </section>
+
+    <script>
+        $(document).ready(function () {
+            initJogControls();
+            bindEventHandlers();
+            setInterval(currentPosition, 1000);
+        });
+
+        function initJogControls() {
+            const jogControlsHtml = ['01', '02', '03', '04'].map(slaveId => `
+                <div class="jog-control">
+                    <label>Slave ${slaveId}:</label>
+                    <button class="jog-btn" data-slave="${slaveId}" data-direction="plus">Jog +</button>
+                    <button class="jog-btn" data-slave="${slaveId}" data-direction="minus">Jog -</button>
+                    <span id="position${slaveId}">??? mm</span>
+                </div>
+            `).join('');
+            $('#jog-controls').html(jogControlsHtml);
+        }
+
+        function bindEventHandlers() {
+            $(document).on('mousedown mouseup mouseleave', '.jog-btn', function(event) {
+                const slave = $(this).data('slave');
+                const direction = $(this).data('direction');
+                jog(slave, direction === 'plus', event.type === 'mousedown');
+            });
+
+            $('#servo-on').click(() => servo(true));
+            $('#servo-off').click(() => servo(false));
+            $('#pause-on').click(() => pause(true));
+            $('#pause-off').click(() => pause(false));
+            $('#alarm-reset').click(alarmReset);
+            $('#home').click(home);
+            $('#current-position').click(currentPosition);
+            $('#move-to').click(moveTo);
+            $('#set-to').click(setTo);
+        }
+
+        function apiCall(endpoint, method, data) {
+            return $.ajax({
+                url: `/api/${endpoint}`,
+                method: method,
+                contentType: 'application/json',
+                data: JSON.stringify(data)
+            }).then(response => {
+                console.log(`${endpoint}:`, response);
+                return response;
+            }).catch(error => {
+                console.error(`Error in ${endpoint}:`, error);
+                $('#error_status').text(`Error in ${endpoint}: ${error.statusText}`);
+            });
+        }
+
+        function servo(on) {
+            apiCall('servo', 'POST', {on: on});
+        }
+
+        function alarmReset() {
+            apiCall('alarm_reset', 'POST');
+        }
+
+        function pause(pause) {
+            apiCall('pause', 'POST', {pause: pause});
+        }
+
+        function home() {
+            apiCall('home', 'POST');
+        }
+
+        function currentPosition() {
+            apiCall('current_position', 'GET').then(updatePositions);
+        }
+
+        function updatePositions(positions) {
+            if (positions && positions.status === 'success') {
+                for (let slave in positions.data) {
+                    $(`#position${slave}`).text(`${positions.data[slave] / 100} mm`);
+                }
+                $('#status').text(JSON.stringify(positions, null, 2));
+            }
+        }
+
+        function jog(slave, positiveSide, move) {
+            apiCall('jog', 'POST', {
+                slave: slave,
+                positive_side: positiveSide,
+                move: move
+            });
+        }
+
+        function moveTo() {
+            apiCall('move_to', 'POST', {row: parseInt($('#move-to-row').val())});
+        }
+
+        function setTo() {
+            apiCall('set_to', 'POST', {
+                slave: $('#set-to-slave').val(),
+                row: parseInt($('#set-to-row').val()),
+                position: parseFloat($('#set-to-position').val()),
+                speed: parseFloat($('#set-to-speed').val()),
+                acc: parseFloat($('#set-to-acc').val()),
+                dec: parseFloat($('#set-to-dec').val())
+            });
+        }
+    </script>
+</body>
+</html>

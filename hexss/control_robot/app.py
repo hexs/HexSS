@@ -1,7 +1,7 @@
 import os
 from flask import Flask, render_template, request, jsonify, abort
 from hexss.serial import get_comport
-from robot import Robot
+from hexss.control_robot.robot import Robot
 import threading
 import logging
 

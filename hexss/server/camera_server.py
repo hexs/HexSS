@@ -149,7 +149,7 @@ def get_video():
 
 def run_server(data: Dict[str, Any]) -> None:
     log = logging.getLogger('werkzeug')
-    log.disabled = True
+    log.setLevel(logging.ERROR)
     app.config['data'] = data
     ipv4 = data['ipv4']
     port = data['port']

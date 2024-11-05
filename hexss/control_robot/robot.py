@@ -68,6 +68,8 @@ class Robot:
         self.send_data('all', '05', '040B', '0000')
 
     def jog(self, slave: str, positive_side: bool, move: bool) -> None:
+        if move:
+            self.logger.info(f'Jog slave:{slave} {"+" if positive_side else "-"}')
         register = '0416' if positive_side else '0417'
         data = 'FF00' if move else '0000'
         self.send_data(slave, '05', register, data)
@@ -113,7 +115,7 @@ class Robot:
             vel = int(string[7:-2], 16)
             if vel > 0x7FFFFFFF:
                 vel -= 0x100000000
-            self.logger.info(f"Slave: {slave}, Velocity: {vel}, Hex: {hex(vel)}")
+            # self.logger.info(f"Slave: {slave}, Velocity: {vel}, Hex: {hex(vel)}")
             self.current_position_vel[slave] = vel
 
     def run(self) -> None:
@@ -124,7 +126,7 @@ class Robot:
                 while b'\r\n' in self.buffer:
                     message, self.buffer = self.buffer.split(b'\r\n', 1)
                     if message.startswith(b':'):
-                        self.logger.info(f"Received: {message.decode()}\\r\\n")
+                        # self.logger.info(f"Received: {message.decode()}\\r\\n")
                         self.evens(message.decode())
         except serial.SerialException as e:
             self.logger.error(f"Serial communication error: {e}")

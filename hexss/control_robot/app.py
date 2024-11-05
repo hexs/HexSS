@@ -1,5 +1,6 @@
-import os
-from flask import Flask, render_template, request, jsonify, abort
+import json
+import time
+from flask import Flask, render_template, request, jsonify, abort, Response
 from hexss.serial import get_comport
 from hexss.control_robot.robot import Robot
 import threading
@@ -143,6 +144,21 @@ def set_to():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+# new function
+@app.route('/socket/current_position', methods=['GET', 'POST'])
+def current_position_socket():
+    def generate():
+        result = ''
+        while True:
+            robot.current_position()
+            old_result = result
+            result = f"data: {json.dumps(robot.current_position_vel)}\n\n"
+            if result != old_result:
+                yield result
+            time.sleep(0.1)
+    return Response(generate(), mimetype='text/event-stream')
+
+
 @app.errorhandler(400)
 def bad_request(error):
     return jsonify({'status': 'error', 'message': error.description}), 400
@@ -154,4 +170,10 @@ def internal_server_error(error):
 
 
 def run(data):
-    app.run(data['config']['ipv4'], data['config']['port'], debug=True, use_reloader=False)
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    app.config['data'] = data
+    ipv4 = data['config']['ipv4']
+    port = data['config']['port']
+    print(f" * Running on http://{ipv4}:{port}")
+    app.run(ipv4, port, debug=True, use_reloader=False)

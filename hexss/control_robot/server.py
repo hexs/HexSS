@@ -1,6 +1,6 @@
 from hexss import json_load, get_ipv4
 from hexss.threading import Multithread
-import app
+from hexss.control_robot import app
 
 
 def run():

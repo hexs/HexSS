@@ -2,8 +2,8 @@ include hexss/server/templates/*.html
 include hexss/server/static/*.js
 include hexss/server/static/*.css
 
-include hexss/control-robot/templates/*.html
-include hexss/control-robot/static/*.js
-include hexss/control-robot/static/*.css
+include hexss/control_robot/templates/*.html
+include hexss/control_robot/static/*.js
+include hexss/control_robot/static/*.css
 
 include hexss/example/templates/index.html

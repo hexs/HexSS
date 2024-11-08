@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Image Viewer</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+        }
+
+        button {
+            margin-right: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        #imageSelector {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+<div id="controls">
+    <button id="openSelector">Open Image Selector</button>
+    <button id="prevImage">Previous Image</button>
+    <button id="nextImage">Next Image</button>
+</div>
+
+<div id="imageSelector">
+    <h3>Select an Image</h3>
+    <select id="imageList"> </select>
+    <button id="loadImage">Load Image</button>
+    <button id="closeSelector">Close</button>
+</div>
+
+<canvas id="imageCanvas"></canvas>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

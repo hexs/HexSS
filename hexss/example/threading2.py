@@ -1,74 +1,69 @@
 import random
 import numpy as np
-from hexss.threading import Multithread
+import cv2
 import time
-from flask import Flask
-import tkinter as tk
-
-# web server
-app = Flask(__name__)
+import hexss
+from hexss.threading import Multithread
+from threading_app import run_server
 
 
-@app.route('/')
-def index():
-    data = app.config['data']
-    return f'{data["text label"]}'
-
-
-def run_server(data):
-    app.config['data'] = data
-    app.run(debug=False, use_reloader=False)
-
-
-# normal loop
 def capture(data):
-    while data['play']:
-        random_color = [random.randint(150, 255) for _ in range(3)]
-        data['text label'] = f'{random_color}'
+    while not data.get('close'):
+        random_color = [random.randint(150,255) for _ in range(3)]
         data['img'] = np.full((500, 500, 3), random_color, dtype=np.uint8)
         time.sleep(0.5)
 
 
-# tk
-def ui(data):
-    root = tk.Tk()
-    root.geometry("300x100")
-    root.title("Text Label Updater")
+def show_img(data, multithread):
+    cv2.namedWindow('image')
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    while data.get('img') is None:
+        time.sleep(0.1)
+    while data['play']:
+        img = data['img'].copy()
 
-    var = tk.StringVar()
-    label = tk.Label(root, textvariable=var, relief=tk.RAISED, font=("Arial", 14))
-    var.set(data['text label'])
-    label.pack(pady=20)
+        # Get thread status
+        status = multithread.get_status()
 
-    def update_label():
-        if data['play']:
-            var.set(data['text label'])
-            root.after(500, update_label)
-        else:
-            root.quit()
+        cv2.putText(img, "ESC => data['play'] = False", (10, 30), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, "s => data['close'] = True", (10, 60), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        # Add status text to image
+        y_offset = 100
+        for thread in status:
+            text = f"{thread['name']}: {thread['status']} ({thread['join']})"
+            cv2.putText(img, text, (10, y_offset), font, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+            y_offset += 30
 
-    def on_closing():
-        data['play'] = False
-        root.quit()
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    update_label()
-    root.mainloop()
+        cv2.imshow('image', img)
+        key = cv2.waitKey(1)
+        if key == 27:
+            data['play'] = False
+        if key == ord('s'):
+            data['close'] = True
+    cv2.destroyAllWindows()
 
 
 def main():
     m = Multithread()
     data = {
-        'play': True,
-        'text label': '123',
+        'play': True
     }
 
-    m.add_func(capture, args=(data,))
-    m.add_func(run_server, args=(data,), join=False)
-    m.add_func(ui, args=(data,), name='ui')
+    m.add_func(capture, args=(data,), join=True, name="Capture")
+    m.add_func(show_img, args=(data, m), join=True, name="Display")
+    m.add_func(run_server, args=(data, m), join=False, name="Server")
 
     m.start()
-    m.join()
+    hexss.open_url("http://127.0.0.1:5000")
+    try:
+        while data['play']:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+    finally:
+        data['play'] = False
+        data['close'] = True
+        m.join()
 
 
 if __name__ == '__main__':

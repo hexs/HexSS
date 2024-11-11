@@ -21,20 +21,20 @@
     <h3>Directories:</h3>
     <ul id="directory-list">
         {% if current_path %}
-            <li>
-                <a href="{{ url_for('path', subpath='/'.join(current_path.replace('\\', '/').split('/')[:-1])) }}">..</a>
-            </li>
+        <li>
+            <a href="{{ url_for('path', subpath='/'.join(current_path.replace('\\', '/').split('/')[:-1])) }}">..</a>
+        </li>
         {% endif %}
         {% for directory in directories %}
-            <li><a href="{{ url_for('path', subpath=(current_path + '/' + directory).replace('\\', '/')) }}"
-                   data-path="{{ (current_path + '/' + directory).replace('\\', '/') }}">{{ directory }}</a></li>
+        <li><a href="{{ url_for('path', subpath=(current_path + '/' + directory).replace('\\', '/')) }}"
+               data-path="{{ (current_path + '/' + directory).replace('\\', '/') }}">{{ directory }}</a></li>
         {% endfor %}
     </ul>
     <h3>Files:</h3>
     <ul id="file-list">
         {% for file in files %}
-            <li><a href="{{ url_for('path', subpath=(current_path + '/' + file).replace('\\', '/')) }}"
-                   data-path="{{ (current_path + '/' + file).replace('\\', '/') }}">{{ file }}</a></li>
+        <li><a href="{{ url_for('path', subpath=(current_path + '/' + file).replace('\\', '/')) }}"
+               data-path="{{ (current_path + '/' + file).replace('\\', '/') }}">{{ file }}</a></li>
         {% endfor %}
     </ul>
 </div>
@@ -59,7 +59,7 @@
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{{ url_for('static', filename='jquery-3.6.0.min.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

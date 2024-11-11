@@ -4,7 +4,8 @@ import numpy as np
 from flask import Flask, render_template, Response, request, redirect, url_for
 import cv2
 from datetime import datetime
-from hexss import json_load, json_update, get_ipv4
+from hexss import json_load, json_update
+from hexss.network import get_all_ipv4
 from hexss.threading import Multithread
 import platform
 import logging
@@ -153,19 +154,17 @@ def run_server(data: Dict[str, Any]) -> None:
     app.config['data'] = data
     ipv4 = data['ipv4']
     port = data['port']
-    logging.info(f"Running on http://{ipv4}:{port}")
+    if ipv4 == '0.0.0.0':
+        for ipv4_ in get_all_ipv4():
+            logging.info(f"Running on http://{ipv4_}:{port}")
+    else:
+        logging.info(f"Running on http://{ipv4}:{port}")
     app.run(host=ipv4, port=port, debug=False, use_reloader=False)
 
 
-def signal_handler(signum, frame):
-    logging.info("Received signal to terminate. Shutting down...")
-    sys.exit(0)
-
-
 def run():
-    # multiprocessing.freeze_support()
     data = json_load('camera_server_config.json', {
-        "ipv4": get_ipv4(),
+        "ipv4": '0.0.0.0',
         "port": 2000,
         "camera": [
             {

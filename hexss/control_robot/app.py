@@ -1,6 +1,8 @@
 import json
 import time
 from flask import Flask, render_template, request, jsonify, abort, Response
+from hexss.constants import GREEN, RED, ENDC
+from hexss.network import get_all_ipv4
 from hexss.serial import get_comport
 from hexss.control_robot.robot import Robot
 import threading
@@ -18,9 +20,9 @@ def initialize_robot():
     global robot
     if robot is None:
         try:
-            port = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
-            robot = Robot(port, baudrate=38400)
-            logger.info("Robot initialized successfully")
+            comport = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
+            robot = Robot(comport, baudrate=38400)
+            logger.info(f"{GREEN}Robot initialized successfully{ENDC}")
         except Exception as e:
             logger.error(f"Failed to initialize robot: {e}")
             return False
@@ -156,6 +158,7 @@ def current_position_socket():
             if result != old_result:
                 yield result
             time.sleep(0.1)
+
     return Response(generate(), mimetype='text/event-stream')
 
 
@@ -175,5 +178,10 @@ def run(data):
     app.config['data'] = data
     ipv4 = data['config']['ipv4']
     port = data['config']['port']
-    print(f" * Running on http://{ipv4}:{port}")
+    if ipv4 == '0.0.0.0':
+        for ipv4_ in get_all_ipv4():
+            logging.info(f"Running on http://{ipv4_}:{port}")
+    else:
+        logging.info(f"Running on http://{ipv4}:{port}")
+
     app.run(ipv4, port, debug=True, use_reloader=False)

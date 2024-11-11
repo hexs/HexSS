@@ -3,10 +3,24 @@ import socket
 import subprocess
 import platform
 import webbrowser
+import netifaces
 
 
-def get_ipv4():
+def get_ipv4() -> str:
     return socket.gethostbyname(socket.gethostname())
+
+
+def get_all_ipv4() -> list:
+    ip_addresses = []
+
+    for interface in netifaces.interfaces():
+        addrs = netifaces.ifaddresses(interface)
+
+        if netifaces.AF_INET in addrs:
+            for addr in addrs[netifaces.AF_INET]:
+                ip_addresses.append(addr['addr'])
+
+    return ip_addresses
 
 
 def open_url_(url):

@@ -9,10 +9,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 class Robot:
-    def __init__(self, port: str, baudrate: int = 38400) -> None:
+    def __init__(self, comport: str, baudrate: int = 38400) -> None:
         self.logger = logging.getLogger(__name__)
         try:
-            self.ser = serial.Serial(port=port, baudrate=baudrate)
+            self.ser = serial.Serial(port=comport, baudrate=baudrate)
         except serial.SerialException as e:
             self.logger.error(f"Failed to initialize serial connection: {e}")
             raise
@@ -135,8 +135,8 @@ class Robot:
 
 
 if __name__ == '__main__':
-    port = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
-    robot = Robot(port, baudrate=38400)
+    comport = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
+    robot = Robot(comport, baudrate=38400)
     robot.move_to(0)
     time.sleep(2)
     robot.move_to(8)

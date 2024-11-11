@@ -147,7 +147,7 @@ def extract_file():
 
 def run():
     config = json_load('file_manager_server_config.json', {
-        'ipv4': get_ipv4(),
+        "ipv4": '0.0.0.0',
         'port': 2001
     }, True)
 

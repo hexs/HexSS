@@ -1,9 +1,10 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas Image Viewer</title>
+    <title>Video Frame Viewer</title>
     <style>
         body, html {
             margin: 0;
@@ -22,38 +23,69 @@
             z-index: 1000;
         }
 
-        button {
+        button, select {
             margin-right: 5px;
             padding: 5px 10px;
             cursor: pointer;
         }
 
-        #imageSelector {
-            display: none;
+        #frameControl {
+            width: 100%;
             position: fixed;
-            top: 50%;
+            bottom: 10px;
             left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
-            border: 1px solid #ccc;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            z-index: 2000;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 15px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+        }
+
+        .slider:hover {
+            opacity: 1;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #04AA6D;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #04AA6D;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 <div id="controls">
-    <button id="openSelector">Open Image Selector</button>
-    <button id="prevImage">Previous Image</button>
-    <button id="nextImage">Next Image</button>
+    <select id="videoSelect">
+        <option value="">Select a video</option>
+        {% for video in videos %}
+        <option value="{{ video }}">{{ video }}</option>
+        {% endfor %}
+    </select>
 </div>
 
-<div id="imageSelector">
-    <h3>Select an Image</h3>
-    <select id="imageList"> </select>
-    <button id="loadImage">Load Image</button>
-    <button id="closeSelector">Close</button>
+<div id="frameControl">
+    <input type="range" class="slider" id="frameSlider" min="0" max="100" value="0">
+    <span id="frameNumber">Frame: 0</span>
 </div>
 
 <canvas id="imageCanvas"></canvas>

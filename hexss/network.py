@@ -3,7 +3,6 @@ import socket
 import subprocess
 import platform
 import webbrowser
-import netifaces
 
 
 def get_ipv4() -> str:
@@ -11,6 +10,8 @@ def get_ipv4() -> str:
 
 
 def get_all_ipv4() -> list:
+    import netifaces
+
     ip_addresses = []
 
     for interface in netifaces.interfaces():

@@ -8,34 +8,54 @@
     <style>
         body, html {
             margin: 0;
-            padding: 0;
+            height: 100%;
             overflow: hidden;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            grid-template-rows: 50px 1fr 50px;
+            height: 100vh;
+            grid-template-areas:
+                'leftbar header'
+                'leftbar main'
+                'leftbar footer';
+        }
+
+        .content {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .page-header {
+            grid-area: header;
+        }
+
+        .page-leftbar {
+            grid-area: leftbar;
+        }
+
+        .page-main {
+            grid-area: main;
+            background-color: #f0f0f0;
+            padding: 0;
+        }
+
+        .page-footer {
+            grid-area: footer;
         }
 
         canvas {
             display: block;
-        }
-
-        #controls {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
+            width: 100%;
+            height: 100%;
         }
 
         button, select {
             margin-right: 5px;
             padding: 5px 10px;
             cursor: pointer;
-        }
-
-        #frameControl {
-            width: 100%;
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
         }
 
         .slider {
@@ -46,7 +66,6 @@
             background: #d3d3d3;
             outline: none;
             opacity: 0.7;
-            -webkit-transition: .2s;
             transition: opacity .2s;
         }
 
@@ -71,24 +90,72 @@
             background: #04AA6D;
             cursor: pointer;
         }
+
+        #rectList {
+            margin-top: 20px;
+        }
+
+        #rectanglesList {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #rectanglesList li {
+            margin-bottom: 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #rectanglesList span {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .deleteRect {
+            background-color: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 2px 5px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
-<div id="controls">
-    <select id="videoSelect">
-        <option value="">Select a video</option>
-        {% for video in videos %}
-        <option value="{{ video }}">{{ video }}</option>
-        {% endfor %}
-    </select>
+<div class="grid">
+    <div class="page-header content">
+        <select id="videoSelect">
+            <option value="">Select a video</option>
+            {% for video in videos %}
+            <option value="{{ video }}">{{ video }}</option>
+            {% endfor %}
+        </select>
+        <span id="mouse-pos">Mouse Pos: (0, 0)</span>
+        <span id="scale">Scale: 1.00</span>
+        <span id="offset">Offset: (0, 0)</span>
+    </div>
+    <div class="page-leftbar content">
+        <h3>Tools</h3>
+        <button id="rectangleBtn">Draw Rectangle</button>
+        <button id="saveBtn">Save Rectangle</button>
+
+        <div id="rectList">
+            <h4>Rectangles for Frame <span id="currentFrameNumber"></span></h4>
+            <ul id="rectanglesList"></ul>
+        </div>
+    </div>
+    <div class="page-main content">
+        <canvas id="imageCanvas"></canvas>
+    </div>
+    <div class="page-footer content">
+        <div id="frameControl">
+            <input type="range" class="slider" id="frameSlider" min="0" max="100" value="0">
+            <span id="frameNumber">Frame: 0 / 0</span>
+        </div>
+    </div>
 </div>
 
-<div id="frameControl">
-    <input type="range" class="slider" id="frameSlider" min="0" max="100" value="0">
-    <span id="frameNumber">Frame: 0</span>
-</div>
-
-<canvas id="imageCanvas"></canvas>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

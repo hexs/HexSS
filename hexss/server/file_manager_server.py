@@ -156,7 +156,7 @@ def run():
     ipv4 = config['ipv4']
     port = config['port']
     if ipv4 == '0.0.0.0':
-        for ipv4_ in ['127.0.0.1'] + get_all_ipv4() + [get_hostname()]:
+        for ipv4_ in {'127.0.0.1', *get_all_ipv4(), get_hostname()}:
             logging.info(f"Running on http://{ipv4_}:{port}")
     else:
         logging.info(f"Running on http://{ipv4}:{port}")

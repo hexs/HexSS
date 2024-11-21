@@ -9,7 +9,6 @@ from hexss.network import get_all_ipv4, get_hostname
 from hexss.threading import Multithread
 import platform
 import logging
-import sys
 
 if platform.system() == "Windows":
     import mss
@@ -55,16 +54,13 @@ def video_capture(data: Dict[str, Any], camera_id: int) -> None:
             if data['camera'][camera_id]['camera_enabled']:
                 status, img = cap.read()
                 data['camera'][camera_id]['status'] = status
-                if status:
-                    data['camera'][camera_id]['img'] = img.copy()
-                else:
+                data['camera'][camera_id]['img'] = img
+                if not status:
                     logging.warning(f"Failed to capture image from camera {camera_id}")
                     time.sleep(1)
                     cap.release()
                     cap = setup()
-            else:
-                data['camera'][camera_id]['status'] = False
-                data['camera'][camera_id]['img'] = np.full((480, 640, 3), (50, 50, 50), dtype=np.uint8)
+
         except Exception as e:
             logging.error(f"Error in video capture for camera {camera_id}: {e}")
             time.sleep(1)
@@ -75,10 +71,11 @@ def get_data(data: Dict[str, Any], source: str, camera_id: int, quality=100) -> 
         frame = data['camera'][camera_id]['img']
         status = data['camera'][camera_id]['status']
         if not status:
-            frame = np.full((480, 640, 3), (50, 50, 50), dtype=np.uint8)
-            cv2.putText(frame, f'Failed to capture image', (30, 50), 1, 2, (0, 0, 255), 2)
-            cv2.putText(frame, f'from camera {camera_id}', (30, 90), 1, 2, (0, 0, 255), 2)
-            cv2.putText(frame, datetime.now().strftime('%Y-%m-%d  %H:%M:%S'), (30, 130), 1, 2, (0, 0, 255), 2)
+            w, h = data['camera'][camera_id]['width_height']
+            frame = np.full((int(h), int(w), 3), (50, 50, 50), dtype=np.uint8)
+            cv2.putText(frame, f'Failed to capture image', (100, 150), 1, 2, (0, 0, 255), 2)
+            cv2.putText(frame, f'from camera {camera_id}', (100, 190), 1, 2, (0, 0, 255), 2)
+            cv2.putText(frame, datetime.now().strftime('%Y-%m-%d  %H:%M:%S'), (100, 230), 1, 2, (0, 0, 255), 2)
     else:  # source == 'display_capture':
         frame = data['display_capture']
     if quality == 100:
@@ -155,7 +152,7 @@ def run_server(data: Dict[str, Any]) -> None:
     ipv4 = data['ipv4']
     port = data['port']
     if ipv4 == '0.0.0.0':
-        for ipv4_ in ['127.0.0.1'] + get_all_ipv4() + [get_hostname()]:
+        for ipv4_ in {'127.0.0.1', *get_all_ipv4(), get_hostname()}:
             logging.info(f"Running on http://{ipv4_}:{port}")
     else:
         logging.info(f"Running on http://{ipv4}:{port}")
@@ -176,7 +173,7 @@ def run():
     m = Multithread()
     for camera_id in range(len(data['camera'])):
         data['camera'][camera_id]['status'] = False
-        data['camera'][camera_id]['img'] = np.full((480, 640, 3), (50, 50, 50), dtype=np.uint8)
+        data['camera'][camera_id]['img'] = None
         data['camera'][camera_id]['camera_enabled'] = True  # Default to enabled
         data['camera'][camera_id]['width_height_from_cap'] = [None, None]
         data['camera'][camera_id]['setup'] = False

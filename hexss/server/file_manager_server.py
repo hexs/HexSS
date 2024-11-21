@@ -1,12 +1,15 @@
+import logging
 from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 import os
 import shutil
 import zipfile
 import io
 from werkzeug.utils import secure_filename
-from hexss import json_load, get_ipv4
+from hexss import json_load
+from hexss.network import get_all_ipv4, get_hostname
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 ROOT_DIR = "/"
 
 
@@ -150,8 +153,14 @@ def run():
         "ipv4": '0.0.0.0',
         'port': 2001
     }, True)
-
-    app.run(config['ipv4'], config['port'], debug=True)
+    ipv4 = config['ipv4']
+    port = config['port']
+    if ipv4 == '0.0.0.0':
+        for ipv4_ in ['127.0.0.1'] + get_all_ipv4() + [get_hostname()]:
+            logging.info(f"Running on http://{ipv4_}:{port}")
+    else:
+        logging.info(f"Running on http://{ipv4}:{port}")
+    app.run(config['ipv4'], config['port'], debug=True, use_reloader=False)
 
 
 if __name__ == '__main__':

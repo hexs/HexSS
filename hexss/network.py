@@ -6,6 +6,10 @@ import platform
 import webbrowser
 
 
+def get_hostname() -> str:
+    return socket.gethostname()
+
+
 def get_ipv4() -> str:
     return socket.gethostbyname(socket.gethostname())
 

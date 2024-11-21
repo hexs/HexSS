@@ -5,7 +5,7 @@ from flask import Flask, render_template, Response, request, redirect, url_for
 import cv2
 from datetime import datetime
 from hexss import json_load, json_update
-from hexss.network import get_all_ipv4
+from hexss.network import get_all_ipv4, get_hostname
 from hexss.threading import Multithread
 import platform
 import logging
@@ -155,10 +155,10 @@ def run_server(data: Dict[str, Any]) -> None:
     ipv4 = data['ipv4']
     port = data['port']
     if ipv4 == '0.0.0.0':
-        for ipv4_ in get_all_ipv4():
-            logging.info(f" * Running on http://{ipv4_}:{port}")
+        for ipv4_ in ['127.0.0.1'] + get_all_ipv4() + [get_hostname()]:
+            logging.info(f"Running on http://{ipv4_}:{port}")
     else:
-        logging.info(f" * Running on http://{ipv4}:{port}")
+        logging.info(f"Running on http://{ipv4}:{port}")
     app.run(host=ipv4, port=port, debug=False, use_reloader=False)
 
 

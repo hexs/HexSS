@@ -2,7 +2,7 @@ import json
 import time
 from flask import Flask, render_template, request, jsonify, abort, Response
 from hexss.constants import GREEN, RED, ENDC
-from hexss.network import get_ipv4
+from hexss.network import get_all_ipv4
 from hexss.serial import get_comport
 from hexss.control_robot.robot import Robot
 import threading
@@ -179,9 +179,9 @@ def run(data):
     ipv4 = data['config']['ipv4']
     port = data['config']['port']
     if ipv4 == '0.0.0.0':
-        logging.info(f"Running on http://127.0.0.1:{port}")
-        logging.info(f"Running on http://{get_ipv4()}:{port}")
+        for ipv4_ in get_all_ipv4():
+            logging.info(f" * Running on http://{ipv4_}:{port}")
     else:
-        logging.info(f"Running on http://{ipv4}:{port}")
+        logging.info(f" * Running on http://{ipv4}:{port}")
 
     app.run(ipv4, port, debug=True, use_reloader=False)

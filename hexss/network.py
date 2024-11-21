@@ -1,5 +1,6 @@
 import os
 import socket
+from socket import AddressFamily
 import subprocess
 import platform
 import webbrowser
@@ -9,19 +10,21 @@ def get_ipv4() -> str:
     return socket.gethostbyname(socket.gethostname())
 
 
+def get_ips():
+    ipv4 = []
+    ipv6 = []
+    for item in socket.getaddrinfo(socket.gethostname(), None):
+        protocol, *_, (ip, *_) = item
+        if protocol == AddressFamily.AF_INET:
+            ipv4.append(ip)
+        elif protocol == AddressFamily.AF_INET6:
+            ipv6.append(ip)
+
+    return ipv4, ipv6
+
+
 def get_all_ipv4() -> list:
-    import netifaces
-
-    ip_addresses = []
-
-    for interface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(interface)
-
-        if netifaces.AF_INET in addrs:
-            for addr in addrs[netifaces.AF_INET]:
-                ip_addresses.append(addr['addr'])
-
-    return ip_addresses
+    return get_ips()[0]
 
 
 def open_url_(url):

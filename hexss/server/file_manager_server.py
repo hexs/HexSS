@@ -1,12 +1,15 @@
 import logging
-from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 import os
 import shutil
 import zipfile
 import io
-from werkzeug.utils import secure_filename
-from hexss import json_load
+
+from hexss import check_packages, json_load, secure_filename
+
+check_packages('Flask')
+
 from hexss.network import get_all_ipv4, get_hostname
+from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

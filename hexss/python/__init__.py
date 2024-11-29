@@ -9,7 +9,7 @@ def check_packages(*args):
     missing_packages = [pkg for pkg in args if pkg not in installed_packages]
 
     if missing_packages:
-        raise ImportError(f"Missing packages; You can install them using pip install {' '.join(missing_packages)}")
+        raise ImportError(f"Missing packages; You can install them using `pip install {' '.join(missing_packages)}`")
 
 
 if __name__ == "__main__":

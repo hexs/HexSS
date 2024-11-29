@@ -4,8 +4,6 @@ import logging
 from typing import Dict, Any, List
 
 from hexss import json_load, json_update, check_packages
-from hexss.network import get_all_ipv4, get_hostname
-from hexss.threading import Multithread
 
 if platform.system() == "Windows":
     check_packages('numpy', 'opencv-python', 'Flask', 'mss')
@@ -13,6 +11,8 @@ if platform.system() == "Windows":
 else:
     check_packages('numpy', 'opencv-python', 'Flask')
 
+from hexss.network import get_all_ipv4, get_hostname
+from hexss.threading import Multithread
 import numpy as np
 from flask import Flask, render_template, Response, request, redirect, url_for
 import cv2

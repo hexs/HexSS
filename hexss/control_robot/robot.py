@@ -27,12 +27,12 @@ class Robot:
         error_check = f'{(0x100 - sum_of_bytes) & 0xFF:02X}'
         return f':{message}{error_check}\r\n'.encode()
 
-    def send_data_(self, slave_address: str, function_code: str, register_address: str, *args: str) -> None:
+    def send_data_(self, slave_address: int, function_code: str, register_address: str, *args: str) -> None:
         while (datetime.now() - self.send_data_last_datetime) <= timedelta(milliseconds=20):
             time.sleep(0.001)
 
         self.send_data_last_datetime = datetime.now()
-        message = f'{slave_address}{function_code}{register_address}{"".join(args)}'
+        message = f'{slave_address:02}{function_code}{register_address}{"".join(args)}'
         message = self.LRC_calculation(message)
         try:
             # self.logger.info(f"Sending: {message} len: {len(message)}")
@@ -41,10 +41,10 @@ class Robot:
             self.logger.error(f"Failed to send data: {e}")
             raise
 
-    def send_data(self, slave_address: Union[str, List[str]], function_code: str, register_address: str,
+    def send_data(self, slave_address: Union[int, str], function_code: str, register_address: str,
                   *args: str) -> None:
         if slave_address == 'all':
-            for addr in ['01', '02', '03', '04']:
+            for addr in [1, 2, 3, 4]:
                 self.send_data_(addr, function_code, register_address, *args)
         else:
             self.send_data_(slave_address, function_code, register_address, *args)
@@ -62,14 +62,14 @@ class Robot:
         self.logger.info('Pause' if pause else 'Un pause')
         self.send_data('all', '05', '040A', 'FF00' if pause else '0000')
 
-    def home(self) -> None:
-        self.logger.info('Home')
-        self.send_data('all', '05', '040B', 'FF00')
-        self.send_data('all', '05', '040B', '0000')
+    def home(self, slave: Union[int, str] = 'all') -> None:
+        self.logger.info(f'Home(slave:{slave}')
+        self.send_data(slave, '05', '040B', 'FF00')
+        self.send_data(slave, '05', '040B', '0000')
 
-    def jog(self, slave: str, positive_side: bool, move: bool) -> None:
+    def jog(self, slave: int, positive_side: bool, move: bool) -> None:
         if move:
-            self.logger.info(f'Jog slave:{slave} {"+" if positive_side else "-"}')
+            self.logger.info(f'Jog(slave:{slave}, side:{"+" if positive_side else "-"})')
         register = '0416' if positive_side else '0417'
         data = 'FF00' if move else '0000'
         self.send_data(slave, '05', register, data)
@@ -81,7 +81,7 @@ class Robot:
     def move_to(self, row: int) -> None:
         self.send_data('all', '06', '9800', f'{row:04X}')
 
-    def set_to(self, slave: str, row: int, position: float, speed: float, acc: float, dec: float) -> None:
+    def set_to(self, slave: int, row: int, position: float, speed: float, acc: float, dec: float) -> None:
         position = int(position * 100) & 0xFFFFFFFF
         speed = int(speed * 100)
         acc = int(acc * 100)
@@ -142,3 +142,5 @@ if __name__ == '__main__':
     robot.move_to(8)
     time.sleep(0.5)
     robot.pause()
+    time.sleep(0.2)
+    robot.pause(False)

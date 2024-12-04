@@ -166,7 +166,7 @@ def run_server(data: Dict[str, Any]) -> None:
 def run():
     config = json_load('camera_server_config.json', {
         "ipv4": '0.0.0.0',
-        "port": 2000,
+        "port": 2002,
         "camera": [
             {
                 "width_height": [640, 480]

@@ -18,8 +18,8 @@
             padding: 5px;
         }
 
-        .jog-control {
-            margin-bottom: 10px;
+        .slave-control {
+            margin: 10px;
         }
 
         h2 {
@@ -31,12 +31,12 @@
 <h1>Robot Control Panel</h1>
 
 <section aria-labelledby="jog-control-heading">
-    <h2 id="jog-control-heading">Jog Control</h2>
-    <div id="jog-controls"></div>
+    <h2 id="jog-control-heading">Slave Control</h2>
+    <div id="slave-controls"></div>
 </section>
 
 <section aria-labelledby="other-controls-heading">
-    <h2 id="other-controls-heading">Other Controls</h2>
+    <h2 id="other-controls-heading">All Controls</h2>
     <div>
         <button id="servo-on">Servo ON</button>
         <button id="servo-off">Servo OFF</button>
@@ -63,7 +63,7 @@
 <section aria-labelledby="set-to-heading">
     <h2 id="set-to-heading">Set To</h2>
     <div>
-        <input type="text" id="set-to-slave" placeholder="Slave" aria-label="Slave ID">
+        <input type="number" id="set-to-slave" placeholder="Slave" aria-label="Slave ID">
         <input type="number" id="set-to-row" placeholder="Row" aria-label="Row number">
         <input type="number" id="set-to-position" placeholder="Position" aria-label="Position">
         <input type="number" id="set-to-speed" placeholder="Speed" aria-label="Speed">
@@ -88,21 +88,28 @@
 
     function initJogControls() {
         const jogControlsHtml = ['01', '02', '03', '04'].map(slaveId => `
-        <div class="jog-control">
+        <div class="slave-control">
             <label>Slave ${slaveId}:</label>
-            <button class="jog-btn" data-slave="${slaveId}" data-direction="plus">Jog +</button>
-            <button class="jog-btn" data-slave="${slaveId}" data-direction="minus">Jog -</button>
             <span id="position${slaveId}">??? mm</span>
+            <div>
+                <button class="jog-btn" data-slave="${slaveId}" data-direction="plus">Jog +</button>
+                <button class="jog-btn" data-slave="${slaveId}" data-direction="minus">Jog -</button>
+                <button class="home-btn" data-slave="${slaveId}">Home</button>
+            </div>
         </div>
     `).join('');
-        $('#jog-controls').html(jogControlsHtml);
+        $('#slave-controls').html(jogControlsHtml);
     }
 
     function bindEventHandlers() {
         $(document).on('mousedown mouseup mouseleave', '.jog-btn', function (event) {
-            const slave = $(this).data('slave');
+            const slave = parseInt($(this).data('slave'));
             const direction = $(this).data('direction');
             jog(slave, direction === 'plus', event.type === 'mousedown');
+        });
+        $(document).on('mouseup', '.home-btn', function () {
+            const slave = parseInt($(this).data('slave'));
+            home(slave);
         });
 
         $('#servo-on').click(() => servo(true));
@@ -110,7 +117,7 @@
         $('#pause-on').click(() => pause(true));
         $('#pause-off').click(() => pause(false));
         $('#alarm-reset').click(alarmReset);
-        $('#home').click(home);
+        $('#home').click(() => home("all"));
         $('#current-position').click(currentPosition);
         $('#move-to').click(moveTo);
         $('#set-to').click(setTo);
@@ -158,8 +165,8 @@
         apiCall('pause', 'POST', {pause: pause});
     }
 
-    function home() {
-        apiCall('home', 'POST');
+    function home(slave) {
+        apiCall('home', 'POST', {slave: slave});
     }
 
     function currentPosition() {
@@ -180,7 +187,7 @@
 
     function setTo() {
         apiCall('set_to', 'POST', {
-            slave: $('#set-to-slave').val(),
+            slave: parseInt($('#set-to-slave').val()),
             row: parseInt($('#set-to-row').val()),
             position: parseFloat($('#set-to-position').val()),
             speed: parseFloat($('#set-to-speed').val()),

@@ -88,7 +88,8 @@ def pause():
 @app.route('/api/home', methods=['POST'])
 def home():
     try:
-        robot.home()
+        slave = request.json.get('slave')
+        robot.home(slave)
         return jsonify({'status': 'success'})
     except Exception as e:
         logger.error(f"Error in home: {e}")

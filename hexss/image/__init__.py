@@ -42,3 +42,38 @@ def overlay(main_img, overlay_img, pos: tuple = (0, 0)):
     img_main_roi[:, :] = img_overlay_roi
 
     return main_img
+
+
+def crop_img(image, xywhn, shift=(0, 0), resize=None):
+    wh_ = np.array(image.shape[1::-1])
+    xyn = np.array(xywhn[:2])
+    whn = np.array(xywhn[2:])
+    x1y1_ = ((xyn - whn / 2) * wh_).astype(int)
+    x2y2_ = ((xyn + whn / 2) * wh_).astype(int)
+
+    x1_, y1_ = x1y1_ + shift
+    x2_, y2_ = x2y2_ + shift
+
+    image_crop = image[y1_:y2_, x1_:x2_]
+
+    if resize:
+        return cv2.resize(image_crop, resize)
+    return image_crop
+
+
+def controller(img, brightness=0, contrast=0):
+    """Adjust brightness and contrast of an image."""
+
+    if brightness != 0:
+        shadow = brightness if brightness > 0 else 0
+        max_val = 255 if brightness > 0 else 255 + brightness
+        alpha = (max_val - shadow) / 255
+        gamma = shadow
+        img = cv2.addWeighted(img, alpha, img, 0, gamma)
+
+    if contrast != 0:
+        alpha = float(131 * (contrast + 127)) / (127 * (131 - contrast))
+        gamma = 127 * (1 - alpha)
+        img = cv2.addWeighted(img, alpha, img, 0, gamma)
+
+    return img

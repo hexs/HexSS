@@ -11,7 +11,7 @@ if platform.system() == "Windows":
 else:
     check_packages('numpy', 'opencv-python', 'Flask')
 
-from hexss.network import get_all_ipv4, get_hostname
+from hexss.network import get_all_ipv4, get_hostname, close_port
 from hexss.threading import Multithread
 import numpy as np
 from flask import Flask, render_template, Response, request, redirect, url_for
@@ -173,6 +173,7 @@ def run():
             }
         ]
     }, dump=True)
+    close_port(config['ipv4'], config['port'])
 
     data = {
         'play': True,

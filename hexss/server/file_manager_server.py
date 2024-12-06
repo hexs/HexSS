@@ -8,7 +8,7 @@ from hexss import check_packages, json_load, secure_filename
 
 check_packages('Flask')
 
-from hexss.network import get_all_ipv4, get_hostname
+from hexss.network import get_all_ipv4, get_hostname, close_port
 from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 
 app = Flask(__name__)
@@ -156,6 +156,7 @@ def run():
         "ipv4": '0.0.0.0',
         'port': 2001
     }, True)
+    close_port(config['ipv4'], config['port'])
     ipv4 = config['ipv4']
     port = config['port']
     if ipv4 == '0.0.0.0':

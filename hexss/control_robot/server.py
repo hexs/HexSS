@@ -1,4 +1,4 @@
-from hexss import json_load, get_ipv4
+from hexss import json_load, get_ipv4, close_port
 from hexss.threading import Multithread
 from hexss.control_robot import app
 
@@ -8,6 +8,7 @@ def run():
         "ipv4": '0.0.0.0',
         "port": 2005,
     }, True)
+    close_port(config['ipv4'], config['port'])
 
     data = {
         'config': config,

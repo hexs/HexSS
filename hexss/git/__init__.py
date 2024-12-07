@@ -1,6 +1,8 @@
-from hexss import json_load, proxies
-import requests
+from hexss import json_load, proxies, check_packages
 
+check_packages('requests', 'GitPython')
+
+import requests
 from git import Repo
 
 

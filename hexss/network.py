@@ -183,6 +183,7 @@ if platform.system() == "Windows":
     config_dir = fr'C:\Users\{username}\Documents\hexss'
 else:
     config_dir = f'/home/{username}/hexss'
+os.makedirs(config_dir, exist_ok=True)
 
 if 'proxy.json' in os.listdir(config_dir):
     proxies = json_load(os.path.join(config_dir, 'proxy.json'))

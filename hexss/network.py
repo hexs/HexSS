@@ -3,10 +3,15 @@ import socket
 from socket import AddressFamily
 import subprocess
 import platform
+from hexss import json_load
 
 
 def get_hostname() -> str:
     return socket.gethostname()
+
+
+def get_username() -> str:
+    return os.getlogin()
 
 
 def get_ipv4() -> str:
@@ -168,3 +173,17 @@ def close_port(ip: str, port: int) -> None:
 
     except Exception as e:
         print(f"Error closing port: {e}")
+
+
+hostname = get_hostname()
+username = get_username()
+proxies = None
+config_dir = fr'C:\Users\{username}\Documents\hexss'
+
+if 'proxy.json' in os.listdir(config_dir):
+    proxies = json_load(os.path.join(config_dir, 'proxy.json'))
+else:
+    json_load(os.path.join(config_dir, 'no proxy.json'), {
+        "http": "http://<user>:<pass>@150.61.8.70:10080",
+        "https": "http://<user>:<pass>@150.61.8.70:10080"
+    }, True)

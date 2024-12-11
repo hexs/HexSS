@@ -1,12 +1,15 @@
 import subprocess
 import sys
 
+import hexss.network
+from hexss.constants.cml import *
+
 pkg_name = {
     'pygame-gui': 'pygame_gui'
 }
 
 
-def check_packages(*args):
+def check_packages(*args, install=False):
     text = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze'], text=True)
     installed_packages = {package.split('==')[0] for package in text.splitlines()}
 
@@ -18,7 +21,20 @@ def check_packages(*args):
             missing_packages.append(pkg)
 
     if missing_packages:
-        raise ImportError(f"Missing packages; You can install them using `pip install {' '.join(missing_packages)}`")
+        command = [sys.executable, '-m', 'pip', 'install']
+        if hexss.network.proxies:
+            command.append(f"--proxy {hexss.network.proxies['http']}")
+        command.extend(missing_packages)
+
+        if install:
+            print(f"{PINK}Installing missing packages:{ENDC} {UNDERLINE}{' '.join(command)}{ENDC}")
+            subprocess.run(f"{' '.join(command)}")
+            check_packages(*args)
+
+            raise Warning(f"{GREEN}Missing packages installation complete{ENDC} {YELLOW}Run again!{ENDC}")
+        else:
+            raise ImportError(
+                f"Missing packages; You can install them using `pip install {' '.join(command)}`")
 
 
 if __name__ == "__main__":

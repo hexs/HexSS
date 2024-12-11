@@ -3,6 +3,8 @@ import socket
 from socket import AddressFamily
 import subprocess
 import platform
+
+from hexss import json_dump
 from hexss import json_load
 
 
@@ -179,16 +181,19 @@ hostname = get_hostname()
 username = get_username()
 proxies = None
 
-if platform.system() == "Windows":
-    config_dir = fr'C:\Users\{username}\Documents\hexss'
-else:
-    config_dir = f'/home/{username}/hexss'
-os.makedirs(config_dir, exist_ok=True)
+try:
+    if platform.system() == "Windows":
+        config_dir = fr'C:\Users\{username}\Documents\hexss'
+    else:
+        config_dir = f'/home/{username}/hexss'
+    os.makedirs(config_dir, exist_ok=True)
 
-if 'proxy.json' in os.listdir(config_dir):
-    proxies = json_load(os.path.join(config_dir, 'proxy.json'))
-else:
-    json_load(os.path.join(config_dir, 'no proxy.json'), {
-        "http": "http://<user>:<pass>@150.61.8.70:10080",
-        "https": "http://<user>:<pass>@150.61.8.70:10080"
-    }, True)
+    if 'proxies.json' in os.listdir(config_dir):
+        proxies = json_load(os.path.join(config_dir, 'proxies.json'))
+    else:
+        json_dump(os.path.join(config_dir, 'no proxies.json'), {
+            "http": "http://<user>:<pass>@150.61.8.70:10080",
+            "https": "http://<user>:<pass>@150.61.8.70:10080"
+        }, True)
+except Exception as e:
+    print(f"Error: proxies.json file in {config_dir}")

@@ -183,7 +183,7 @@ proxies = None
 
 try:
     if platform.system() == "Windows":
-        config_dir = fr'C:\Users\{username}\Documents\hexss'
+        config_dir = f'C:/Users/{username}/AppData/Roaming/hexss'
     else:
         config_dir = f'/home/{username}/hexss'
     os.makedirs(config_dir, exist_ok=True)
@@ -197,3 +197,4 @@ try:
         }, True)
 except Exception as e:
     print(f"Error: proxies.json file in {config_dir}")
+    print(e)

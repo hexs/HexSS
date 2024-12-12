@@ -31,7 +31,7 @@ def check_packages(*args, install=False):
             subprocess.run(f"{' '.join(command)}")
             check_packages(*args)
 
-            raise Warning(f"{GREEN}Missing packages installation complete{ENDC} {YELLOW}Run again!{ENDC}")
+            raise Warning(f"{GREEN}Missing packages installation complete{ENDC}, {YELLOW}Run again!{ENDC}")
         else:
             raise ImportError(
                 f"Missing packages; You can install them using `pip install {' '.join(command)}`")

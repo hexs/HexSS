@@ -1,10 +1,35 @@
-from hexss import json_load, proxies, check_packages
+import hexss
 
-# Ensure required packages are installed
-check_packages('requests', 'GitPython')
+hexss.check_packages('requests', 'GitPython')
 
+from hexss import json_load, proxies
 import requests
 from git import Repo
+
+
+def clone(path=".", url=None):
+    """
+    Clone a Git repository from the specified URL to the given path.
+
+    Args:
+        url (str): The URL of the Git repository to clone.
+        path (str): The local directory where the repository should be cloned. Defaults to the current directory.
+
+    Returns:
+        str: The path to the cloned repository if successful.
+
+    Raises:
+        Exception: If the cloning operation fails for any reason.
+    """
+
+    try:
+        print(f"Cloning repository from {url} into {path}...")
+        # Clone the repository
+        repo = Repo.clone_from(url, path)
+        print(f"Repository successfully cloned to: {repo.working_dir}")
+        return repo.working_dir
+    except Exception as e:
+        raise Exception(f"Error occurred while cloning the repository: {e}")
 
 
 def pull(path):

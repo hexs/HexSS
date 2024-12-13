@@ -225,8 +225,8 @@ def initialize_proxies() -> Optional[dict]:
     try:
         if os.path.exists(os.path.join(hexss_dir, "proxies.json")):
             return json_load(os.path.join(hexss_dir, "proxies.json"))
-        if os.path.exists(os.path.join(hexss_dir, "no proxies.json")):
-            pass
+        elif os.path.exists(os.path.join(hexss_dir, "no proxies.json")):
+            return None
         else:
             json_dump(os.path.join(hexss_dir, "no proxies.json"), {
                 "http": "http://<user>:<pass>@150.61.8.70:10080",

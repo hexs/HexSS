@@ -1,3 +1,4 @@
+import time
 import hexss
 
 hexss.check_packages('requests', 'GitPython')
@@ -46,8 +47,14 @@ def pull(path):
         repo = Repo(path)
         res = repo.git.pull('origin', 'main')
         print(res)
+        return res
     except Exception as e:
         print(f"Error while pulling changes: {e}")
+
+
+def pull_loop(path):
+    while pull(path) is None:
+        time.sleep(10)
 
 
 def push_if_status_change(path):

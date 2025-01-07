@@ -1,47 +1,29 @@
 import json
 import time
-from flask import Flask, render_template, request, jsonify, abort, Response
-from hexss.constants import GREEN, RED, ENDC
-from hexss.network import get_all_ipv4, get_hostname
-from hexss.serial import get_comport
-from hexss.control_robot.robot import Robot
-import threading
 import logging
+from functools import wraps
+import traceback
+
+from flask import Flask, render_template, request, jsonify, abort, Response
+from hexss.network import get_all_ipv4, get_hostname
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-robot = None
 
 
-def initialize_robot():
-    global robot
-    if robot is None:
+def handle_errors(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
         try:
-            comport = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
-            robot = Robot(comport, baudrate=38400)
-            logger.info(f"{GREEN}Robot initialized successfully{ENDC}")
+            return f(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Failed to initialize robot: {e}")
-            return False
+            logger.error(f"Error in {f.__name__}: {traceback.format_exc()}")
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
-    def run_robot():
-        while True:
-            try:
-                robot.run()
-            except Exception as e:
-                logger.error(f"Error in robot.run(): {e}")
-
-    robot_thread = threading.Thread(target=run_robot, daemon=True)
-    robot_thread.start()
-    return True
-
-
-if not initialize_robot():
-    logger.error("Failed to initialize robot. Exiting.")
-    exit(1)
+    return decorated_function
 
 
 @app.route('/')
@@ -50,112 +32,106 @@ def index():
 
 
 @app.route('/api/servo', methods=['POST'])
+@handle_errors
 def servo():
-    try:
-        on = request.json.get('on')
-        if on is None:
-            abort(400, description="Missing 'on' parameter")
-        robot.servo(on)
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in servo: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+    on = request.json.get('on')
+
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+    if on is None:
+        abort(400, description="Missing 'on' parameter")
+
+    robot.servo(slave, on)
+    return jsonify({'status': 'success'})
 
 
 @app.route('/api/alarm_reset', methods=['POST'])
+@handle_errors
 def alarm_reset():
-    try:
-        robot.alarm_reset()
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in alarm_reset: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+
+    robot.alarm_reset(slave)
+    return jsonify({'status': 'success'})
 
 
 @app.route('/api/pause', methods=['POST'])
 def pause():
-    try:
-        pause = request.json.get('pause')
-        if pause is None:
-            abort(400, description="Missing 'pause' parameter")
-        robot.pause(pause)
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in pause: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+    pause = request.json.get('pause')
+
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+    if pause is None:
+        abort(400, description="Missing 'pause' parameter")
+
+    robot.pause(slave, pause)
+    return jsonify({'status': 'success'})
 
 
 @app.route('/api/home', methods=['POST'])
 def home():
-    try:
-        slave = request.json.get('slave')
-        robot.home(slave)
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in home: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+
+    robot.home(slave)
+    return jsonify({'status': 'success'})
 
 
 @app.route('/api/jog', methods=['POST'])
+@handle_errors
 def jog():
-    try:
-        data = request.json
-        required_fields = ['slave', 'positive_side', 'move']
-        if not all(field in data for field in required_fields):
-            abort(400, description="Missing required fields")
-        robot.jog(data['slave'], data['positive_side'], data['move'])
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in jog: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+    direction = request.json.get('direction')
 
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+    if direction is None:
+        abort(400, description="Missing 'direction' parameter")
 
-@app.route('/api/current_position', methods=['GET', 'POST'])
-def current_position():
-    try:
-        robot.current_position()
-        return jsonify({'status': 'success', 'data': robot.current_position_vel})
-    except Exception as e:
-        logger.error(f"Error in current_position: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot.jog(slave, direction)
+    return jsonify({'status': 'success'})
 
 
 @app.route('/api/move_to', methods=['POST'])
 def move_to():
-    try:
-        row = request.json.get('row')
-        if row is None:
-            abort(400, description="Missing 'row' parameter")
-        robot.move_to(row)
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in move_to: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    robot = app.config['robot']
+    slave = request.json.get('slave')
+    row = request.json.get('row')
+
+    if slave is None:
+        abort(400, description="Missing 'slave' parameter")
+    if row is None:
+        abort(400, description="Missing 'row' parameter")
+
+    robot.move_to(slave, row)
+    return jsonify({'status': 'success'})
 
 
-@app.route('/api/set_to', methods=['POST'])
-def set_to():
-    try:
-        data = request.json
-        required_fields = ['slave', 'row', 'position', 'speed', 'acc', 'dec']
-        if not all(field in data for field in required_fields):
-            abort(400, description="Missing required fields")
-        robot.set_to(data['slave'], data['row'], data['position'], data['speed'], data['acc'], data['dec'])
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        logger.error(f"Error in set_to: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-# new function
 @app.route('/socket/current_position', methods=['GET', 'POST'])
 def current_position_socket():
+    robot = app.config['robot']
+
     def generate():
         result = ''
         while True:
-            robot.current_position()
             old_result = result
-            result = f"data: {json.dumps(robot.current_position_vel)}\n\n"
+            result = f"data: {json.dumps({
+                '01': robot.get_current_position(1),
+                '02': robot.get_current_position(2),
+                '03': robot.get_current_position(3),
+                '04': robot.get_current_position(4),
+            })}\n\n"
             if result != old_result:
                 yield result
             time.sleep(0.1)
@@ -173,10 +149,12 @@ def internal_server_error(error):
     return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
 
-def run(data):
+def run(data, robot):
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
     app.config['data'] = data
+    app.config['robot'] = robot
+
     ipv4 = data['config']['ipv4']
     port = data['config']['port']
     if ipv4 == '0.0.0.0':

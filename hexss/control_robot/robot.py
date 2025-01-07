@@ -1,178 +1,205 @@
 import time
-from datetime import datetime, timedelta
-import serial
-from typing import Dict, Union, List
 import logging
-from hexss.serial import get_comport
+from typing import Union, List, Optional
+from functools import wraps
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import numpy as np
+from pymodbus.client import ModbusSerialClient
+from hexss.serial import get_comport
+from hexss.numpy import combine_uint16_to_int32
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def normalize_slaves(func):
+    """Decorator to normalize 'slaves' argument into a list format."""
+
+    @wraps(func)
+    def wrapper(self, slaves: Union[int, List[int]], *args, **kwargs):
+        if isinstance(slaves, int):
+            slaves = [slaves]
+        elif not isinstance(slaves, list):
+            raise ValueError(f"Invalid 'slaves' type ({type(slaves)}). Must be int or list.")
+        return func(self, slaves, *args, **kwargs)
+
+    return wrapper
 
 
 class Robot:
-    def __init__(self, comport: str, baudrate: int = 38400) -> None:
+    HOME = 4
+    PAUSE = 5
+    ALARM_RESET = 8
+    SERVO = 12
+
+    JOG_MINUS = 8
+    JOG_PLUS = 9
+
+    def __init__(self, comport: str, baudrate: int = 38400, timeout: float = 0.05, dry_run: bool = False) -> None:
+        """Initialize Modbus client for robot communication."""
         self.logger = logging.getLogger(__name__)
-        try:
-            self.ser = serial.Serial(port=comport, baudrate=baudrate)
-        except serial.SerialException as e:
-            self.logger.error(f"Failed to initialize serial connection: {e}")
-            raise
+        self.dry_run = dry_run
 
-        self.current_position_vel: Dict[str, int] = {'01': 0, '02': 0, '03': 0, '04': 0}
-        self.send_data_last_datetime = datetime.now()
-        self.buffer = bytearray()
-
-    @staticmethod
-    def LRC_calculation(message: str) -> bytes:
-        sum_of_bytes = sum(int(message[i:i + 2], 16) for i in range(0, len(message), 2))
-        error_check = f'{(0x100 - sum_of_bytes) & 0xFF:02X}'
-        return f':{message}{error_check}\r\n'.encode()
-
-    def send_data_(self, slave_address: int, function_code: str, register_address: str, *args: str) -> None:
-        while (datetime.now() - self.send_data_last_datetime) <= timedelta(milliseconds=20):
-            time.sleep(0.001)
-
-        self.send_data_last_datetime = datetime.now()
-        message = f'{slave_address:02}{function_code}{register_address}{"".join(args)}'
-        message = self.LRC_calculation(message)
-        try:
-            # self.logger.info(f"Sending: {message} len: {len(message)}")
-            self.ser.write(message)
-        except serial.SerialException as e:
-            self.logger.error(f"Failed to send data: {e}")
-            raise
-
-    def send_data(self, slave_address: Union[int, str], function_code: str, register_address: str,
-                  *args: str) -> None:
-        if slave_address == 'all':
-            for addr in [1, 2, 3, 4]:
-                self.send_data_(addr, function_code, register_address, *args)
+        if not dry_run:
+            self.client = ModbusSerialClient(port=comport, baudrate=baudrate, timeout=timeout)
+            if not self.client.connect():
+                self.logger.warning(f"Failed to connect to {comport}. Check configuration.")
         else:
-            self.send_data_(slave_address, function_code, register_address, *args)
+            self.client = None
+            self.logger.warning("Dry-run mode enabled. No commands will be sent.")
 
-    def servo(self, on: bool = True) -> None:
-        self.logger.info('Servo ON' if on else 'Servo OFF')
-        self.send_data('all', '05', '0403', 'FF00' if on else '0000')
+    def close_connection(self) -> None:
+        """Close the Modbus communication client."""
+        if self.client and self.client.is_socket_open():
+            self.client.close()
+            self.logger.info("Connection closed.")
 
-    def alarm_reset(self) -> None:
-        self.logger.info('Alarm reset')
-        self.send_data('all', '05', '0407', 'FF00')
-        self.send_data('all', '05', '0407', '0000')
-
-    def pause(self, pause: bool = True) -> None:
-        self.logger.info('Pause' if pause else 'Un pause')
-        self.send_data('all', '05', '040A', 'FF00' if pause else '0000')
-
-    def home(self, slave: Union[int, str] = 'all') -> None:
-        self.logger.info(f'Home(slave:{slave}')
-        self.send_data(slave, '05', '040B', 'FF00')
-        self.send_data(slave, '05', '040B', '0000')
-
-    def jog(self, slave: int, positive_side: bool, move: bool) -> None:
-        if move:
-            self.logger.info(f'Jog(slave:{slave}, side:{"+" if positive_side else "-"})')
-        register = '0416' if positive_side else '0417'
-        data = 'FF00' if move else '0000'
-        self.send_data(slave, '05', register, data)
-        self.current_position()
-
-    def current_position(self) -> None:
-        self.send_data('all', '03', '9000', '0002')
-
-    def move_to(self, row: int) -> None:
-        self.send_data('all', '06', '9800', f'{row:04X}')
-
-    def set_to(self, slave: int, row: int, position: float, speed: float, acc: float, dec: float) -> None:
-        position = int(position * 100) & 0xFFFFFFFF
-        speed = int(speed * 100)
-        acc = int(acc * 100)
-        dec = int(dec * 100)
-
-        self.send_data(
-            slave,
-            '10',
-            f'{0x100 + row:03X}0',  # start_address
-            '000F',  # number_of_regis
-            '1E',  # number_of_bytes
-            f'{position:08X}',  # data 1,2 |target position = 100 (mm) x 100 = 10000 → 00002710
-            '0000',
-            '000A',
-            f'{speed:08X}',  # data 5,6 |speed = 200 (mm/sec) x 100 = 20000 → 00004E20
-            '0000',
-            '1770',
-            '0000',
-            '0FA0',
-            f'{acc:04X}',  # data 11 |acceleration =0.01 (G) x 100 = 1 → 0001
-            f'{dec:04X}',  # data 12 |deceleration =0.3 (G) x 100 = 30 → 001E
-            '0000',
-            '0000',
-            '0000',
-        )
-        time.sleep(0.5)
-
-    def evens(self, string: str) -> None:
-        if len(string) == 17 and string[3:7] == '0304':
-            slave = string[1:3]
-            vel = int(string[7:-2], 16)
-            if vel > 0x7FFFFFFF:
-                vel -= 0x100000000
-            # self.logger.info(f"Slave: {slave}, Velocity: {vel}, Hex: {hex(vel)}")
-            self.current_position_vel[slave] = vel
-
-    def run(self) -> None:
+    def read_registers(self, slave_id: int, address: int, count: int = 1) -> Optional[List[int]]:
+        """Read registers from the Modbus slave device."""
         try:
-            if self.ser.in_waiting:
-                data_ = self.ser.read(self.ser.in_waiting)
-                self.buffer.extend(data_)
-                while b'\r\n' in self.buffer:
-                    message, self.buffer = self.buffer.split(b'\r\n', 1)
-                    if message.startswith(b':'):
-                        # self.logger.info(f"Received: {message.decode()}\\r\\n")
-                        self.evens(message.decode())
-        except serial.SerialException as e:
-            self.logger.error(f"Serial communication error: {e}")
+            response = self.client.read_input_registers(address=address, count=count, slave=slave_id)
+            if response.isError():
+                self.logger.error(f"Error reading from slave {slave_id}, address {address}: {response}")
+                return None
+            return response.registers
         except Exception as e:
-            self.logger.error(f"Unexpected error in run method: {e}")
+            self.logger.exception(f"Exception during read: {e}")
+            return None
+
+    def write_registers(self, slave_id: int, address: int, values: List[int]) -> None:
+        """Write values to Modbus slave device registers."""
+        if self.dry_run:
+            self.logger.debug(f"Dry-run mode: Writing to {slave_id}, address {address}, values {values}")
+            return
+
+        try:
+            response = self.client.write_registers(address=address, values=values, slave=slave_id)
+            if response.isError():
+                self.logger.error(f"Error writing to slave {slave_id}, address {address}: {response}")
+        except Exception as e:
+            self.logger.exception(f"Exception during write: {e}")
+
+    def set_bit(self, slave: int, register_address: int, bit_number: int) -> None:
+        """Set a specific bit in a register."""
+        registers = self.read_registers(slave, register_address, 1)
+        if registers:
+            new_value = registers[0] | (1 << bit_number)
+            self.write_registers(slave, register_address, [new_value])
+
+    def reset_bit(self, slave: int, register_address: int, bit_number: int) -> None:
+        """Reset (clear) a specific bit in a register."""
+        registers = self.read_registers(slave, register_address, 1)
+        if registers:
+            new_value = registers[0] & ~(1 << bit_number)
+            self.write_registers(slave, register_address, [new_value])
+
+    def write_to_register(self, slave: int, register_address: int, value: int) -> None:
+        """Write a single value to a register."""
+        self.write_registers(slave, register_address, [value])
+
+    def get_current_position(self, slave: int) -> int:
+        """Retrieve the current position from registers."""
+        registers = self.read_registers(slave, 64 * 16, 2)
+        return int(combine_uint16_to_int32(registers)) if registers else 0
+
+    def get_target_position(self, slave: int) -> int:
+        """Retrieve the target position from registers."""
+        registers = self.read_registers(slave, 64 * 612, 2)
+        return int(combine_uint16_to_int32(registers)) if registers else 0
+
+    def wait_for_target(self, slave: int, timeout: int = 30) -> None:
+        """Wait for the robot to reach its target position."""
+        start_time = time.time()
+        previous_positions = []
+        target_position = self.get_target_position(slave)
+
+        while time.time() - start_time < timeout:
+            current_position = self.get_current_position(slave)
+            print(f'\rTarget: {target_position} << Current: {current_position}', end='')
+            previous_positions.append(current_position)
+
+            if len(previous_positions) > 10:
+                previous_positions = previous_positions[-10:]
+                if all(pos == previous_positions[0] for pos in previous_positions):
+                    if abs(current_position - target_position) <= 3:
+                        print(f'\r ', end='')
+                        break
+            time.sleep(0.1)
+
+        else:
+            self.logger.warning(f"Timeout: Slave {slave} did not reach the target position.")
+
+    @normalize_slaves
+    def servo(self, slaves, on: bool = True) -> None:
+        self.logger.info(f'servo(on={on})')
+        for slave in slaves:
+            if on:
+                self.set_bit(slave, 64 * 52 + 0, self.SERVO)
+            else:
+                self.reset_bit(slave, 64 * 52 + 0, self.SERVO)
+
+    @normalize_slaves
+    def alarm_reset(self, slaves) -> None:
+        self.logger.info(f'alarm_reset(slave={slaves})')
+        for slave in slaves:
+            self.set_bit(slave, 64 * 52 + 0, self.ALARM_RESET)
+            self.reset_bit(slave, 64 * 52 + 0, self.ALARM_RESET)
+
+    @normalize_slaves
+    def pause(self, slaves, pause: bool = True) -> None:
+        self.logger.info(f'pause(slave={slaves}, pause={pause})')
+        for slave in slaves:
+            if pause:
+                self.set_bit(slave, 64 * 52 + 0, self.PAUSE)
+            else:
+                self.reset_bit(slave, 64 * 52 + 0, self.PAUSE)
+
+    @normalize_slaves
+    def home(self, slaves: Union[int, List[int]], alarm_reset=False, on_servo=False, unpause=False) -> None:
+        self.logger.info(f'home(slave={slaves})')
+        for slave in slaves:
+            if alarm_reset:
+                self.set_bit(slave, 64 * 52 + 0, self.ALARM_RESET)
+                self.reset_bit(slave, 64 * 52 + 0, self.ALARM_RESET)
+            if on_servo:
+                self.reset_bit(slave, 64 * 52 + 0, self.SERVO)
+                self.set_bit(slave, 64 * 52 + 0, self.SERVO)
+            if unpause:
+                self.set_bit(slave, 64 * 52 + 0, self.PAUSE)
+                self.reset_bit(slave, 64 * 52 + 0, self.PAUSE)
+
+            self.set_bit(slave, 64 * 52 + 0, self.HOME)
+            self.reset_bit(slave, 64 * 52 + 0, self.HOME)
+
+    def jog(self, slave: int, direction='+') -> None:
+        if direction == '+':
+            self.logger.info(f'jog(slave={slave}, direction:{direction})')
+            self.set_bit(slave, 64 * 52 + 1, self.JOG_PLUS)
+        elif direction == '-':
+            self.logger.info(f'jog(slave={slave}, direction:{direction})')
+            self.set_bit(slave, 64 * 52 + 1, self.JOG_MINUS)
+        else:
+            self.reset_bit(slave, 64 * 52 + 1, self.JOG_PLUS)
+            self.reset_bit(slave, 64 * 52 + 1, self.JOG_MINUS)
+
+    def move(self, slave, value):
+        self.write_to_register(slave, 64 * 612 + 1, value)
+
+    @normalize_slaves
+    def move_to(self, slaves: Union[int, list], row: int) -> None:
+        self.logger.info(f'move_to(slaves={slaves} ,row={row})')
+        for slave in slaves:
+            self.write_to_register(slave, 64 * 608 + 0, row)
 
 
 if __name__ == '__main__':
     comport = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
     robot = Robot(comport, baudrate=38400)
-    robot.move_to(0)
-    time.sleep(2)
-    robot.move_to(8)
-    time.sleep(0.5)
-    robot.pause()
-    time.sleep(0.2)
-    robot.pause(False)
-    time.sleep(2)
 
-    robot.alarm_reset()
-    time.sleep(2)
+    robot.home(1, alarm_reset=True, on_servo=True, unpause=True)
+    robot.wait_for_target(1)
 
-    x = 30
-    y = 76
-    z1 = round(150-6 - 110 / 1.414, 2)
-    z2 = round(150-6 - 36 / 1.441, 2)
-    z3 = round(150-6 - 78 / 1.414, 2)
-    y1 = y
-    y2 = y + 52
-    y3 = y - 43
-    position = {
-        1: (x + 0, y1, z1, 0),
-        2: (x + 0, y2, z2, 0),
-        3: (x + 86, y1, z1, 0),
-        4: (x + 86, y2, z2, 0),
-        5: (x + 162, y1, z1, 0),
-        6: (x + 162, y2, z2, 0),
-        7: (x + 237, y1, z1, 0),
-        8: (x + 237, y2, z2, 0),
-        9: (x + 304, y1, z1, 0),
-        10: (x + 304, y2, z2, 0),
-        11: (x + 230, y3, z3, 0),
-    }
-    for k, v in position.items():
-        print(f'{k}: {v}')
-        robot.set_to(1, k, v[0], 200, 0.1, 0.1)
-        robot.set_to(2, k, v[1], 200, 0.1, 0.1)
-        robot.set_to(3, k, v[2], 100, 0.1, 0.1)
-        robot.set_to(4, k, v[3], 100, 0.1, 0.1)
+    robot.move_to(1, 4)
+    robot.wait_for_target(1)
+
+    robot.move_to(1, 0)
+    robot.wait_for_target(1)

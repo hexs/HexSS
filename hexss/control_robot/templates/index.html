@@ -48,7 +48,6 @@
     <div>
         <button id="alarm-reset">Alarm Reset</button>
         <button id="home">Home</button>
-        <button id="current-position">Current Position</button>
     </div>
 </section>
 
@@ -57,19 +56,6 @@
     <div>
         <input type="number" id="move-to-row" placeholder="Row" aria-label="Row number">
         <button id="move-to">Move To</button>
-    </div>
-</section>
-
-<section aria-labelledby="set-to-heading">
-    <h2 id="set-to-heading">Set To</h2>
-    <div>
-        <input type="number" id="set-to-slave" placeholder="Slave" aria-label="Slave ID">
-        <input type="number" id="set-to-row" placeholder="Row" aria-label="Row number">
-        <input type="number" id="set-to-position" placeholder="Position" aria-label="Position">
-        <input type="number" id="set-to-speed" placeholder="Speed" aria-label="Speed">
-        <input type="number" id="set-to-acc" placeholder="Acceleration" aria-label="Acceleration">
-        <input type="number" id="set-to-dec" placeholder="Deceleration" aria-label="Deceleration">
-        <button id="set-to">Set To</button>
     </div>
 </section>
 
@@ -92,8 +78,8 @@
             <label>Slave ${slaveId}:</label>
             <span id="position${slaveId}">??? mm</span>
             <div>
-                <button class="jog-btn" data-slave="${slaveId}" data-direction="plus">Jog +</button>
-                <button class="jog-btn" data-slave="${slaveId}" data-direction="minus">Jog -</button>
+                <button class="jog-btn" data-slave="${slaveId}" data-direction="+">Jog +</button>
+                <button class="jog-btn" data-slave="${slaveId}" data-direction="-">Jog -</button>
                 <button class="home-btn" data-slave="${slaveId}">Home</button>
             </div>
         </div>
@@ -105,22 +91,24 @@
         $(document).on('mousedown mouseup mouseleave', '.jog-btn', function (event) {
             const slave = parseInt($(this).data('slave'));
             const direction = $(this).data('direction');
-            jog(slave, direction === 'plus', event.type === 'mousedown');
+            if (event.type === 'mousedown')
+                jog(slave, direction,);
+            else {
+                jog(slave, '0');
+            }
         });
         $(document).on('mouseup', '.home-btn', function () {
             const slave = parseInt($(this).data('slave'));
             home(slave);
         });
 
-        $('#servo-on').click(() => servo(true));
-        $('#servo-off').click(() => servo(false));
-        $('#pause-on').click(() => pause(true));
-        $('#pause-off').click(() => pause(false));
-        $('#alarm-reset').click(alarmReset);
-        $('#home').click(() => home("all"));
-        $('#current-position').click(currentPosition);
-        $('#move-to').click(moveTo);
-        $('#set-to').click(setTo);
+        $('#servo-on').click(() => servo([1, 2, 3, 4], true));
+        $('#servo-off').click(() => servo([1, 2, 3, 4], false));
+        $('#pause-on').click(() => pause([1, 2, 3, 4], true));
+        $('#pause-off').click(() => pause([1, 2, 3, 4], false));
+        $('#alarm-reset').click(() => alarmReset([1, 2, 3, 4]));
+        $('#home').click(() => home([1, 2, 3, 4]));
+        $('#move-to').click(() => moveTo([1, 2, 3, 4]));
     }
 
     function initPositionSocket() {
@@ -153,48 +141,35 @@
         });
     }
 
-    function servo(on) {
-        apiCall('servo', 'POST', {on: on});
+    function servo(slave, on) {
+        apiCall('servo', 'POST', {slave, on});
     }
 
-    function alarmReset() {
-        apiCall('alarm_reset', 'POST');
+    function alarmReset(slave) {
+        apiCall('alarm_reset', 'POST',{slave});
     }
 
-    function pause(pause) {
-        apiCall('pause', 'POST', {pause: pause});
+    function pause(slave, pause_) {
+        apiCall('pause', 'POST', {slave, pause:pause_});
     }
 
     function home(slave) {
-        apiCall('home', 'POST', {slave: slave});
+        apiCall('home', 'POST', {slave});
     }
 
     function currentPosition() {
         apiCall('current_position', 'GET');
     }
 
-    function jog(slave, positiveSide, move) {
-        apiCall('jog', 'POST', {
-            slave: slave,
-            positive_side: positiveSide,
-            move: move
-        });
+    function jog(slave, direction) {
+        apiCall('jog', 'POST', {slave, direction});
     }
 
-    function moveTo() {
-        apiCall('move_to', 'POST', {row: parseInt($('#move-to-row').val())});
+    function moveTo(slave) {
+        apiCall('move_to', 'POST', {slave, row: parseInt($('#move-to-row').val())});
     }
 
-    function setTo() {
-        apiCall('set_to', 'POST', {
-            slave: parseInt($('#set-to-slave').val()),
-            row: parseInt($('#set-to-row').val()),
-            position: parseFloat($('#set-to-position').val()),
-            speed: parseFloat($('#set-to-speed').val()),
-            acc: parseFloat($('#set-to-acc').val()),
-            dec: parseFloat($('#set-to-dec').val())
-        });
-    }
+
 </script>
 </body>
 </html>

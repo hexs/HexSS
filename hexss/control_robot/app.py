@@ -4,8 +4,10 @@ import logging
 from functools import wraps
 import traceback
 
+import pandas as pd
 from flask import Flask, render_template, request, jsonify, abort, Response
 from hexss.network import get_all_ipv4, get_hostname
+from pretty_dataframe import column_mapping, read_p_df, write_p_df
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,95 +28,92 @@ def handle_errors(f):
     return decorated_function
 
 
+def validate_params(*required_params):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            for param in required_params:
+                if request.json.get(param) is None:
+                    abort(400, description=f"Required Params: {required_params}\nMissing '{param}' parameter")
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 
 @app.route('/api/servo', methods=['POST'])
+@validate_params('slave', 'on')
 @handle_errors
 def servo():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-    on = request.json.get('on')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-    if on is None:
-        abort(400, description="Missing 'on' parameter")
-
-    robot.servo(slave, on)
+    robot.servo(
+        request.json.get('slave'),
+        request.json.get('on')
+    )
     return jsonify({'status': 'success'})
 
 
 @app.route('/api/alarm_reset', methods=['POST'])
+@validate_params('slave')
 @handle_errors
 def alarm_reset():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-
-    robot.alarm_reset(slave)
+    robot.alarm_reset(
+        request.json.get('slave')
+    )
     return jsonify({'status': 'success'})
 
 
 @app.route('/api/pause', methods=['POST'])
+@validate_params('slave', 'pause')
+@handle_errors
 def pause():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-    pause = request.json.get('pause')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-    if pause is None:
-        abort(400, description="Missing 'pause' parameter")
-
-    robot.pause(slave, pause)
+    robot.pause(
+        request.json.get('slave'),
+        request.json.get('pause')
+    )
     return jsonify({'status': 'success'})
 
 
 @app.route('/api/home', methods=['POST'])
+@validate_params('slave')
+@handle_errors
 def home():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-
-    robot.home(slave)
+    robot.home(
+        request.json.get('slave')
+    )
     return jsonify({'status': 'success'})
 
 
 @app.route('/api/jog', methods=['POST'])
+@validate_params('slave', 'direction')
 @handle_errors
 def jog():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-    direction = request.json.get('direction')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-    if direction is None:
-        abort(400, description="Missing 'direction' parameter")
-
-    robot.jog(slave, direction)
+    robot.jog(
+        request.json.get('slave'),
+        request.json.get('direction')
+    )
     return jsonify({'status': 'success'})
 
 
 @app.route('/api/move_to', methods=['POST'])
+@validate_params('slave', 'row')
+@handle_errors
 def move_to():
     robot = app.config['robot']
-    slave = request.json.get('slave')
-    row = request.json.get('row')
-
-    if slave is None:
-        abort(400, description="Missing 'slave' parameter")
-    if row is None:
-        abort(400, description="Missing 'row' parameter")
-
-    robot.move_to(slave, row)
+    robot.move_to(
+        request.json.get('slave'),
+        request.json.get('row')
+    )
     return jsonify({'status': 'success'})
 
 
@@ -139,14 +138,36 @@ def current_position_socket():
     return Response(generate(), mimetype='text/event-stream')
 
 
-@app.errorhandler(400)
-def bad_request(error):
-    return jsonify({'status': 'error', 'message': error.description}), 400
+@app.route("/table")
+def show_table():
+    return render_template("table_editor.html")
 
 
-@app.errorhandler(500)
-def internal_server_error(error):
-    return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+@app.route("/load", methods=["GET"])
+def get_data():
+    robot = app.config['robot']
+    try:
+        slave = request.args.get('slave', type=int)
+        return jsonify(read_p_df(robot, slave))
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route("/save", methods=["POST"])
+def save_changes():
+    robot = app.config['robot']
+    try:
+        slave = request.args.get('slave', type=int)
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data received"}), 400
+        p_df = pd.DataFrame(data)
+        p_df.rename(columns=dict(zip(range(len(column_mapping)), column_mapping.keys())), inplace=True)
+        write_p_df(robot, slave, p_df)
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 def run(data, robot):

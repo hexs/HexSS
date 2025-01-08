@@ -4,6 +4,7 @@ from typing import Union, List, Optional
 from functools import wraps
 
 import numpy as np
+import pandas as pd
 from pymodbus.client import ModbusSerialClient
 from hexss.serial import get_comport
 from hexss.numpy import combine_uint16_to_int32
@@ -38,6 +39,7 @@ class Robot:
         """Initialize Modbus client for robot communication."""
         self.logger = logging.getLogger(__name__)
         self.dry_run = dry_run
+        self.table_data = pd.DataFrame()
 
         if not dry_run:
             self.client = ModbusSerialClient(port=comport, baudrate=baudrate, timeout=timeout)
@@ -189,6 +191,55 @@ class Robot:
         self.logger.info(f'move_to(slaves={slaves} ,row={row})')
         for slave in slaves:
             self.write_to_register(slave, 64 * 608 + 0, row)
+
+    def read_table_data(self, slave: int) -> pd.DataFrame:
+        try:
+            all_positions = []
+            start_address = 4096
+            num_registers = 16
+            total_rows = 64
+
+            for i in range(total_rows):
+                row_address = start_address + i * num_registers
+                response = self.client.read_input_registers(
+                    address=row_address,
+                    count=num_registers,
+                    slave=slave
+                )
+
+                if response.isError():
+                    self.logger.error(f"Error reading table data from slave {slave}, row {i}")
+                    continue
+
+                data_dict = {f"{j}": val for j, val in enumerate(response.registers)}
+                all_positions.append(data_dict)
+            self.table_data = pd.DataFrame(all_positions) if all_positions else pd.DataFrame()
+            return self.table_data
+
+        except Exception as e:
+            self.logger.exception(f"Exception occurred while reading table data: {e}")
+            return pd.DataFrame()
+
+    def write_table_data(self, slave: int, table_data:pd.DataFrame):
+        try:
+            start_address = 4096
+            num_registers = 16
+
+            for row in range(len(self.table_data)):
+                if self.table_data.iloc[row].values.tolist() != table_data.iloc[row].values.tolist():
+                    print(f'{row}-->{table_data.iloc[row].values.tolist()}')
+
+                    row_address = start_address + row * num_registers
+                    response = self.client.write_registers(
+                        address=row_address,
+                        values=table_data.iloc[row].values.tolist(),
+                        slave=slave
+                    )
+            self.table_data = table_data
+
+        except Exception as e:
+            self.logger.exception(f"Exception occurred while writing table data: {e}")
+
 
 
 if __name__ == '__main__':

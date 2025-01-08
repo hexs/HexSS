@@ -1,0 +1,9 @@
+<link rel="stylesheet" href="static/header.css">
+
+<div class="header">
+    <a href="/" class="logo">Robot Control</a>
+    <div class="header-right">
+        <a href="/" class="{% if request.path == '/' %}active{% endif %}">Control Panel</a>
+        <a href="/table" class="{% if request.path == '/table' %}active{% endif %}">Table</a>
+    </div>
+</div>

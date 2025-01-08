@@ -4,67 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Robot Control Panel</title>
+    <link rel="stylesheet" href="/static/styles.css">
+
     <script src="static/jquery-3.6.0.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        button, input {
-            margin: 5px;
-            padding: 5px;
-        }
-
         .slave-control {
             margin: 10px;
-        }
-
-        h2 {
-            margin: 30px 0 10px;
         }
     </style>
 </head>
 <body>
-<h1>Robot Control Panel</h1>
+{% include 'header.html' %}
+<main class="page">
+    <div class="theme-default-content content__default">
+        <h2 id="jog-control-heading">Slave Control</h2>
+        <div class="container">
+            <section aria-labelledby="jog-control-heading">
+                <div id="slave-controls"></div>
+            </section>
+        </div>
 
-<section aria-labelledby="jog-control-heading">
-    <h2 id="jog-control-heading">Slave Control</h2>
-    <div id="slave-controls"></div>
-</section>
+        <h2 id="other-controls-heading">All Controls</h2>
+        <div class="container">
+            <section aria-labelledby="other-controls-heading">
+                <div>
+                    <button id="servo-on">Servo ON</button>
+                    <button id="servo-off">Servo OFF</button>
+                </div>
+                <div>
+                    <button id="pause-on">Pause ON</button>
+                    <button id="pause-off">Pause OFF</button>
+                </div>
+                <div>
+                    <button id="alarm-reset">Alarm Reset</button>
+                    <button id="home">Home</button>
+                </div>
+            </section>
+        </div>
 
-<section aria-labelledby="other-controls-heading">
-    <h2 id="other-controls-heading">All Controls</h2>
-    <div>
-        <button id="servo-on">Servo ON</button>
-        <button id="servo-off">Servo OFF</button>
+        <h2 id="move-to-heading">Move To</h2>
+        <div class="container">
+            <section aria-labelledby="move-to-heading">
+                <div>
+                    <input type="number" id="move-to-row" placeholder="Row" aria-label="Row number">
+                    <button id="move-to">Move To</button>
+                </div>
+            </section>
+        </div>
+
+        <h2 id="status-heading">Status</h2>
+        <div class="container">
+            <section aria-labelledby="status-heading">
+                <pre id="status" aria-live="polite"></pre>
+                <pre id="error_status" aria-live="polite"></pre>
+            </section>
+        </div>
     </div>
-    <div>
-        <button id="pause-on">Pause ON</button>
-        <button id="pause-off">Pause OFF</button>
-    </div>
-    <div>
-        <button id="alarm-reset">Alarm Reset</button>
-        <button id="home">Home</button>
-    </div>
-</section>
-
-<section aria-labelledby="move-to-heading">
-    <h2 id="move-to-heading">Move To</h2>
-    <div>
-        <input type="number" id="move-to-row" placeholder="Row" aria-label="Row number">
-        <button id="move-to">Move To</button>
-    </div>
-</section>
-
-<section aria-labelledby="status-heading">
-    <h2 id="status-heading">Status</h2>
-    <pre id="status" aria-live="polite"></pre>
-    <pre id="error_status" aria-live="polite"></pre>
-</section>
-
+</main>
 <script>
     $(document).ready(function () {
         initJogControls();

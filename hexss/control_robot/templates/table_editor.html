@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Editor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+
+    <link rel="stylesheet" href="/static/handsontable.full.min.css">
+    <script src="/static/handsontable.full.min.js"></script>
+
+</head>
+<body>
+{% include 'header.html' %}
+<h2 class="text-center">Table Editor</h2>
+<div class="container">
+    <a>Slave: </a>
+    <select name="slave-select" id="slave-select">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+    </select>
+    <button id="refresh-btn" class="btn btn-secondary mt-3">Refresh Table</button>
+    <button id="save-btn" class="btn btn-primary mt-3">Save Changes</button>
+    <div id="handsontable-container" class="mt-4"></div>
+</div>
+
+<script>
+    function loadTableData(slave){
+        destroyTable();
+        fetch("/load?slave="+slave)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(responseData => {
+                responseData.height = 500;
+                hot = new Handsontable(container, responseData);
+            })
+            .catch(error => {
+                console.error("Error loading table data:", error);
+                alert("Failed to load data. Please try again.");
+            });
+    };
+
+    function saveTableData(slave){
+        const updatedData = hot.getSourceData();
+        fetch("/save?slave="+slaveSelect.value, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                alert("Data saved successfully!");
+            } else {
+                alert("Failed to save data.");
+            }
+        })
+        .catch(error => {
+            console.error("Error saving data:", error);
+            alert("Failed to save data. Please try again.");
+        });
+    };
+
+    function destroyTable(){
+        if (hot) {
+            hot.destroy();
+            hot = null;
+        }
+    }
+
+    const slaveSelect = document.getElementById('slave-select');
+    const container = document.getElementById('handsontable-container');
+    let hot = null;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        loadTableData(slaveSelect.value)
+
+        slaveSelect.addEventListener('change', function () {
+            loadTableData(slaveSelect.value)
+        });
+
+        document.getElementById('refresh-btn').addEventListener('click', function () {
+            loadTableData(slaveSelect.value);
+        });
+        document.getElementById('save-btn').addEventListener('click', function () {
+            saveTableData(slaveSelect.value);
+        });
+
+    });
+</script>
+</body>
+</html>

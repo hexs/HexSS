@@ -7,7 +7,7 @@ import traceback
 import pandas as pd
 from flask import Flask, render_template, request, jsonify, abort, Response
 from hexss.network import get_all_ipv4, get_hostname
-from pretty_dataframe import column_mapping, read_p_df, write_p_df
+from hexss.control_robot.pretty_dataframe import column_mapping, read_p_df, write_p_df
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -125,12 +125,12 @@ def current_position_socket():
         result = ''
         while True:
             old_result = result
-            result = f"data: {json.dumps({
+            result = f"""data: {json.dumps({
                 '01': robot.get_current_position(1),
                 '02': robot.get_current_position(2),
                 '03': robot.get_current_position(3),
                 '04': robot.get_current_position(4),
-            })}\n\n"
+            })}\n\n"""
             if result != old_result:
                 yield result
             time.sleep(0.1)

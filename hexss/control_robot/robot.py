@@ -232,6 +232,10 @@ class Robot:
     def move(self, slave, value):
         self.write_to_register(slave, 64 * 612 + 1, value)
 
+    def move_multiple_slaves(self, slave_to_value_map: dict[int, int]) -> None:
+        for slave_id, position in slave_to_value_map.items():
+            self.move(slave_id, position)
+
     @normalize_slaves
     def move_to(self, slaves: Union[int, list], row: int) -> None:
         self.logger.info(f'move_to(slaves={slaves} ,row={row})')
@@ -289,6 +293,7 @@ class Robot:
 
 if __name__ == '__main__':
     from hexss.threading import Multithread
+
 
     def move(robot):
         robot.home([1, 2], alarm_reset=True, on_servo=True, unpause=True)

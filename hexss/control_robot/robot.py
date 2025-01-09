@@ -1,11 +1,14 @@
 import time
 import logging
+from datetime import datetime
 from typing import Union, List, Optional
 from functools import wraps
 
 import numpy as np
 import pandas as pd
 from pymodbus.client import ModbusSerialClient
+
+from hexss.constants import GREEN, YELLOW, RED, ENDC
 from hexss.serial import get_comport
 from hexss.numpy import combine_uint16_to_int32
 
@@ -67,6 +70,17 @@ class Robot:
             self.logger.exception(f"Exception during read: {e}")
             return None
 
+    def read_memories(self, slave_id: int):
+        memories = []
+
+        for i in range(1024):
+            data = self.read_registers(slave_id, 64 * i, count=64)
+            memories.append(data)
+            print(f'\r{i} {data}', end='')
+
+        print()
+        return memories
+
     def write_registers(self, slave_id: int, address: int, values: List[int]) -> None:
         """Write values to Modbus slave device registers."""
         if self.dry_run:
@@ -94,6 +108,13 @@ class Robot:
             new_value = registers[0] & ~(1 << bit_number)
             self.write_registers(slave, register_address, [new_value])
 
+    def read_bit(self, slave: int, register_address: int, bit_number: int) -> Union[bool, None]:
+        """Read a specific bit in a register."""
+        registers = self.read_registers(slave, register_address, 1)
+        if registers:
+            return (registers[0] & (1 << bit_number)) != 0
+        return None
+
     def write_to_register(self, slave: int, register_address: int, value: int) -> None:
         """Write a single value to a register."""
         self.write_registers(slave, register_address, [value])
@@ -108,27 +129,45 @@ class Robot:
         registers = self.read_registers(slave, 64 * 612, 2)
         return int(combine_uint16_to_int32(registers)) if registers else 0
 
-    def wait_for_target(self, slave: int, timeout: int = 30) -> None:
-        """Wait for the robot to reach its target position."""
+    @normalize_slaves
+    def wait_for_target(self, slaves: Union[int, List[int]], timeout: int = 30) -> None:
+        """Wait for the robots to reach their target positions."""
         start_time = time.time()
-        previous_positions = []
-        target_position = self.get_target_position(slave)
+        previous_positions = {slave: [] for slave in slaves}
+        target_positions = {slave: self.get_target_position(slave) for slave in slaves}
 
-        while time.time() - start_time < timeout:
-            current_position = self.get_current_position(slave)
-            print(f'\rTarget: {target_position} << Current: {current_position}', end='')
-            previous_positions.append(current_position)
+        while True:
+            pause_slaves = self.get_pause(slaves)
+            is_pause = any(pause_slaves.values())
+            if is_pause:
+                start_time = time.time()
+            else:
+                if time.time() - start_time > timeout:
+                    self.logger.warning(f"Timeout: Slaves {slaves} did not reach the target position.")
+                    break
 
-            if len(previous_positions) > 10:
-                previous_positions = previous_positions[-10:]
-                if all(pos == previous_positions[0] for pos in previous_positions):
-                    if abs(current_position - target_position) <= 3:
-                        print(f'\r ', end='')
-                        break
+            all_reached = True
+            distance_status = []
+
+            for slave in slaves:
+                current_position = self.get_current_position(slave)
+                distance = abs(target_positions[slave] - current_position)
+                distance_status.append(f"{RED if pause_slaves[slave] else YELLOW}Slave {slave}: {distance}{ENDC}")
+
+                prev = previous_positions[slave]
+                prev.append(current_position)
+                previous_positions[slave] = prev[-5:]
+
+                if len(prev) < 5 or len(set(prev)) > 1 or distance > 3:
+                    all_reached = False
+
+            print(f"\rWait: ({' | '.join(distance_status)}) {', is pause' if is_pause else ''}", end='')
+
+            if all_reached:
+                print()
+                break
+
             time.sleep(0.1)
-
-        else:
-            self.logger.warning(f"Timeout: Slave {slave} did not reach the target position.")
 
     @normalize_slaves
     def servo(self, slaves, on: bool = True) -> None:
@@ -154,6 +193,13 @@ class Robot:
                 self.set_bit(slave, 64 * 52 + 0, self.PAUSE)
             else:
                 self.reset_bit(slave, 64 * 52 + 0, self.PAUSE)
+
+    @normalize_slaves
+    def get_pause(self, slaves):
+        o = {}
+        for slave in slaves:
+            o[slave] = self.read_bit(slave, 64 * 52 + 0, self.PAUSE)
+        return o
 
     @normalize_slaves
     def home(self, slaves: Union[int, List[int]], alarm_reset=False, on_servo=False, unpause=False) -> None:
@@ -220,7 +266,7 @@ class Robot:
             self.logger.exception(f"Exception occurred while reading table data: {e}")
             return pd.DataFrame()
 
-    def write_table_data(self, slave: int, table_data:pd.DataFrame):
+    def write_table_data(self, slave: int, table_data: pd.DataFrame):
         try:
             start_address = 4096
             num_registers = 16
@@ -241,16 +287,69 @@ class Robot:
             self.logger.exception(f"Exception occurred while writing table data: {e}")
 
 
-
 if __name__ == '__main__':
+    from hexss.threading import Multithread
+
+    def move(robot):
+        robot.home([1, 2], alarm_reset=True, on_servo=True, unpause=True)
+        robot.wait_for_target([1, 2])
+
+        positions = [
+            (10765, 1745),
+            (40000, 1976),
+            (31559, 1214),
+            (5587, 2934),
+            (0, 0)
+        ]
+
+        for i, (v1, v2) in enumerate(positions):
+            print(f"Moving {i}")
+            robot.move(1, v1)
+            robot.move(2, v2)
+            robot.wait_for_target([1, 2])
+
+
+    def interrupt(robot):
+        t1 = datetime.now()
+        step = 0
+        while True:
+            if step == 0:
+                if (datetime.now() - t1).total_seconds() > 7.8:
+                    robot.pause([1], pause=True)
+                    step = 1
+
+            if step == 1:
+                if (datetime.now() - t1).total_seconds() > 20:
+                    robot.pause([1], pause=False)
+                    step = 2
+
+
+    def get_mem(robot):
+        robot.pause([1, 2], pause=True)
+        time.sleep(1)
+        memory_pause = robot.read_memories(1)
+        time.sleep(1)
+
+        robot.pause([1, 2], pause=False)
+        time.sleep(1)
+        memory_unpause = robot.read_memories(1)
+        time.sleep(1)
+
+        for i, (p, u) in enumerate(zip(memory_pause, memory_unpause)):
+            if p != u:
+                print(i)
+                print(p)
+                print(u)
+                print()
+
+
     comport = get_comport('ATEN USB to Serial', 'USB-Serial Controller')
     robot = Robot(comport, baudrate=38400)
 
-    robot.home(1, alarm_reset=True, on_servo=True, unpause=True)
-    robot.wait_for_target(1)
+    m = Multithread()
+    m.add_func(move, args=(robot,))
+    m.add_func(interrupt, args=(robot,))
 
-    robot.move_to(1, 4)
-    robot.wait_for_target(1)
+    m.start()
 
-    robot.move_to(1, 0)
-    robot.wait_for_target(1)
+    m.join()

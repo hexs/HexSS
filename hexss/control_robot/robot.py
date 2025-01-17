@@ -1,6 +1,7 @@
 import time
 import logging
 from datetime import datetime
+from pprint import pprint
 from typing import Union, List, Optional
 from functools import wraps
 
@@ -8,9 +9,10 @@ import numpy as np
 import pandas as pd
 from pymodbus.client import ModbusSerialClient
 
+import hexss.control_robot
 from hexss.constants import GREEN, YELLOW, RED, ENDC
 from hexss.serial import get_comport
-from hexss.numpy import combine_uint16_to_int32
+from hexss.numpy import combine_uint16_to_int32, split_int32_to_uint16
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -30,13 +32,41 @@ def normalize_slaves(func):
 
 
 class Robot:
-    HOME = 4
-    PAUSE = 5
-    ALARM_RESET = 8
-    SERVO = 12
+    # Controller Input Signals
+    DRG1 = DEVICE_CONTROL_REGISTER = 0x0D00
+    CSTR = 3  # 0: Normal, “0” -> “1” rise edge: Positioning start to the target position specified with the position no.
+    HOME = 4  # “0” -> “1” rise edge: Home return operation
+    STP = PAUSE = 5  # 0: Normal, 1: Pause (deceleration stop)
+    RES = ALARM_RESET = 8  # 0: Normal, “0” -> “1” rise edge: Alarm reset
+    SON = SERVO = 12  # 0: Servo OFF, 1: Servo ON
+    SFTY = 14  # Safety speed set with the parameter 0: Invalid, 1: Valid
 
+    POSR = 0x0D03
     JOG_MINUS = 8
     JOG_PLUS = 9
+
+    # Controller Output Signals
+    DSS1 = DEVICE_STATUS_REGISTER = 0x9005
+    PEND = 3  # 1: Positioning completed
+    HEND = 4  # 1: Home return completed
+    STP = 5  # 1: Pause command being issued
+    ALML = 9  # 1: Alarm indicating that continuous operation is impossible
+    ALMH = 10  # 1: Alarm indicating that continuous operation is impossible
+    PSFL = 11  # 1: Push & hold missing
+    SV = 12  # 1: Operation preparation completed (servo ON status)
+    PWR = 13  # 1: Controller preparation completed
+    SFTY = 14  # 1: Safety speed valid condition
+    EMGS = 15  # 1: Under emergency stop
+
+    DSSE = EXPANSION_DEVICE_STATUS_REGISTER = 0x9007
+    MOVE = 5  # 1: Moving (including home return, push & hold operation)
+    PUSH = 10  # 1: Push & hold operating
+    GMHS = 11  # 1: Home returning
+
+    ZONS = ZONE_STATUS_REGISTER = 0x9013
+    ZONE1 = 0  # Zone output 1
+    ZONE2 = 1  # Zone output 2
+    PZONE = 8  # Position zone output
 
     def __init__(self, comport: str, baudrate: int = 38400, timeout: float = 0.05, dry_run: bool = False) -> None:
         """Initialize Modbus client for robot communication."""
@@ -94,11 +124,20 @@ class Robot:
         except Exception as e:
             self.logger.exception(f"Exception during write: {e}")
 
+    def read_bit(self, slave: int, register_address: int, bit_number: int) -> Union[bool, None]:
+        """Read a specific bit in a register."""
+        registers = self.read_registers(slave, register_address, 1)
+        if registers:
+            return (registers[0] & (1 << bit_number)) != 0
+        return None
+
     def set_bit(self, slave: int, register_address: int, bit_number: int) -> None:
         """Set a specific bit in a register."""
         registers = self.read_registers(slave, register_address, 1)
         if registers:
             new_value = registers[0] | (1 << bit_number)
+            if registers[0] == new_value:
+                return
             self.write_registers(slave, register_address, [new_value])
 
     def reset_bit(self, slave: int, register_address: int, bit_number: int) -> None:
@@ -106,14 +145,9 @@ class Robot:
         registers = self.read_registers(slave, register_address, 1)
         if registers:
             new_value = registers[0] & ~(1 << bit_number)
+            if registers[0] == new_value:
+                return
             self.write_registers(slave, register_address, [new_value])
-
-    def read_bit(self, slave: int, register_address: int, bit_number: int) -> Union[bool, None]:
-        """Read a specific bit in a register."""
-        registers = self.read_registers(slave, register_address, 1)
-        if registers:
-            return (registers[0] & (1 << bit_number)) != 0
-        return None
 
     def write_to_register(self, slave: int, register_address: int, value: int) -> None:
         """Write a single value to a register."""
@@ -168,6 +202,23 @@ class Robot:
                 break
 
             time.sleep(0.1)
+
+    def read_register(self, slave):
+        registers_data = hexss.control_robot.registers.copy()
+
+        for name, register_info in registers_data.items():
+            register_value = self.read_registers(slave_id=slave, address=register_info['address'], count=1)
+            if register_value:
+                register_info['value'] = register_value[0]
+
+                if 'signals' in register_info:
+                    for signal in register_info['signals']:
+                        bit_value = (register_value[0] & (1 << signal['bit_position'])) != 0
+                        signal['value'] = bit_value
+            else:
+                self.logger.error(f"Failed to read register {name} (Address: 0x{register_info['address']:04X})")
+
+        return registers_data
 
     @normalize_slaves
     def servo(self, slaves, on: bool = True) -> None:
@@ -229,12 +280,12 @@ class Robot:
             self.reset_bit(slave, 64 * 52 + 1, self.JOG_PLUS)
             self.reset_bit(slave, 64 * 52 + 1, self.JOG_MINUS)
 
-    def move(self, slave, value):
-        self.write_to_register(slave, 64 * 612 + 1, value)
+    def move(self, slave, target_position: int):
+        self.write_registers(slave, 64 * 612 + 0, split_int32_to_uint16(target_position).tolist())
 
     def move_multiple_slaves(self, slave_to_value_map: dict[int, int]) -> None:
-        for slave_id, position in slave_to_value_map.items():
-            self.move(slave_id, position)
+        for slave, target_position in slave_to_value_map.items():
+            self.move(slave, target_position)
 
     @normalize_slaves
     def move_to(self, slaves: Union[int, list], row: int) -> None:
@@ -304,7 +355,7 @@ if __name__ == '__main__':
             (40000, 1976),
             (31559, 1214),
             (5587, 2934),
-            (0, 0)
+            (-1, -1)
         ]
 
         for i, (v1, v2) in enumerate(positions):
@@ -330,12 +381,12 @@ if __name__ == '__main__':
 
 
     def get_mem(robot):
-        robot.pause([1, 2], pause=True)
+        robot.set_bit(1, 64 * 52 + 0, robot.HOME)
         time.sleep(1)
         memory_pause = robot.read_memories(1)
         time.sleep(1)
 
-        robot.pause([1, 2], pause=False)
+        robot.reset_bit(1, 64 * 52 + 0, robot.HOME)
         time.sleep(1)
         memory_unpause = robot.read_memories(1)
         time.sleep(1)

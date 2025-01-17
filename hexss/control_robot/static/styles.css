@@ -1,4 +1,4 @@
-/* General Styles */
+
 body {
     font-family: Arial, sans-serif;
     line-height: 1.6;
@@ -100,4 +100,27 @@ button:disabled {
         width: 100%;
         margin-bottom: 10px;
     }
+}
+
+.tg {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+}
+.tg th, .tg td {
+    width: 6.25%;
+    border: 1px solid black;
+    text-align: center;
+    padding: 5px;
+}
+.tg .green {
+    background-color: green;
+    color: white;
+}
+.tg .red {
+    background-color: red;
+    color: white;
+}
+.tg .gray {
+    background-color: lightgray;
 }

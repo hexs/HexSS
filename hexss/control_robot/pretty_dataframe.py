@@ -1,18 +1,16 @@
 from hexss.pandas.dataframe_transformation import transform_dataframe, reverse_transformation
 
 column_mapping = {
-    "Target | (0,1)": [0, 1],
-    "Speed | (4,5)": [4, 5],
-    "Acceleration | (10)": [10],
-    "Deceleration | (11)": [11],
-    "Zone Boundary (+) | (6,7)": [6, 7],
-    "Zone Boundary (-) | (8,9)": [8, 9],
-    "(2)": [2],
-    "(3)": [3],
-    "(12)": [12],
-    "(13)": [13],
-    "(14)": [14],
-    "(15)": [15],
+    "Target": [0, 1],
+    "INP": [2, 3],  # Positioning band
+    "Speed": [4, 5],
+    "ZNMP": [6, 7],  # "Zone Boundary (+) | (6,7)": [6, 7],
+    "ZNLP": [8, 9],  # "Zone Boundary (-) | (8,9)": [8, 9],
+    "Acc": [10],  # "Acceleration | (10)": [10],
+    "Dec": [11],  # "Deceleration | (11)": [11],
+    "PPOW": [12],  # Push-current limiting value
+    "LPOW": [13],  # Load current threshold
+    "CTLF": [14,15],  # Control flag specification
 }
 
 

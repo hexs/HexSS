@@ -138,6 +138,31 @@ def current_position_socket():
     return Response(generate(), mimetype='text/event-stream')
 
 
+@app.route('/socket/register', methods=['GET', 'POST'])
+def read_register_socket():
+    robot = app.config['robot']
+    slave = request.args.get('slave', type=int)
+
+    if slave is None:
+        abort(400, "Missing 'slave' parameter")
+
+    def generate():
+        result = ''
+        while True:
+            old_result = result
+            result = f"""data: {json.dumps(robot.read_register(slave))}\n\n"""
+            if result != old_result:
+                yield result
+            time.sleep(0.1)
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route("/register")
+def register():
+    return render_template("register.html")
+
+
 @app.route("/table")
 def show_table():
     return render_template("table_editor.html")

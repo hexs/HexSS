@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" data-color-mode="auto" data-light-theme="light">
+<head>
+    {% include 'head_import.html' %}
+    <title>Register</title>
+    <style>
+        .tg {
+            table-layout: fixed;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .tg th, .tg td {
+            width: 6.25%;
+            border: 1px solid black;
+            text-align: center;
+            padding: 5px;
+        }
+        .tg .green {
+            background-color: green;
+            color: white;
+        }
+        .tg .red {
+            background-color: red;
+            color: white;
+        }
+        .tg .gray {
+            background-color: lightgray;
+        }
+    </style>
+</head>
+
+<body>
+{% include 'header.html' %}
+<div class="d-md-flex feed-background">
+    <div class="flex-auto col-md-8 col-lg-8 px-3 px-sm-3 px-md-0">
+        <main>
+            <turbo-frame>
+                <div class="container-xl px-3 px-md-4 px-lg-5 mt-4">
+                    <div class="d-flex flex-auto my-4 my-md-0 width-full width-md-auto">
+                        <details class="details-reset details-overlay">
+                            <summary class="color-border-emphasis Button--secondary Button--medium Button">
+                                <span class="Button-content">
+                                    <span class="Button-label">Slave:
+                                        <span id="slave-value">1</span>
+                                    </span>
+                                </span>
+                                <span class="Button-visual Button-trailingAction">
+                                    <svg height="16" viewBox="0 0 16 16" class="octicon">
+                                        <path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path>
+                                    </svg>
+                                </span>
+                            </summary>
+                            <details-menu class="SelectMenu">
+                                <div class="SelectMenu-modal">
+                                    <div class="SelectMenu-header">
+                                        <h3 class="SelectMenu-title">Slave</h3>
+                                    </div>
+                                    <div class="SelectMenu-list" id="SelectMenu-list"></div>
+                                </div>
+                            </details-menu>
+                        </details>
+                    </div>
+
+                    <div class="Box mt-3 Box--responsive hx_Box--firstRowRounded0">
+                        <div class="Box-header">
+                            <b>Register</b>
+                        </div>
+                        <article class="flex-column py-3">
+                            <div class="mt-1 mb-1" id="status-table"></div>
+                        </article>
+                    </div>
+
+                </div>
+            </turbo-frame>
+        </main>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const selectMenuList = document.getElementById('SelectMenu-list');
+        const detailsElement = document.querySelector('details.details-reset.details-overlay');
+        let currentSlave = 1;
+
+        let eventSource = null;
+
+        function initRegisterSocket(slave) {
+            if (eventSource) {
+                eventSource.close();
+            }
+            eventSource = new EventSource(`/socket/register?slave=${slave}`);
+
+            eventSource.onmessage = function (event) {
+                const registers = JSON.parse(event.data);
+
+                let combinedHtml = '';
+                for (let regKey in registers) {
+                    const register = registers[regKey];
+                    const signals = register.signals;
+                    const allSignals = Array(16).fill(null);
+
+                    console.log(signals);
+
+                    if (signals === undefined) {
+                        let tableHtml = `
+                            <div class="px-3">
+                                <div>
+                                    <h4 class="mb-2 h5">0x${register.address.toString(16)}: ${register.name}</h4>
+                                    <div class="pt-2">
+                                        <table class="tg">
+                                            <thead>
+                                                <tr>
+                                                    ${Array.from({ length: 16 }, (_, bitPosition) => `<th>${bitPosition}</th>`).join('')}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="gray" colspan="16">${register.value}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="mb-3 mt-2">
+                        `;
+                        combinedHtml += tableHtml;
+                    } else {
+                        signals.forEach(signal => {
+                            allSignals[signal.bit_position] = signal;
+                        });
+
+                        let tableHtml = `
+                            <div class="px-3">
+                                <div>
+                                    <h4 class="mb-2 h5">0x${register.address.toString(16)}: ${register.name}</h4>
+                                    <div class="pt-2">
+                                        <table class="tg">
+                                            <thead>
+                                                <tr>
+                                                    ${allSignals.map((_, bitPosition) => `<th>${bitPosition}</th>`).join('')}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    ${allSignals.map(signal => `<td>${signal ? signal.signal_symbol : '-'}</td>`).join('')}
+                                                </tr>
+                                                <tr>
+                                                    ${allSignals.map(signal => {
+                                                        if (!signal) {
+                                                            return `<td class="gray">-</td>`;
+                                                        }
+                                                        const value = signal.value === true ? 1 : (signal.value === false ? 0 : '-');
+                                                        const cellClass = value === 1 ? 'green' : value === 0 ? 'red' : 'gray';
+                                                        return `<td class="${cellClass}">${value}</td>`;
+                                                    }).join('')}
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="mb-3 mt-2">
+                        `;
+                        combinedHtml += tableHtml;
+                    }
+                }
+
+                document.getElementById('status-table').innerHTML = combinedHtml;
+            };
+        }
+
+        initRegisterSocket(currentSlave);
+
+        ['Slave 1', 'Slave 2', 'Slave 3', 'Slave 4'].forEach((slave, index) => {
+            let anchor = document.createElement('a');
+            anchor.className = 'SelectMenu-item';
+            anchor.setAttribute('aria-checked', index === 0 ? 'true' : 'false');
+
+            anchor.innerHTML = `
+                <svg aria-hidden="true" height="16" viewBox="0 0 16 16" width="16" class="SelectMenu-icon SelectMenu-icon--check">
+                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path>
+                </svg>
+                ${slave}
+            `;
+
+            anchor.addEventListener('click', (e) => {
+                e.preventDefault();
+                currentSlave = index + 1;
+                document.getElementById('slave-value').textContent = currentSlave;
+
+                document.querySelectorAll('#SelectMenu-list .SelectMenu-item').forEach(item => {
+                    item.setAttribute('aria-checked', 'false');
+                });
+                anchor.setAttribute('aria-checked', 'true');
+
+                initRegisterSocket(currentSlave);
+
+                detailsElement.removeAttribute('open');
+            });
+
+            selectMenuList.appendChild(anchor);
+        });
+    });
+
+    $(document).ready(function () {
+        initRegisterSocket();
+    });
+
+</script>
+
+</body>
+</html>

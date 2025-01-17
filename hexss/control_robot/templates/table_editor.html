@@ -1,105 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-color-mode="auto" data-light-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include 'head_import.html' %}
     <title>Table Editor</title>
-    <link rel="stylesheet" href="/static/styles.css">
 
     <link rel="stylesheet" href="/static/handsontable.full.min.css">
     <script src="/static/handsontable.full.min.js"></script>
 
 </head>
+
 <body>
 {% include 'header.html' %}
-<h2 class="text-center">Table Editor</h2>
-<div class="container">
-    <a>Slave: </a>
-    <select name="slave-select" id="slave-select">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-    </select>
-    <button id="refresh-btn" class="btn btn-secondary mt-3">Refresh Table</button>
-    <button id="save-btn" class="btn btn-primary mt-3">Save Changes</button>
-    <div id="handsontable-container" class="mt-4"></div>
+<div class="d-md-flex feed-background">
+    <div class="flex-auto col-md-8 col-lg-8 px-3 px-sm-3 px-md-0">
+        <main>
+            <turbo-frame>
+                <div class="container-xl px-3 px-md-4 px-lg-5 mt-4">
+                    <div class="d-flex flex-auto my-4 my-md-0 width-full width-md-auto">
+                        <details class="details-reset details-overlay">
+                            <summary class="color-border-emphasis Button--secondary Button--medium Button">
+                                <span class="Button-content">
+                                    <span class="Button-label">Slave:
+                                        <span id="slave-select">1</span>
+                                    </span>
+                                </span>
+                                <span class="Button-visual Button-trailingAction">
+                                    <svg height="16" viewBox="0 0 16 16" class="octicon">
+                                        <path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"></path>
+                                    </svg>
+                                </span>
+                            </summary>
+                            <details-menu class="SelectMenu">
+                                <div class="SelectMenu-modal">
+                                    <div class="SelectMenu-header">
+                                        <h3 class="SelectMenu-title">Slave</h3>
+                                    </div>
+                                    <div class="SelectMenu-list" id="SelectMenu-list"></div>
+                                </div>
+                            </details-menu>
+                        </details>
+
+                        <div class="ml-3 flex-justify-between width-full width-md-auto">
+                            <button id="refresh-btn" class="btn btn-secondary">Refresh Table</button>
+                            <button id="save-btn" class="btn btn-primary">Save Changes</button>
+                        </div>
+
+                    </div>
+                    <div class="Box mt-3 Box--responsive hx_Box--firstRowRounded0">
+                        <div class="Box-header">
+                            <b>Table</b>
+                        </div>
+                        <div class="px-3">
+                            <div id="handsontable-container" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </turbo-frame>
+        </main>
+    </div>
 </div>
 
 <script>
-    function loadTableData(slave){
-        destroyTable();
-        fetch("/load?slave="+slave)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(responseData => {
-                responseData.height = 500;
-                hot = new Handsontable(container, responseData);
-            })
-            .catch(error => {
-                console.error("Error loading table data:", error);
-                alert("Failed to load data. Please try again.");
-            });
-    };
+    document.addEventListener('DOMContentLoaded', () => {
+       const slaveSelect = document.getElementById('slave-select');
+       const selectMenuList = document.getElementById('SelectMenu-list');
+       const detailsElement = document.querySelector('details.details-reset.details-overlay');
+       const container = document.getElementById('handsontable-container');
+       let hot = null;
 
-    function saveTableData(slave){
-        const updatedData = hot.getSourceData();
-        fetch("/save?slave="+slaveSelect.value, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(updatedData)
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                alert("Data saved successfully!");
-            } else {
-                alert("Failed to save data.");
-            }
-        })
-        .catch(error => {
-            console.error("Error saving data:", error);
-            alert("Failed to save data. Please try again.");
-        });
-    };
+       function loadTableData(slaveId) {
+           destroyTable();
+           fetch(`/load?slave=${slaveId}`)
+               .then(response => {
+                   if (!response.ok) {
+                       throw new Error(`HTTP error! Status: ${response.status}`);
+                   }
+                   return response.json();
+               })
+               .then(responseData => {
+                   responseData.height = 500;
+                   hot = new Handsontable(container, responseData);
+               })
+               .catch(error => {
+                   console.error("Failed to load data:", error);
+                   alert("Failed to load data. Please try again.");
+               });
+       }
 
-    function destroyTable(){
-        if (hot) {
-            hot.destroy();
-            hot = null;
-        }
-    }
+       function saveTableData(slaveId) {
+           if (!hot) {
+               alert("No table data to save.");
+               return;
+           }
+           const updatedData = hot.getSourceData();
+           fetch(`/save?slave=${slaveId}`, {
+               method: 'POST',
+               headers: {
+                   'Content-Type': 'application/json',
+               },
+               body: JSON.stringify(updatedData),
+           })
+               .then(response => {
+                   if (!response.ok) {
+                       throw new Error(`HTTP error! Status: ${response.status}`);
+                   }
+                   return response.json();
+               })
+               .then(data => {
+                   if (data.success) {
+                       alert("Data saved successfully!");
+                   } else {
+                       alert("Failed to save data.");
+                   }
+               })
+               .catch(error => {
+                   console.error("Error saving data:", error);
+                   alert("Failed to save data. Please try again.");
+               });
+       }
 
-    const slaveSelect = document.getElementById('slave-select');
-    const container = document.getElementById('handsontable-container');
-    let hot = null;
+       function destroyTable() {
+           if (hot) {
+               hot.destroy();
+               hot = null;
+           }
+       }
 
-    document.addEventListener("DOMContentLoaded", function () {
-        loadTableData(slaveSelect.value)
+       function updateSlave(slaveId) {
+           slaveSelect.textContent = slaveId;
+           loadTableData(slaveId);
+       }
 
-        slaveSelect.addEventListener('change', function () {
-            loadTableData(slaveSelect.value)
-        });
+       function initializeSelectMenu() {
+           const slaves = ['Slave 1', 'Slave 2', 'Slave 3', 'Slave 4'];
+           slaves.forEach((slave, index) => {
+               const slaveId = index + 1;
+               const anchor = document.createElement('a');
+               anchor.className = 'SelectMenu-item';
+               anchor.setAttribute('aria-checked', index === 0 ? 'true' : 'false');
+               anchor.innerHTML = `
+                   <svg aria-hidden="true" height="16" width="16" class="SelectMenu-icon SelectMenu-icon--check">
+                       <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path>
+                   </svg>
+                   ${slave}
+               `;
 
-        document.getElementById('refresh-btn').addEventListener('click', function () {
-            loadTableData(slaveSelect.value);
-        });
-        document.getElementById('save-btn').addEventListener('click', function () {
-            saveTableData(slaveSelect.value);
-        });
+               anchor.addEventListener('click', (e) => {
+                   e.preventDefault();
+                   document.querySelectorAll('.SelectMenu-item').forEach(item => {
+                       item.setAttribute('aria-checked', 'false');
+                   });
+                   anchor.setAttribute('aria-checked', 'true');
+                   updateSlave(slaveId);
+                   detailsElement.removeAttribute('open');
+               });
 
-    });
+               selectMenuList.appendChild(anchor);
+           });
+       }
+
+       function configureSelectMenuPosition() {
+           detailsElement.addEventListener('toggle', () => {
+               if (detailsElement.hasAttribute('open')) {
+                   const selectMenu = document.querySelector('.SelectMenu');
+                   selectMenu.style.position = 'absolute';
+                   selectMenu.style.zIndex = '9999';
+               }
+           });
+       }
+
+       function initializeApp() {
+           const initialSlaveId = parseInt(slaveSelect.textContent, 10);
+           loadTableData(initialSlaveId);
+
+           document.getElementById('refresh-btn').addEventListener('click', () => {
+               loadTableData(parseInt(slaveSelect.textContent, 10));
+           });
+
+           document.getElementById('save-btn').addEventListener('click', () => {
+               saveTableData(parseInt(slaveSelect.textContent, 10));
+           });
+
+           initializeSelectMenu();
+           configureSelectMenuPosition();
+       }
+
+       initializeApp();
+   });
 </script>
 </body>
 </html>

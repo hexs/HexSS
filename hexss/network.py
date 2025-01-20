@@ -3,7 +3,7 @@ import socket
 from socket import AddressFamily
 import subprocess
 import platform
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Dict, Optional
 from hexss import json_load, json_dump
 
 
@@ -214,26 +214,28 @@ def close_port(ip: str, port: int) -> None:
         print(f"Failed to close port {port} on {ip}. Error: {result.stderr}")
 
 
-def initialize_proxies() -> Optional[dict]:
+def initialize_proxies() -> Optional[Dict[str, str]]:
     """
     Initialize and retrieve the proxies configuration.
 
     Returns:
-        Optional[dict]: The loaded proxies configuration if available.
+        Optional[Dict[str, str]]: The proxies dictionary if "use_proxy" is True, otherwise None.
+
+    Notes:
+        - The proxies are loaded from `proxies.json` located in the `hexss_dir` directory.
     """
-    hexss_dir = get_hexss_dir()
     try:
-        if os.path.exists(os.path.join(hexss_dir, "proxies.json")):
-            return json_load(os.path.join(hexss_dir, "proxies.json"))
-        elif os.path.exists(os.path.join(hexss_dir, "no proxies.json")):
-            return None
-        else:
-            json_dump(os.path.join(hexss_dir, "no proxies.json"), {
-                "http": "http://<user>:<pass>@150.61.8.70:10080",
-                "https": "http://<user>:<pass>@150.61.8.70:10080"
-            })
-            print("Default proxy configuration created.")
+        proxies_config = json_load(os.path.join(hexss_dir, "proxies.json"), {
+            "use_proxy": False,
+            "proxies": {
+                "http": "http://<user>:<pass>@150.61.8.70:10086",
+                "https": "http://<user>:<pass>@150.61.8.70:10086"
+            }
+        }, True)
+        if proxies_config.get('use_proxy', False):
+            return proxies_config['proxies']
         return None
+
     except Exception as e:
         print(f"Error initializing proxies: {str(e)}")
         return None
@@ -242,5 +244,5 @@ def initialize_proxies() -> Optional[dict]:
 # Initialize global variables
 hostname = get_hostname()
 username = get_username()
-proxies = initialize_proxies()
 hexss_dir = get_hexss_dir()
+proxies = initialize_proxies()

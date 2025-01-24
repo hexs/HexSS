@@ -10,7 +10,7 @@ import pandas as pd
 from pymodbus.client import ModbusSerialClient
 
 import hexss.control_robot
-from hexss.constants import GREEN, YELLOW, RED, ENDC
+from hexss.constants.terminal_color import *
 from hexss.serial import get_comport
 from hexss.numpy import combine_uint16_to_int32, split_int32_to_uint16
 
@@ -186,7 +186,7 @@ class Robot:
             for slave in slaves:
                 current_position = self.get_current_position(slave)
                 distance = abs(target_positions[slave] - current_position)
-                distance_status.append(f"{RED if pause_slaves[slave] else YELLOW}Slave {slave}: {distance}{ENDC}")
+                distance_status.append(f"{RED if pause_slaves[slave] else YELLOW}Slave {slave}: {distance}{END}")
 
                 prev = previous_positions[slave]
                 prev.append(current_position)

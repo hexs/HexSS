@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 import hexss.network
-from hexss.constants.cml import *
+from hexss.constants.terminal_color import *
 
 # Map package aliases to actual package names for installation
 PACKAGE_ALIASES = {
@@ -18,9 +18,6 @@ def check_packages(*packages, install=False):
         *packages (str): The names of the packages to check.
         install (bool): Whether to install missing packages automatically (default: False).
 
-    Raises:
-        ImportError: If required packages are missing and `install` is False.
-        Warning: If missing packages were successfully installed, prompting user to re-run the script.
     """
     try:
         # Get a list of installed packages using pip
@@ -43,31 +40,22 @@ def check_packages(*packages, install=False):
             command += missing_packages
 
             if install:
-                print(f"{PINK}Installing missing packages:{ENDC} {UNDERLINE}{' '.join(missing_packages)}{ENDC}")
+                print(f"{PINK}Installing missing packages: {UNDERLINED}{' '.join(missing_packages)}{END}")
                 subprocess.run(command, check=True)  # Run the installation command
                 check_packages(*packages)  # Recheck packages after installation
 
-                raise Warning(f"{GREEN}Missing packages installation complete.{ENDC} {YELLOW}Please run again!{ENDC}")
+                raise Warning(f"{GREEN}Missing packages {BOLD}installation complete.{END}")
             else:
                 raise ImportError(
-                    f"Missing packages. Install them using: `pip install {' '.join(missing_packages)}`"
+                    f"{RED.BOLD}Missing packages.{END.RED} Install them using:{END}\n"
+                    f"{ORANGE.UNDERLINED}{' '.join(command)}{END}"
                 )
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error during package check or installation: {e}")
     except Exception as exc:
         print(f"An unexpected error occurred: {exc}")
+        exit()
 
 
 if __name__ == "__main__":
     # Example usage of the function
     check_packages('numpy', 'pandas', 'matplotlib')
-
-    # or
-
-    try:
-        check_packages('numpy', 'pandas', 'matplotlib')
-    except ImportError as e:
-        print(e)
-    except Warning as w:
-        print(w)

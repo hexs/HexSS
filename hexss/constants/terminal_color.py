@@ -3,6 +3,7 @@ class Style:
         "END": "\033[0m",
 
         "BOLD": "\033[1m",
+        "DIM": "\033[2m",
         "ITALIC": "\033[3m",
         "UNDERLINED": "\033[4m",
         "BLINK": "\033[5m",
@@ -11,6 +12,7 @@ class Style:
 
         "END_BOLD": "\033[21m",
         "END_DIM": "\033[22m",
+        "END_ITALIC": "\033[23m",
         "END_UNDERLINED": "\033[24m",
         "END_BLINK": "\033[25m",
         "END_REVERSE": "\033[27m",
@@ -81,6 +83,7 @@ class Style:
     END: "Style"
 
     BOLD: "Style"
+    DIM: "Style"
     ITALIC: "Style"
     UNDERLINED: "Style"
     BLINK: "Style"
@@ -89,6 +92,7 @@ class Style:
 
     END_BOLD: "Style"
     END_DIM: "Style"
+    END_ITALIC: "Style"
     END_UNDERLINED: "Style"
     END_BLINK: "Style"
     END_REVERSE: "Style"
@@ -148,6 +152,7 @@ class Style:
 END = Style(Style.styles["END"])
 
 BOLD = Style(Style.styles["BOLD"])
+DIM = Style(Style.styles["DIM"])
 ITALIC = Style(Style.styles["ITALIC"])
 UNDERLINED = Style(Style.styles["UNDERLINED"])
 BLINK = Style(Style.styles["BLINK"])
@@ -156,6 +161,7 @@ HIDDEN = Style(Style.styles["HIDDEN"])
 
 END_BOLD = Style(Style.styles["END_BOLD"])
 END_DIM = Style(Style.styles["END_DIM"])
+END_ITALIC = Style(Style.styles["END_ITALIC"])
 END_UNDERLINED = Style(Style.styles["END_UNDERLINED"])
 END_BLINK = Style(Style.styles["END_BLINK"])
 END_REVERSE = Style(Style.styles["END_REVERSE"])

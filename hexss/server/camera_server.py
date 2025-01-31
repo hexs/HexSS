@@ -20,8 +20,11 @@ import cv2
 from datetime import datetime
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def display_capture(data: Dict[str, Any]) -> None:
     if platform.system() != "Windows":
@@ -174,7 +177,7 @@ def run():
             }
         ]
     }, dump=True)
-    close_port(config['ipv4'], config['port'])
+    close_port(config['ipv4'], config['port'], verbose=False)
 
     data = {
         'play': True,

@@ -1,7 +1,7 @@
 import argparse
 import os
 from hexss import hexss_dir, json_load, json_update
-from hexss.server import camera_server
+from hexss.server import camera_server, file_manager_server
 
 
 def show_config(data, keys):
@@ -44,7 +44,7 @@ def update_config(file_name, keys, new_value):
         print(f"Error while updating configuration: {e}")
 
 
-def main():
+def run():
     """Parse arguments and perform the requested action."""
     parser = argparse.ArgumentParser(description="Manage configuration files or run specific functions.")
     parser.add_argument("action", help="Specify the action to perform, e.g., 'config', 'camera_server'.")
@@ -56,6 +56,8 @@ def main():
     if args.action == "camera_server":
         camera_server.run()
         return
+    if args.action == "file_manager_server":
+        file_manager_server.run()
 
     if args.action == "config":
         if args.key:
@@ -81,4 +83,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run()

@@ -13,7 +13,11 @@ from hexss.network import get_all_ipv4, close_port
 from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 ROOT_DIR = "/"
 
 
@@ -157,11 +161,11 @@ def run():
         "ipv4": '0.0.0.0',
         'port': 2001
     }, True)
-    close_port(config['ipv4'], config['port'])
+    close_port(config['ipv4'], config['port'], verbose=False)
     ipv4 = config['ipv4']
     port = config['port']
     if ipv4 == '0.0.0.0':
-        for ipv4_ in {'127.0.0.1', *get_all_ipv4(), get_hostname()}:
+        for ipv4_ in {'127.0.0.1', 'localhost', *get_all_ipv4(), get_hostname()}:
             logging.info(f"Running on http://{ipv4_}:{port}")
     else:
         logging.info(f"Running on http://{ipv4}:{port}")

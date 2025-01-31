@@ -5,6 +5,8 @@ import subprocess
 import platform
 from typing import List, Tuple, Dict, Optional
 
+from hexss.constants.terminal_color import *
+
 
 def get_ipv4() -> str:
     """Retrieve the primary IPv4 address of the system."""
@@ -160,20 +162,21 @@ def is_port_available(ip: str, port: int) -> bool:
         return False
 
 
-def close_port(ip: str, port: int) -> None:
+def close_port(ip: str, port: int, verbose: bool = True) -> None:
     """
     Close a specific TCP port on the given IP address.
 
     Args:
         ip (str): IP address as a string.
         port (int): Port number.
+        verbose (bool): Whether to print messages. Defaults to True.
 
     Raises:
         ValueError: If the port number is invalid.
         OSError: If the operating system is unsupported.
 
     Example:
-        close_port("192.168.225.137", 2002)
+        close_port("192.168.225.137", 2002, verbose=True)
     """
     if not (0 < port <= 65535):
         raise ValueError("Invalid port number. Must be between 1 and 65535.")
@@ -188,7 +191,9 @@ def close_port(ip: str, port: int) -> None:
         raise OSError("Unsupported operating system.")
 
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
-    if result.returncode == 0:
-        print(f"Successfully closed port {port} on {ip}")
-    else:
-        print(f"Failed to close port {port} on {ip}. Error: {result.stderr}")
+    if verbose:
+        if result.returncode == 0:
+            print(f"{GREEN}Successfully closed port {port} on {ip}{END}")
+        else:
+            print(f"{RED}Failed to close port {port} on {ip}. Error:{END} {result.stderr}")
+

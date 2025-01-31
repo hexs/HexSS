@@ -14,6 +14,7 @@ setup(
             'hexss_camera_server = hexss.server.camera_server:run',
             'hexss_file_manager_server = hexss.server.file_manager_server:run',
             'hexss_robot_server = hexss.control_robot.server:main',
+            "hexss = hexss.__main__:run",
         ]
     }
 )

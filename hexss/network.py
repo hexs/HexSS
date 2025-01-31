@@ -4,26 +4,6 @@ from socket import AddressFamily
 import subprocess
 import platform
 from typing import List, Tuple, Dict, Optional
-from hexss import json_load, json_dump
-
-
-def get_hexss_dir():
-    if platform.system() == "Windows":
-        hexss_dir = os.path.join(f'C:/Users/{username}/AppData/Roaming/hexss')
-    else:
-        hexss_dir = os.path.join(f'/home/{username}/hexss')
-    os.makedirs(hexss_dir, exist_ok=True)
-    return hexss_dir
-
-
-def get_hostname() -> str:
-    """Retrieve the hostname of the current machine."""
-    return socket.gethostname()
-
-
-def get_username() -> str:
-    """Retrieve the username of the currently logged-in user."""
-    return os.getlogin()
 
 
 def get_ipv4() -> str:
@@ -212,37 +192,3 @@ def close_port(ip: str, port: int) -> None:
         print(f"Successfully closed port {port} on {ip}")
     else:
         print(f"Failed to close port {port} on {ip}. Error: {result.stderr}")
-
-
-def initialize_proxies() -> Optional[Dict[str, str]]:
-    """
-    Initialize and retrieve the proxies configuration.
-
-    Returns:
-        Optional[Dict[str, str]]: The proxies dictionary if "use_proxy" is True, otherwise None.
-
-    Notes:
-        - The proxies are loaded from `proxies.json` located in the `hexss_dir` directory.
-    """
-    try:
-        proxies_config = json_load(os.path.join(hexss_dir, "proxies.json"), {
-            "use_proxy": False,
-            "proxies": {
-                "http": "http://<user>:<pass>@150.61.8.70:10086",
-                "https": "http://<user>:<pass>@150.61.8.70:10086"
-            }
-        }, True)
-        if proxies_config.get('use_proxy', False):
-            return proxies_config['proxies']
-        return None
-
-    except Exception as e:
-        print(f"Error initializing proxies: {str(e)}")
-        return None
-
-
-# Initialize global variables
-hostname = get_hostname()
-username = get_username()
-hexss_dir = get_hexss_dir()
-proxies = initialize_proxies()

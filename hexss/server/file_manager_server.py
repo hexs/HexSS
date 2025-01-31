@@ -8,7 +8,8 @@ from hexss import check_packages, json_load, secure_filename
 
 check_packages('Flask')
 
-from hexss.network import get_all_ipv4, get_hostname, close_port
+from hexss import get_hostname
+from hexss.network import get_all_ipv4, close_port
 from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 
 app = Flask(__name__)

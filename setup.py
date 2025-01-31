@@ -1,12 +1,14 @@
 from setuptools import setup, find_packages
+from hexss import __version__ as version
 
 setup(
     name='hexss',
-    version='0.12.4',
+    version=version,
     packages=find_packages(),
     include_package_data=True,
     install_requires=[],
     url='https://github.com/hexs/hexss',
+    license="MIT",
     entry_points={
         'console_scripts': [
             'hexss_camera_server = hexss.server.camera_server:run',

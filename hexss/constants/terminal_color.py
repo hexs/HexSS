@@ -30,7 +30,7 @@ class Style:
 
         "END_COLOR": "\033[39m",
 
-        "DarkGray": "\033[90m",
+        "DARKGRAY": "\033[90m",
         "RED": "\033[91m",
         "GREEN": "\033[92m",
         "YELLOW": "\033[93m",
@@ -51,7 +51,7 @@ class Style:
 
         "END_BG": "\033[49m",
 
-        "BG_DarkGray": "\033[100m",
+        "BG_DARKGRAY": "\033[100m",
         "BG_RED": "\033[101m",
         "BG_GREEN": "\033[102m",
         "BG_YELLOW": "\033[103m",
@@ -110,7 +110,7 @@ class Style:
 
     END_COLOR: "Style"
 
-    DarkGray: "Style"
+    DARKGRAY: "Style"
     RED: "Style"
     GREEN: "Style"
     YELLOW: "Style"
@@ -131,7 +131,7 @@ class Style:
 
     END_BG: "Style"
 
-    BG_DarkGray: "Style"
+    BG_DARKGRAY: "Style"
     BG_RED: "Style"
     BG_GREEN: "Style"
     BG_YELLOW: "Style"
@@ -179,7 +179,7 @@ LIGHT_GRAY = Style(Style.styles["LIGHT_GRAY"])
 
 END_COLOR = Style(Style.styles["END_COLOR"])
 
-DarkGray = Style(Style.styles["DarkGray"])
+DARKGRAY = Style(Style.styles["DARKGRAY"])
 RED = Style(Style.styles["RED"])
 GREEN = Style(Style.styles["GREEN"])
 YELLOW = Style(Style.styles["YELLOW"])
@@ -200,7 +200,7 @@ BG_LIGHT_GRAY = Style(Style.styles["BG_LIGHT_GRAY"])
 
 END_BG = Style(Style.styles["END_BG"])
 
-BG_DarkGray = Style(Style.styles["BG_DarkGray"])
+BG_DARKGRAY = Style(Style.styles["BG_DARKGRAY"])
 BG_RED = Style(Style.styles["BG_RED"])
 BG_GREEN = Style(Style.styles["BG_GREEN"])
 BG_YELLOW = Style(Style.styles["BG_YELLOW"])

@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-import hexss.network
+import hexss
 from hexss.constants.terminal_color import *
 
 # Map package aliases to actual package names for installation
@@ -35,8 +35,8 @@ def check_packages(*packages, install=False):
         if missing_packages:
             # Prepare the pip install command
             command = [sys.executable, '-m', 'pip', 'install']
-            if hexss.network.proxies:  # Add proxy if available
-                command += [f"--proxy={hexss.network.proxies['http']}"]
+            if hexss.proxies:  # Add proxy if available
+                command += [f"--proxy {hexss.proxies['http']}"]
             command += missing_packages
 
             if install:
@@ -51,8 +51,8 @@ def check_packages(*packages, install=False):
                     f"{ORANGE.UNDERLINED}{' '.join(command)}{END}"
                 )
 
-    except Exception as exc:
-        print(f"An unexpected error occurred: {exc}")
+    except Exception as e:
+        print(e)
         exit()
 
 

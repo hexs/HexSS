@@ -41,10 +41,10 @@ def check_packages(*packages, install=False):
 
             if install:
                 print(f"{PINK}Installing missing packages: {UNDERLINED}{' '.join(missing_packages)}{END}")
-                subprocess.run(command, check=True)  # Run the installation command
+                subprocess.run(' '.join(command), check=True)  # Run the installation command
                 check_packages(*packages)  # Recheck packages after installation
 
-                raise Warning(f"{GREEN}Missing packages {BOLD}installation complete.{END}")
+                print(Warning(f"{GREEN}Missing packages {BOLD}installation complete.{END}"))
             else:
                 raise ImportError(
                     f"{RED.BOLD}Missing packages.{END.RED} Install them using:{END}\n"
@@ -58,4 +58,4 @@ def check_packages(*packages, install=False):
 
 if __name__ == "__main__":
     # Example usage of the function
-    check_packages('numpy', 'pandas', 'matplotlib')
+    check_packages('numpy', 'pandas', 'matplotli1b')

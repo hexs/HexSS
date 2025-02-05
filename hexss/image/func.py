@@ -31,6 +31,11 @@ def numpy_to_pygame_surface(arr: np.ndarray) -> pygame.Surface:
     return pygame.surfarray.make_surface(arr.swapaxes(0, 1))
 
 
+def pygame_surface_to_numpy(surface: pygame.Surface) -> np.ndarray:
+    array = pygame.surfarray.array3d(surface)
+    return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+
+
 def get_image(source: Union[cv2.VideoCapture, str], output: Literal['numpy', 'pygame'] = 'numpy') -> Optional[
     Union[np.ndarray, pygame.Surface]]:
     if isinstance(source, str):

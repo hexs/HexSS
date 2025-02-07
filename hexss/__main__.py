@@ -1,7 +1,6 @@
 import argparse
 import os
 from hexss import hexss_dir, json_load, json_update
-from hexss.server import camera_server, file_manager_server
 
 
 def show_config(data, keys):
@@ -54,12 +53,14 @@ def run():
     args = parser.parse_args()
 
     if args.action == "camera_server":
+        from hexss.server import camera_server
         camera_server.run()
-        return
-    if args.action == "file_manager_server":
+
+    elif args.action == "file_manager_server":
+        from hexss.server import file_manager_server
         file_manager_server.run()
 
-    if args.action == "config":
+    elif args.action == "config":
         if args.key:
             key_parts = args.key.split(".")
             file_name = key_parts[0]  # Extract file name (e.g., 'proxies')

@@ -7,6 +7,17 @@ import cv2
 import numpy as np
 
 
+def rotate(image, angle, center=None, scale=1):
+    if isinstance(center, np.ndarray):
+        center = center.tolist()
+    h, w = image.shape[:2]
+    if center is None:
+        center = (w // 2, h // 2)
+    rotate_matrix = cv2.getRotationMatrix2D(center, angle, scale)
+    image = cv2.warpAffine(src=image, M=rotate_matrix, dsize=(w, h))
+    return image
+
+
 def overlay(main_img, overlay_img, pos: tuple = (0, 0)):
     '''
     Overlay function to blend an overlay image onto a main image at a specified position.

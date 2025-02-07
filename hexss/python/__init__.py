@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import os
 
 import hexss
 from hexss.constants.terminal_color import *
@@ -19,6 +20,10 @@ def check_packages(*packages, install=False):
         install (bool): Whether to install missing packages automatically (default: False).
 
     """
+    if hexss.proxies:  # Add proxy if available
+        os.environ['HTTP_PROXY'] = hexss.proxies["http"]
+        os.environ['HTTPS_PROXY'] = hexss.proxies["https"]
+
     try:
         # Get a list of installed packages using pip
         installed_packages = {
@@ -37,6 +42,8 @@ def check_packages(*packages, install=False):
             command = [sys.executable, '-m', 'pip', 'install']
             if hexss.proxies:  # Add proxy if available
                 command += [f"--proxy {hexss.proxies['http']}"]
+            if install in ['-U', '--upgrade']:
+                command += ["--upgrade"]
             command += missing_packages
 
             if install:
@@ -58,4 +65,4 @@ def check_packages(*packages, install=False):
 
 if __name__ == "__main__":
     # Example usage of the function
-    check_packages('numpy', 'pandas', 'matplotli1b')
+    check_packages('numpy', 'pandas', 'matplotlib')

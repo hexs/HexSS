@@ -5,7 +5,7 @@ from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
 from .string import secure_filename, random_str
-from .python import check_packages
+from .python import check_packages, install, install_upgrade
 
 
 def get_hostname() -> str:
@@ -59,7 +59,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.13.4'
+__version__ = '0.13.5'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

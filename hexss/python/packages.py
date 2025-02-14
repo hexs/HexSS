@@ -56,57 +56,58 @@ def run_command(command: List[str], verbose: bool = False) -> int:
     try:
         if verbose:
             print(f"{BLUE}Executing: {BOLD}{' '.join(command)}{END}")
-        result = subprocess.run(command, check=True)
+            result = subprocess.run(command, check=True)
+        else:
+            result = subprocess.run(command, capture_output=True)
         return result.returncode
     except subprocess.CalledProcessError as e:
         print(f"{RED}Command failed with error: {e}{END}")
         return e.returncode
 
 
-def install(*packages: str, verbose: bool = False) -> None:
+def install(*packages: str, verbose: bool = True) -> None:
     """
     Installs missing packages.
     """
     missing = missing_packages(*packages)
     if not missing:
-        print(f"{GREEN}All specified packages are already {BOLD}installed.{END}")
+        if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
         return
-
-    print(f"{PINK}Installing missing packages: {UNDERLINED}{' '.join(missing)}{END}")
+    if verbose: print(f"{PINK}Installing missing packages: {UNDERLINED}{' '.join(missing)}{END}")
     command = generate_install_command(missing)
     if run_command(command, verbose=verbose) == 0:
-        print(f"{GREEN}Missing packages {BOLD}installation complete.{END}")
+        if verbose: print(f"{GREEN}Missing packages {BOLD}installation complete.{END}")
     else:
         print(f"{RED}Failed to install some packages. Check errors.{END}")
 
 
-def install_upgrade(*packages: str, verbose: bool = False) -> None:
+def install_upgrade(*packages: str, verbose: bool = True) -> None:
     """
     Installs or upgrades the specified packages.
     """
-    print(f"{PINK}Upgrading pip...{END}")
+    if verbose: print(f"{PINK}Upgrading pip...{END}")
     pip_command = generate_install_command(["pip"], upgrade=True)
     run_command(pip_command, verbose=verbose)
-
-    print(f"{PINK}Installing or upgrading specified packages: {UNDERLINED}{' '.join(packages)}{END}")
+    if verbose: print(f"{PINK}Installing or upgrading specified packages: {UNDERLINED}{' '.join(packages)}{END}")
     command = generate_install_command(packages, upgrade=True)
     if run_command(command, verbose=verbose) == 0:
-        print(f"{GREEN}Packages {BOLD}installation/upgrade complete.{END}")
+        if verbose: print(f"{GREEN}Packages {BOLD}installation/upgrade complete.{END}")
     else:
         print(f"{RED}Failed to install/upgrade some packages. Check errors.{END}")
 
 
-def check_packages(*packages: str, auto_install: bool = False, verbose: bool = False) -> None:
+def check_packages(*packages: str, auto_install: bool = False, verbose: bool = True) -> None:
     """
     Checks if the required Python packages are installed, and optionally installs missing packages.
     """
     missing = missing_packages(*packages)
     if not missing:
-        print(f"{GREEN}All specified packages are already installed.{END}")
+        if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
         return
 
     if auto_install:
-        print(f"{PINK}Missing packages detected. Attempting to install: {UNDERLINED}{' '.join(missing)}{END}")
+        if verbose:
+            print(f"{PINK}Missing packages detected. Attempting to install: {UNDERLINED}{' '.join(missing)}{END}")
         install(*missing, verbose=verbose)
     else:
         try:
@@ -122,6 +123,6 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = F
 
 if __name__ == "__main__":
     # Example
-    install("numpy", verbose=True)
-    install_upgrade("opencv-python", "Flask", verbose=True)
+    install("numpy")
+    install_upgrade("opencv-python", "Flask")
     check_packages("ultralytics")

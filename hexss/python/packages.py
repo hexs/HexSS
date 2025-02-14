@@ -106,8 +106,7 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         return
 
     if auto_install:
-        if verbose:
-            print(f"{PINK}Missing packages detected. Attempting to install: {UNDERLINED}{' '.join(missing)}{END}")
+        print(f"{PINK}Missing packages detected. Attempting to install: {UNDERLINED}{' '.join(missing)}{END}")
         install(*missing, verbose=verbose)
     else:
         try:

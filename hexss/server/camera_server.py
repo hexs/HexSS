@@ -6,10 +6,10 @@ from typing import Dict, Any, List
 from hexss import json_load, json_update, check_packages
 
 if platform.system() == "Windows":
-    check_packages('numpy', 'opencv-python', 'Flask', 'mss')
+    check_packages('numpy', 'opencv-python', 'Flask', 'mss', auto_install=True, verbose=False)
     import mss
 else:
-    check_packages('numpy', 'opencv-python', 'Flask')
+    check_packages('numpy', 'opencv-python', 'Flask', auto_install=True, verbose=False)
 
 from hexss import get_hostname
 from hexss.network import get_all_ipv4, close_port
@@ -25,6 +25,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
 
 def display_capture(data: Dict[str, Any]) -> None:
     if platform.system() != "Windows":

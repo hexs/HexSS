@@ -41,7 +41,7 @@ def generate_install_command(
     Generates the pip install command.
     """
     command = [sys.executable, "-m", "pip", "install"]
-    if proxy or hexss.proxies.get('http'):  # Add proxy if available
+    if proxy or (hexss.proxies and hexss.proxies.get('http')):  # Add proxy if available
         command += [f"--proxy={proxy or hexss.proxies['http']}"]
     if upgrade:
         command.append("--upgrade")

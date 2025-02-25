@@ -85,9 +85,9 @@ def install_upgrade(*packages: str, verbose: bool = True) -> None:
     """
     Installs or upgrades the specified packages.
     """
-    if verbose: print(f"{PINK}Upgrading pip...{END}")
-    pip_command = generate_install_command(["pip"], upgrade=True)
-    run_command(pip_command, verbose=verbose)
+    # if verbose: print(f"{PINK}Upgrading pip...{END}")
+    # pip_command = generate_install_command(["pip"], upgrade=True)
+    # run_command(pip_command, verbose=verbose)
     if verbose: print(f"{PINK}Installing or upgrading specified packages: {UNDERLINED}{' '.join(packages)}{END}")
     command = generate_install_command(packages, upgrade=True)
     if run_command(command, verbose=verbose) == 0:

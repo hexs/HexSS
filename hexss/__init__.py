@@ -1,6 +1,7 @@
 import os
 import platform
 from typing import Optional, Dict
+from pathlib import Path
 from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
@@ -13,16 +14,19 @@ def get_hostname() -> str:
 
 
 def get_username() -> str:
-    """Retrieve the username of the currently logged-in user."""
-    return os.getlogin()
+    for name in ('LOGNAME', 'USER', 'LNAME', 'USERNAME'):
+        user = os.environ.get(name)
+        if user:
+            return user
 
 
 def get_hexss_dir():
+    home_dir = Path.home()
     if platform.system() == "Windows":
-        hexss_dir = os.path.join(f'C:/Users/{username}/AppData/Roaming/hexss')
+        hexss_dir = home_dir / 'AppData' / 'Roaming' / 'hexss'
     else:
-        hexss_dir = os.path.join(f'/home/{username}/hexss')
-    os.makedirs(hexss_dir, exist_ok=True)
+        hexss_dir = home_dir / '.config' / 'hexss'
+    hexss_dir.mkdir(parents=True, exist_ok=True)
     return hexss_dir
 
 
@@ -44,9 +48,9 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
     :rtype: Optional[Dict[str, str]]
     """
     try:
-        proxies_config = json_load(os.path.join(hexss_dir, "proxies.json"), {
+        proxies_config = json_load(hexss_dir / "proxies.json", {
             "proxies": None,
-            "__proxies_example__": {
+            "proxies_example": {
                 "http": "http://<user>:<pass>@150.61.8.70:10086",
                 "https": "http://<user>:<pass>@150.61.8.70:10086"
             }
@@ -59,7 +63,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.13.9'
+__version__ = '0.13.10'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

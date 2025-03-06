@@ -2,7 +2,7 @@ from typing import List, Optional
 import time
 import hexss
 
-hexss.check_packages('pyserial', auto_install=True, verbose=False)
+hexss.check_packages('pyserial', auto_install=True)
 
 
 import serial

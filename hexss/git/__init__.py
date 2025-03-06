@@ -1,7 +1,7 @@
 import time
 import hexss
 
-hexss.check_packages('requests', 'GitPython', auto_install=True, verbose=False)
+hexss.check_packages('requests', 'GitPython', auto_install=True)
 
 from hexss import json_load, proxies
 import requests

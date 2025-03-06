@@ -1,6 +1,6 @@
 from hexss import check_packages
 
-check_packages('numpy', 'opencv-python', 'pygame', auto_install=True, verbose=False)
+check_packages('numpy', 'opencv-python', 'pygame', auto_install=True)
 
 from .func import get_image, get_image_from_cam, get_image_from_url
 import cv2

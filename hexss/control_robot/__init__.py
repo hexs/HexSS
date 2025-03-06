@@ -1,6 +1,6 @@
 from hexss import check_packages
 
-check_packages('pandas', 'pymodbus', 'Flask', 'pyserial', auto_install=True, verbose=False)
+check_packages('pandas', 'pymodbus', 'Flask', 'pyserial', auto_install=True)
 
 registers = {
     'ALA01': {

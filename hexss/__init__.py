@@ -30,6 +30,16 @@ def get_hexss_dir():
     return hexss_dir
 
 
+def get_config(file_name):
+    config_ = json_load(hexss_dir / '.config' / f'{file_name}.json', {})
+    if file_name in config_:
+        config = config_[file_name]
+    else:
+        config = config_
+
+    return config
+
+
 def initialize_proxies() -> Optional[Dict[str, str]]:
     """
     Initializes proxy configurations.
@@ -48,7 +58,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
     :rtype: Optional[Dict[str, str]]
     """
     try:
-        proxies_config = json_load(hexss_dir / "proxies.json", {
+        proxies_config = json_load(hexss_dir / '.config' / 'proxies.json', {
             "proxies": None,
             "proxies_example": {
                 "http": "http://<user>:<pass>@150.61.8.70:10086",
@@ -63,7 +73,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.13.10'
+__version__ = '0.13.11'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

@@ -102,7 +102,7 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
     """
     missing = missing_packages(*packages)
     if not missing:
-        if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
+        # if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
         return
 
     if auto_install:

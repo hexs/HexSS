@@ -73,12 +73,12 @@ def install(*packages: str, verbose: bool = True) -> None:
     if not missing:
         if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
         return
-    if verbose: print(f"{PINK}Installing missing packages: {UNDERLINED}{' '.join(missing)}{END}")
+    if verbose: print(f"{YELLOW}Installing: {BOLD}{', '.join(missing)}{END}")
     command = generate_install_command(missing)
     if run_command(command, verbose=verbose) == 0:
-        if verbose: print(f"{GREEN}Missing packages {BOLD}installation complete.{END}")
+        if verbose: print(f"{GREEN.BOLD}{', '.join(packages)}{END} {GREEN}installation complete.{END}")
     else:
-        print(f"{RED}Failed to install some packages. Check errors.{END}")
+        print(f"{RED}Failed to install {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
 
 
 def install_upgrade(*packages: str, verbose: bool = True) -> None:
@@ -88,12 +88,12 @@ def install_upgrade(*packages: str, verbose: bool = True) -> None:
     # if verbose: print(f"{PINK}Upgrading pip...{END}")
     # pip_command = generate_install_command(["pip"], upgrade=True)
     # run_command(pip_command, verbose=verbose)
-    if verbose: print(f"{PINK}Installing or upgrading specified packages: {UNDERLINED}{' '.join(packages)}{END}")
+    if verbose: print(f"{YELLOW}Installing or upgrading: {BOLD}{' '.join(packages)}{END}")
     command = generate_install_command(packages, upgrade=True)
     if run_command(command, verbose=verbose) == 0:
-        if verbose: print(f"{GREEN}Packages {BOLD}installation/upgrade complete.{END}")
+        if verbose: print(f"{GREEN.BOLD}{', '.join(packages)}{END} {GREEN}installation/upgrade complete.{END}")
     else:
-        print(f"{RED}Failed to install/upgrade some packages. Check errors.{END}")
+        print(f"{RED}Failed to install/upgrade {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
 
 
 def check_packages(*packages: str, auto_install: bool = False, verbose: bool = True) -> None:
@@ -106,8 +106,10 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         return
 
     if auto_install:
-        print(f"{PINK}Missing packages detected. Attempting to install: {UNDERLINED}{' '.join(missing)}{END}")
-        install(*missing, verbose=verbose)
+        print(f"{PINK}Missing packages detected. Attempting to install: {BOLD}{', '.join(missing)}{END}")
+        for package in missing:
+            install(package, verbose=verbose)
+        check_packages(*packages)
     else:
         try:
             raise ImportError(

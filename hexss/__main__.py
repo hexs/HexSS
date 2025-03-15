@@ -26,15 +26,9 @@ def show_config(data, keys):
 def update_config(file_name, keys, new_value):
     """Update a JSON configuration file with a new value for the given keys."""
     try:
-        file_path = os.path.join(hexss_dir, f'{file_name}.json')
-        config = json_load(file_path)
-        data = config.get(file_name, config)
-
-        # Traverse and update the appropriate key
-        for key in keys[:-1]:
-            if key not in data:
-                data[key] = {}
-            data = data[key]
+        file_path = hexss_dir / '.config' / f'{file_name}.json'
+        config_data = json_load(file_path)
+        data = config_data.get(file_name, config_data)
 
         data[keys[-1]] = new_value
         json_update(file_path, {file_name: data})
@@ -46,7 +40,7 @@ def update_config(file_name, keys, new_value):
 def run():
     """Parse arguments and perform the requested action."""
     parser = argparse.ArgumentParser(description="Manage configuration files or run specific functions.")
-    parser.add_argument("action", help="Specify the action to perform, e.g., 'config', 'camera_server'.")
+    parser.add_argument("action", help="e.g., 'config', 'camera_server', 'file_manager_server'.")
     parser.add_argument("key", nargs="?", help="Configuration key, e.g., 'proxies' or 'proxies.http'.")
     parser.add_argument("value", nargs="?", help="New value for the configuration key (if updating).")
 
@@ -61,24 +55,28 @@ def run():
         file_manager_server.run()
 
     elif args.action == "config":
-        if args.key:
-            key_parts = args.key.split(".")
-            file_name = key_parts[0]  # Extract file name (e.g., 'proxies')
-            keys = key_parts[1:]  # Extract nested keys (e.g., ['http'])
+        if args.key is None:
+            for config_file in os.listdir(hexss_dir / ".config"):
+                print(f"- {config_file.split('.')[0]}")
 
-            if args.value:
-                update_config(file_name, keys, args.value)
-            else:
+        elif args.key:
+            key_parts = args.key.split(".")
+            file_name = key_parts[0]
+            keys = key_parts[1:]
+
+            if args.value is None:
                 try:
-                    config = json_load(os.path.join(hexss_dir, f'{file_name}.json'))
-                    data = config.get(file_name, config)
-                    show_config(data, keys)
+                    config_data = json_load(hexss_dir / '.config' / f'{file_name}.json')
+                    config_data = config_data.get(file_name, config_data)
+                    show_config(config_data, keys)
+
                 except FileNotFoundError:
                     print(f"Configuration file for '{file_name}' not found.")
                 except Exception as e:
                     print(f"Error while loading configuration: {e}")
-        else:
-            print("Error: 'key' is required for the 'config' action.")
+            else:
+                update_config(file_name, keys, args.value)
+
     else:
         print(f"Error: Unknown action '{args.action}'.")
 

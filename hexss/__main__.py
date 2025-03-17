@@ -88,13 +88,15 @@ def run():
     elif args.action in ["get-constant", "get_constant"]:
         import sys
         def get_venv_path():
+            venv_env = os.environ.get("VIRTUAL_ENV")
+            if venv_env:
+                return venv_env
             if hasattr(sys, 'real_prefix'):
-                venv_path = sys.prefix
+                return sys.prefix
             elif sys.base_prefix != sys.prefix:
-                venv_path = sys.prefix
+                return sys.prefix
             else:
-                venv_path = None
-            return venv_path
+                return None
 
         venv_path = get_venv_path()
         print('venv_path   :', venv_path)

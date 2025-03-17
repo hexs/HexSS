@@ -1,11 +1,11 @@
 import os
 import sys
-from typing import Optional
-from pathlib import Path
 import platform
+from pathlib import Path
+from typing import Optional
 
 
-def get_virtualenv_path() -> Optional[Path]:
+def get_venv_dir() -> Optional[Path]:
     """
     Returns the path of the current virtual environment if active.
 
@@ -24,69 +24,71 @@ def get_virtualenv_path() -> Optional[Path]:
     return None
 
 
-def get_virtualenv_python_path() -> Path:
+def get_venv_python_path() -> Path:
     """
     Returns the path to the Python executable in the active virtual environment.
 
-    If a virtual environment is detected, constructs the path based on the operating
-    system (using 'Scripts' on Windows and 'bin' on other systems). If the expected
-    executable does not exist or no virtual environment is active, returns sys.executable
-    as a Path object.
+    If a virtual environment is active, constructs the executable path based on the OS:
+    - Windows: 'Scripts/python.exe'
+    - Unix-like: 'bin/python'
+
+    If no virtual environment is detected or the expected executable does not exist,
+    returns the current sys.executable as a Path object.
 
     Returns:
         Path: The path to the Python executable.
     """
-    venv_path = get_virtualenv_path()
-    if not venv_path:
+    venv_dir = get_venv_dir()
+    if not venv_dir:
         return Path(sys.executable)
 
     if platform.system() == 'Windows':
-        python_path = venv_path / "Scripts" / "python.exe"
+        python_path = venv_dir / "Scripts" / "python.exe"
     else:
-        python_path = venv_path / "bin" / "python"
+        python_path = venv_dir / "bin" / "python"
 
     if python_path.exists():
         return python_path
     return Path(sys.executable)
 
 
-def get_script_directory() -> Path:
+def get_script_dir() -> Path:
     """
-    Get the directory of the currently running script.
+    Returns the directory where the current script is located.
 
     Returns:
-        Path: The absolute path of the directory where the script is located.
+        Path: The absolute directory path of the running script.
     """
     try:
         # Resolve the absolute path of the script and return its parent directory.
         return Path(sys.argv[0]).resolve().parent
     except Exception as e:
-        raise RuntimeError("Failed to retrieve the script directory.") from e
+        raise RuntimeError("Unable to determine the script directory.") from e
 
 
-def get_working_directory() -> Path:
+def get_current_working_dir() -> Path:
     """
-    Get the current working directory.
+    Returns the current working directory.
 
     Returns:
-        Path: The current working directory of the Python process.
+        Path: The current working directory.
     """
     try:
         return Path.cwd()
     except Exception as e:
-        raise RuntimeError("Failed to retrieve the current working directory.") from e
+        raise RuntimeError("Unable to retrieve the current working directory.") from e
 
 
-def move_up(directory_path: Path, levels: int = 1) -> Path:
+def ascend_path(path: Path, levels: int = 1) -> Path:
     """
-    Move up the directory tree by a specified number of levels.
+    Ascends the directory tree from a given path by a specified number of levels.
 
     Args:
-        directory_path (Path): The starting directory path.
-        levels (int): The number of levels to move up. Defaults to 1.
+        path (Path): The starting path.
+        levels (int): The number of levels to ascend. Must be at least 1.
 
     Returns:
-        Path: The updated directory path after moving up.
+        Path: The resulting path after ascending the specified number of levels.
 
     Raises:
         ValueError: If levels is less than 1.
@@ -94,41 +96,52 @@ def move_up(directory_path: Path, levels: int = 1) -> Path:
     if levels < 1:
         raise ValueError("The levels argument must be at least 1.")
 
-    new_path = directory_path
+    new_path = path
     for _ in range(levels):
         new_path = new_path.parent
     return new_path
 
 
-def get_basename(directory_path: Path) -> str:
+def get_basename(path: Path) -> str:
     """
-    Get the basename of a directory or file path.
+    Retrieves the basename (final component) of the given path.
 
     Args:
-        directory_path (Path): The input directory or file path.
+        path (Path): The path from which to extract the basename.
 
     Returns:
-        str: The final component (basename) of the path.
+        str: The basename of the path.
     """
     try:
-        return directory_path.name
+        return path.name
     except Exception as e:
-        raise RuntimeError(f"Failed to retrieve the basename from '{directory_path}'.") from e
+        raise RuntimeError(f"Unable to retrieve basename from path: {path}") from e
+
+
+def get_hexss_dir():
+    home_dir = Path.home()
+    if platform.system() == "Windows":
+        hexss_dir = home_dir / 'AppData' / 'Roaming' / 'hexss'
+    else:
+        hexss_dir = home_dir / '.config' / 'hexss'
+    hexss_dir.mkdir(parents=True, exist_ok=True)
+    return hexss_dir
 
 
 if __name__ == "__main__":
-    # Virtual environment related paths
-    venv_path = get_virtualenv_path()
-    python_path = get_virtualenv_python_path()
-    print("Virtual Environment Path         :", venv_path)
-    print("Python Executable Path           :", python_path)
+    # Virtual environment-related paths
+    venv_dir = get_venv_dir()
+    python_executable = get_venv_python_path()
+    print("Virtual Environment Directory   :", venv_dir)
+    print("Virtual Environment Python Exec :", python_executable)
 
     # Script and working directory paths
-    script_dir = get_script_directory()
-    work_dir = get_working_directory()
-    print("Script Directory                 :", script_dir)
-    print("Working Directory                :", work_dir)
-    print("Basename of Working Dir          :", get_basename(work_dir))
+    script_directory = get_script_dir()
+    working_directory = get_current_working_dir()
+    print("Script Directory                :", script_directory)
+    print("Working Directory               :", working_directory)
+    print("Basename of Working Directory   :", get_basename(working_directory))
 
-    # Example: Move up 2 levels from the working directory
-    print("Working Directory - 2 levels up  :", move_up(work_dir, 2))
+    # Example: Ascend 2 levels from the working directory
+    ascended_path = ascend_path(working_directory, 2)
+    print("Ascended Path (2 levels up)     :", ascended_path)

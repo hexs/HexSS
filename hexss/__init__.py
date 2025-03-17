@@ -7,6 +7,7 @@ from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
 from .string import secure_filename, random_str
 from .python import check_packages, install, install_upgrade
+from .path import get_hexss_dir
 
 
 def get_hostname() -> str:
@@ -18,16 +19,6 @@ def get_username() -> str:
         user = os.environ.get(name)
         if user:
             return user
-
-
-def get_hexss_dir():
-    home_dir = Path.home()
-    if platform.system() == "Windows":
-        hexss_dir = home_dir / 'AppData' / 'Roaming' / 'hexss'
-    else:
-        hexss_dir = home_dir / '.config' / 'hexss'
-    hexss_dir.mkdir(parents=True, exist_ok=True)
-    return hexss_dir
 
 
 def get_config(file_name):
@@ -73,7 +64,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.14.6'
+__version__ = '0.14.7'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

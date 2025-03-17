@@ -85,6 +85,26 @@ def run():
         from hexss.python import install_upgrade
         install_upgrade('hexss')
 
+    elif args.action in ["get-constant", "get_constant"]:
+        import sys
+        def get_venv_path():
+            if hasattr(sys, 'real_prefix'):
+                venv_path = sys.prefix
+            elif sys.base_prefix != sys.prefix:
+                venv_path = sys.prefix
+            else:
+                venv_path = None
+            return venv_path
+
+        venv_path = get_venv_path()
+        print('venv_path   :', venv_path)
+
+        print('prefix      :', sys.prefix)
+        print('base_prefix :', sys.base_prefix)
+        print('exec_prefix :', sys.exec_prefix)
+
+        print('executable  :', sys.executable)
+
     else:
         print(f"Error: Unknown action '{args.action}'.")
 

@@ -77,6 +77,14 @@ def run():
             else:
                 update_config(file_name, keys, args.value)
 
+    elif args.action == "install":
+        from hexss.python import install
+        install('hexss')
+
+    elif args.action == "upgrade":
+        from hexss.python import install_upgrade
+        install_upgrade('hexss')
+
     else:
         print(f"Error: Unknown action '{args.action}'.")
 

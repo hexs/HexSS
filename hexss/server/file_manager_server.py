@@ -3,6 +3,7 @@ import os
 import shutil
 import zipfile
 import io
+from pathlib import Path
 
 from hexss import check_packages, json_load, secure_filename
 
@@ -18,12 +19,38 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-ROOT_DIR = "/"
+ROOT_DIR = Path("/")
 
 
 @app.route('/')
 def root():
+    # return render_template('file_manager2.html')
     return redirect(url_for('path'))
+
+
+@app.route('/api/get_list_dir')
+def listdir():
+    try:
+        path = ROOT_DIR
+        path = path / request.args.get('path', default='', type=str)
+        listdir = {
+            'path': str(path),
+            'folder': [],
+            'file': []
+        }
+        for dir in os.listdir(path):
+            if os.path.isdir(path / dir):
+                listdir['folder'].append(dir)
+            else:
+                listdir['file'].append(dir)
+
+        return jsonify({
+            'success': True,
+            'listdir': listdir
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/path/')

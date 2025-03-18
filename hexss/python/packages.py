@@ -1,11 +1,11 @@
 import subprocess
-import sys
 from typing import Sequence, List
 import hexss
 from hexss.constants.terminal_color import *
 
 # Map package aliases to actual package names for installation
 PACKAGE_ALIASES = {
+    # 'install_name': 'freeze_name'
     'pygame-gui': 'pygame_gui'
 }
 
@@ -18,7 +18,7 @@ def get_installed_packages() -> set[str]:
         return {
             pkg.split('==')[0]
             for pkg in subprocess.check_output(
-                [sys.executable, "-m", "pip", "freeze"], text=True
+                [hexss.path.get_python_path(), "-m", "pip", "freeze"], text=True
             ).splitlines()
         }
     except subprocess.CalledProcessError as e:
@@ -31,7 +31,16 @@ def missing_packages(*packages: str) -> List[str]:
     Identifies missing packages from the list of required packages.
     """
     installed = get_installed_packages()
-    return [PACKAGE_ALIASES.get(pkg, pkg) for pkg in packages if PACKAGE_ALIASES.get(pkg, pkg) not in installed]
+    installed_lower = [pkg.lower() for pkg in installed]
+
+    missing = []
+    for pkg in packages:
+        actual_pkg = PACKAGE_ALIASES.get(pkg, pkg)
+        pkg_lower = actual_pkg.lower()
+
+        if pkg_lower not in installed_lower:
+            missing.append(pkg)
+    return missing
 
 
 def generate_install_command(
@@ -40,7 +49,7 @@ def generate_install_command(
     """
     Generates the pip install command.
     """
-    command = [sys.executable, "-m", "pip", "install"]
+    command = [hexss.path.get_python_path(), "-m", "pip", "install"]
     if proxy or (hexss.proxies and hexss.proxies.get('http')):  # Add proxy if available
         command += [f"--proxy={proxy or hexss.proxies['http']}"]
     if upgrade:

@@ -1,6 +1,7 @@
 import argparse
 import os
 from hexss import hexss_dir, json_load, json_update
+from hexss.path import get_venv_dir, get_python_path
 
 
 def show_config(data, keys):
@@ -87,25 +88,15 @@ def run():
 
     elif args.action in ["get-constant", "get_constant"]:
         import sys
-        def get_venv_path():
-            venv_env = os.environ.get("VIRTUAL_ENV")
-            if venv_env:
-                return venv_env
-            if hasattr(sys, 'real_prefix'):
-                return sys.prefix
-            elif sys.base_prefix != sys.prefix:
-                return sys.prefix
-            else:
-                return None
 
-        venv_path = get_venv_path()
-        print('venv_path   :', venv_path)
+        print('venv path        :', get_venv_dir())
+        print("python exec path :", get_python_path())
 
-        print('prefix      :', sys.prefix)
-        print('base_prefix :', sys.base_prefix)
-        print('exec_prefix :', sys.exec_prefix)
+        print('prefix           :', sys.prefix)
+        print('base prefix      :', sys.base_prefix)
+        print('exec prefix      :', sys.exec_prefix)
 
-        print('executable  :', sys.executable)
+        print('executable       :', sys.executable)
 
     else:
         print(f"Error: Unknown action '{args.action}'.")

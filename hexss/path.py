@@ -24,7 +24,7 @@ def get_venv_dir() -> Optional[Path]:
     return None
 
 
-def get_venv_python_path() -> Path:
+def get_python_path() -> Path:
     """
     Returns the path to the Python executable in the active virtual environment.
 
@@ -36,7 +36,7 @@ def get_venv_python_path() -> Path:
     returns the current sys.executable as a Path object.
 
     Returns:
-        Path: The path to the Python executable.
+        Path: The Python executable path.
     """
     venv_dir = get_venv_dir()
     if not venv_dir:
@@ -102,22 +102,6 @@ def ascend_path(path: Path, levels: int = 1) -> Path:
     return new_path
 
 
-def get_basename(path: Path) -> str:
-    """
-    Retrieves the basename (final component) of the given path.
-
-    Args:
-        path (Path): The path from which to extract the basename.
-
-    Returns:
-        str: The basename of the path.
-    """
-    try:
-        return path.name
-    except Exception as e:
-        raise RuntimeError(f"Unable to retrieve basename from path: {path}") from e
-
-
 def get_hexss_dir():
     home_dir = Path.home()
     if platform.system() == "Windows":
@@ -129,19 +113,15 @@ def get_hexss_dir():
 
 
 if __name__ == "__main__":
-    # Virtual environment-related paths
-    venv_dir = get_venv_dir()
-    python_executable = get_venv_python_path()
-    print("Virtual Environment Directory   :", venv_dir)
-    print("Virtual Environment Python Exec :", python_executable)
+    python_path = get_python_path()
+    print("Python Exec Path            :", python_path)
 
     # Script and working directory paths
     script_directory = get_script_dir()
     working_directory = get_current_working_dir()
-    print("Script Directory                :", script_directory)
-    print("Working Directory               :", working_directory)
-    print("Basename of Working Directory   :", get_basename(working_directory))
+    print("Script Directory            :", script_directory)
+    print("Working Directory           :", working_directory)
 
     # Example: Ascend 2 levels from the working directory
     ascended_path = ascend_path(working_directory, 2)
-    print("Ascended Path (2 levels up)     :", ascended_path)
+    print("Ascended Path (2 levels up) :", ascended_path)

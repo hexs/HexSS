@@ -19,6 +19,7 @@ def get_username() -> str:
         user = os.environ.get(name)
         if user:
             return user
+    raise ValueError('No username was specified')
 
 
 def get_config(file_name):
@@ -64,7 +65,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.14.7'
+__version__ = '0.14.8'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

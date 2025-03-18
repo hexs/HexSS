@@ -18,7 +18,7 @@ def get_installed_packages() -> set[str]:
         return {
             pkg.split('==')[0]
             for pkg in subprocess.check_output(
-                [hexss.path.get_python_path(), "-m", "pip", "freeze"], text=True
+                [str(hexss.path.get_python_path()), "-m", "pip", "freeze"], text=True
             ).splitlines()
         }
     except subprocess.CalledProcessError as e:
@@ -49,7 +49,7 @@ def generate_install_command(
     """
     Generates the pip install command.
     """
-    command = [hexss.path.get_python_path(), "-m", "pip", "install"]
+    command = [str(hexss.path.get_python_path()), "-m", "pip", "install"]
     if proxy or (hexss.proxies and hexss.proxies.get('http')):  # Add proxy if available
         command += [f"--proxy={proxy or hexss.proxies['http']}"]
     if upgrade:

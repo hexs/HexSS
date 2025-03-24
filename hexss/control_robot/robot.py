@@ -4,6 +4,9 @@ from datetime import datetime
 from pprint import pprint
 from typing import Union, List, Optional
 from functools import wraps
+from hexss import check_packages
+
+check_packages('pymodbus', 'pyserial', auto_install=True)
 
 import numpy as np
 import pandas as pd

@@ -4,9 +4,14 @@ import logging
 from functools import wraps
 import traceback
 
+from hexss import check_packages
+
+check_packages('pandas', 'Flask', auto_install=True)
+
 import pandas as pd
 from flask import Flask, render_template, request, jsonify, abort, Response
-from hexss.network import get_all_ipv4, get_hostname
+from hexss import get_hostname
+from hexss.network import get_all_ipv4
 from hexss.control_robot.pretty_dataframe import column_mapping, read_p_df, write_p_df
 
 # Configure logging

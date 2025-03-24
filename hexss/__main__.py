@@ -1,5 +1,7 @@
 import argparse
 import os
+
+import hexss.python
 from hexss import hexss_dir, json_load, json_update
 from hexss.path import get_venv_dir, get_python_path
 
@@ -85,6 +87,13 @@ def run():
     elif args.action == "upgrade":
         from hexss.python import install_upgrade
         install_upgrade('hexss')
+
+    elif args.action in ["env", "environ"]:
+        for key, value in os.environ.items():
+            print(f'{key:25}:{value}')
+
+    elif args.action in ["write-proxy-to-env", "write_proxy_to_env"]:
+        hexss.python.write_proxy_to_env()
 
     elif args.action in ["get-constant", "get_constant"]:
         import sys

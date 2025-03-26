@@ -1,7 +1,8 @@
 import subprocess
 from typing import Sequence, List
 import hexss
-from hexss.constants.terminal_color import *
+from ..constants.terminal_color import *
+from ..path import get_python_path
 
 # Map package aliases to actual package names for installation
 PACKAGE_ALIASES = {
@@ -10,10 +11,7 @@ PACKAGE_ALIASES = {
 }
 
 
-def get_installed_packages() -> set[str]:
-    """
-    Retrieves a set of installed Python packages using pip.
-    """
+def old_get_installed_packages() -> set[str]:
     try:
         return {
             pkg.split('==')[0]
@@ -26,11 +24,37 @@ def get_installed_packages() -> set[str]:
         return set()
 
 
+def get_installed_packages(python_path=get_python_path()) -> set[str]:
+    """
+    Retrieves a set of installed Python packages using pip.
+    """
+    output = subprocess.check_output([
+        str(python_path), "-c",
+        "import importlib.metadata\n"
+        "for dist in importlib.metadata.distributions():\n"
+        " print(dist.name,dist.version,sep='==')"
+    ], text=True)
+
+    # Split the output into lines
+    lines = output.splitlines()
+
+    # Parse the lines to extract package name and version
+    packages = []
+    for line in lines:
+        if '==' in line:
+            name, version = line.split('==')
+        else:
+            continue
+        packages.append((name, version))
+
+    return set(packages)
+
+
 def missing_packages(*packages: str) -> List[str]:
     """
     Identifies missing packages from the list of required packages.
     """
-    installed = get_installed_packages()
+    installed = old_get_installed_packages()
     installed_lower = [pkg.lower() for pkg in installed]
 
     missing = []
@@ -49,7 +73,7 @@ def generate_install_command(
     """
     Generates the pip install command.
     """
-    command = [str(hexss.path.get_python_path()), "-m", "pip", "install"]
+    command = [str(get_python_path()), "-m", "pip", "install"]
     if proxy or (hexss.proxies and hexss.proxies.get('http')):  # Add proxy if available
         command += [f"--proxy={proxy or hexss.proxies['http']}"]
     if upgrade:
@@ -129,10 +153,3 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         except ImportError as e:
             print(e)
             exit()
-
-
-if __name__ == "__main__":
-    # Example
-    install("numpy")
-    install_upgrade("opencv-python", "Flask")
-    check_packages("ultralytics")

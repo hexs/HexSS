@@ -24,6 +24,29 @@ def get_venv_dir() -> Optional[Path]:
     return None
 
 
+def get_main_python_path() -> Path:
+    """
+    Returns the path to the main Python executable.
+
+    This function returns the path to the main Python interpreter executable
+    that is running the current script. It is useful in cases where the path
+    to the main Python executable is needed, regardless of whether a virtual
+    environment is active or not.
+
+    Returns:
+        Path: The main Python executable path.
+    """
+    if hasattr(sys, 'real_prefix') or sys.base_prefix != sys.prefix:
+        # If in a virtual environment, return the base prefix executable
+        if platform.system() == 'Windows':
+            return Path(sys.base_prefix) / "python.exe"
+        else:
+            return Path(sys.base_prefix) / "bin" / "python"
+    else:
+        # If not in a virtual environment, return the current executable
+        return Path(sys.executable)
+
+
 def get_python_path() -> Path:
     """
     Returns the path to the Python executable in the active virtual environment.
@@ -113,7 +136,9 @@ def get_hexss_dir():
 
 
 if __name__ == "__main__":
+    main_python_path = get_main_python_path()
     python_path = get_python_path()
+    print("Main Python Exec Path       :", main_python_path)
     print("Python Exec Path            :", python_path)
 
     # Script and working directory paths
@@ -125,3 +150,5 @@ if __name__ == "__main__":
     # Example: Ascend 2 levels from the working directory
     ascended_path = ascend_path(working_directory, 2)
     print("Ascended Path (2 levels up) :", ascended_path)
+
+    print(sys.base_prefix)

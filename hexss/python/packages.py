@@ -1,27 +1,18 @@
 import subprocess
 from typing import Sequence, List
+import re
+from packaging.version import Version, InvalidVersion
+from packaging.specifiers import SpecifierSet
+
 import hexss
-from ..constants.terminal_color import *
-from ..path import get_python_path
+from hexss.constants.terminal_color import *
+from hexss.path import get_python_path
 
 # Map package aliases to actual package names for installation
 PACKAGE_ALIASES = {
     # 'install_name': 'freeze_name'
     'pygame-gui': 'pygame_gui'
 }
-
-
-def old_get_installed_packages() -> set[str]:
-    try:
-        return {
-            pkg.split('==')[0]
-            for pkg in subprocess.check_output(
-                [str(hexss.path.get_python_path()), "-m", "pip", "freeze"], text=True
-            ).splitlines()
-        }
-    except subprocess.CalledProcessError as e:
-        print(f"{RED}Error fetching installed packages: {e}{END}")
-        return set()
 
 
 def get_installed_packages(python_path=get_python_path()) -> set[str]:
@@ -52,18 +43,52 @@ def get_installed_packages(python_path=get_python_path()) -> set[str]:
 
 def missing_packages(*packages: str) -> List[str]:
     """
-    Identifies missing packages from the list of required packages.
+    Identifies missing packages from the list of required packages,
+    including support for version specifiers.
+
+    example:
+    'package_name'
+    'package_name==1.3'
+    'package_name>=1.2,<2.0'
     """
-    installed = old_get_installed_packages()
-    installed_lower = [pkg.lower() for pkg in installed]
+    # Build a dictionary of installed packages: {package_name_lower: version}
+    installed_dict = {name.lower(): version for name, version in get_installed_packages()}
 
     missing = []
-    for pkg in packages:
-        actual_pkg = PACKAGE_ALIASES.get(pkg, pkg)
-        pkg_lower = actual_pkg.lower()
+    # Regex to capture package name and optional version specifier
+    pattern = re.compile(r"^([A-Za-z0-9_\-]+)([<>=!].+)?$")
 
-        if pkg_lower not in installed_lower:
-            missing.append(pkg)
+    for req in packages:
+        # Check for alias mapping first.
+        # We apply alias mapping to the requirement string if available, but only to the package name part.
+        match = pattern.match(req)
+        if not match:
+            # if the requirement doesn't match our pattern, skip it.
+            continue
+        pkg_name, version_spec = match.groups()
+        # Apply alias if exists (alias should not include version specifiers)
+        actual_pkg = PACKAGE_ALIASES.get(pkg_name, pkg_name)
+        actual_pkg_lower = actual_pkg.lower()
+
+        # Get installed version if available
+        installed_version = installed_dict.get(actual_pkg_lower)
+
+        # If package is not installed, add to missing and continue.
+        if installed_version is None:
+            missing.append(req)
+            continue
+
+        # If a version specifier is provided, check if the installed version satisfies it.
+        if version_spec:
+            try:
+                spec_set = SpecifierSet(version_spec)
+                # Compare using packaging.version.Version
+                if not spec_set.contains(Version(installed_version), prereleases=True):
+                    missing.append(req)
+            except InvalidVersion:
+                # If version parsing fails, assume the package is missing or invalid.
+                missing.append(req)
+        # No version specifier provided and package is installed, so it's fine.
     return missing
 
 

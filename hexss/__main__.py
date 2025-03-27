@@ -1,9 +1,8 @@
 import argparse
 import os
 
-import hexss.python
+import hexss
 from hexss import hexss_dir, json_load, json_update
-from hexss.path import get_venv_dir, get_python_path
 
 
 def show_config(data, keys):
@@ -96,16 +95,18 @@ def run():
         hexss.python.write_proxy_to_env()
 
     elif args.action in ["get-constant", "get_constant"]:
-        import sys
-
-        print('venv path        :', get_venv_dir())
-        print("python exec path :", get_python_path())
-
-        print('prefix           :', sys.prefix)
-        print('base prefix      :', sys.base_prefix)
-        print('exec prefix      :', sys.exec_prefix)
-
-        print('executable       :', sys.executable)
+        print('hostname         :', hexss.hostname)
+        print('username         :', hexss.username)
+        print()
+        print('proxies          :', hexss.proxies)
+        print()
+        print('--path--')
+        print('hexss dir        :', hexss.hexss_dir)
+        print('venv             :', hexss.path.get_venv_dir())
+        print("python exec      :", hexss.path.get_python_path())
+        print("main python exec :", hexss.path.get_main_python_path())
+        print("working dir      :", hexss.path.get_current_working_dir())
+        print("script dir       :", hexss.path.get_script_dir())
 
     else:
         print(f"Error: Unknown action '{args.action}'.")

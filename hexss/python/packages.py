@@ -1,7 +1,7 @@
 import subprocess
+from importlib.metadata import version as get_version, packages_distributions
+import re
 from typing import Sequence, List, Set, Tuple
-from packaging.version import Version, InvalidVersion
-from packaging.requirements import Requirement
 
 import hexss
 from hexss.constants.terminal_color import *
@@ -34,6 +34,26 @@ def get_installed_packages(python_path=get_python_path()) -> Set[Tuple[str, str]
     return set(packages)
 
 
+def parse_version(version: str) -> Tuple:
+    return tuple(map(int, re.findall(r'\d+', version)))
+
+
+def version_satisfies(version: str, specifier: str) -> bool:
+    if not specifier:
+        return True
+    if specifier.startswith("=="):
+        return parse_version(version) == parse_version(specifier[2:])
+    elif specifier.startswith(">="):
+        return parse_version(version) >= parse_version(specifier[2:])
+    elif specifier.startswith("<="):
+        return parse_version(version) <= parse_version(specifier[2:])
+    elif specifier.startswith(">"):
+        return parse_version(version) > parse_version(specifier[1:])
+    elif specifier.startswith("<"):
+        return parse_version(version) < parse_version(specifier[1:])
+    return False
+
+
 def missing_packages(*packages: str) -> List[str]:
     """
     Identifies missing packages from the list of required packages,
@@ -47,22 +67,16 @@ def missing_packages(*packages: str) -> List[str]:
         missing_packages('numpy==2.0.0', 'opencv-python')
         missing_packages('numpy>=2.0.0', 'opencv-python')
     """
-    # Build a dictionary of installed packages: {package_name_lower: version}
     installed_dict = {name.lower(): version for name, version in get_installed_packages()}
 
     missing = []
     for req in packages:
-        try:
-            # Parse requirement string using packaging.requirements.Requirement
-            requirement = Requirement(req)
-        except Exception:
-            # If the requirement cannot be parsed, assume it's missing.
+        match = re.match(r"([a-zA-Z0-9_-]+)([<>=!]*)([\dA-Za-z.+!_-]*)", req)
+        if not match:
             missing.append(req)
             continue
 
-        pkg_name = requirement.name
-        specifier = requirement.specifier
-        # Apply alias mapping if needed
+        pkg_name, operator, version = match.groups()
         actual_pkg = PACKAGE_ALIASES.get(pkg_name, pkg_name)
         actual_pkg_lower = actual_pkg.lower()
 
@@ -72,14 +86,8 @@ def missing_packages(*packages: str) -> List[str]:
             missing.append(req)
             continue
 
-        # If there is a version specifier, check whether the installed version meets the requirement.
-        if specifier:
-            try:
-                if not specifier.contains(Version(installed_version), prereleases=True):
-                    missing.append(req)
-            except InvalidVersion:
-                # If the installed version cannot be parsed, consider the package as missing.
-                missing.append(req)
+        if not version_satisfies(installed_version, operator + version):
+            missing.append(req)
     return missing
 
 
@@ -171,3 +179,136 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         except ImportError as e:
             print(e)
             exit()
+
+
+if __name__ == "__main__":
+    # test
+
+    operators = ['==', '>=', '<=', '>', '<']
+
+    versions = [
+        # Various development release incarnations
+        "1.0dev",
+        "1.0.dev",
+        "1.0dev1",
+        "1.0-dev",
+        "1.0-dev1",
+        "1.0DEV",
+        "1.0.DEV",
+        "1.0DEV1",
+        "1.0.DEV1",
+        "1.0-DEV",
+        "1.0-DEV1",
+        # Various alpha incarnations
+        "1.0a",
+        "1.0.a",
+        "1.0.a1",
+        "1.0-a",
+        "1.0-a1",
+        "1.0alpha",
+        "1.0.alpha",
+        "1.0.alpha1",
+        "1.0-alpha",
+        "1.0-alpha1",
+        "1.0A",
+        "1.0.A",
+        "1.0.A1",
+        "1.0-A",
+        "1.0-A1",
+        "1.0ALPHA",
+        "1.0.ALPHA",
+        "1.0.ALPHA1",
+        "1.0-ALPHA",
+        "1.0-ALPHA1",
+        # Various beta incarnations
+        "1.0b",
+        "1.0.b",
+        "1.0.b1",
+        "1.0-b",
+        "1.0-b1",
+        "1.0beta",
+        "1.0.beta",
+        "1.0.beta1",
+        "1.0-beta",
+        "1.0-beta1",
+        "1.0B",
+        "1.0.B",
+        "1.0.B1",
+        "1.0-B",
+        "1.0-B1",
+        "1.0BETA",
+        "1.0.BETA",
+        "1.0.BETA1",
+        "1.0-BETA",
+        "1.0-BETA1",
+        # Various release candidate incarnations
+        "1.0c",
+        "1.0.c",
+        "1.0.c1",
+        "1.0-c",
+        "1.0-c1",
+        "1.0rc",
+        "1.0.rc",
+        "1.0.rc1",
+        "1.0-rc",
+        "1.0-rc1",
+        "1.0C",
+        "1.0.C",
+        "1.0.C1",
+        "1.0-C",
+        "1.0-C1",
+        "1.0RC",
+        "1.0.RC",
+        "1.0.RC1",
+        "1.0-RC",
+        "1.0-RC1",
+        # Various post release incarnations
+        "1.0post",
+        "1.0.post",
+        "1.0post1",
+        "1.0-post",
+        "1.0-post1",
+        "1.0POST",
+        "1.0.POST",
+        "1.0POST1",
+        "1.0.POST1",
+        "1.0-POST",
+        "1.0-POST1",
+        "1.0-5",
+        # Local version case insensitivity
+        "1.0+AbC"
+        # Integer Normalization
+        "1.01",
+        "1.0a05",
+        "1.0b07",
+        "1.0c056",
+        "1.0rc09",
+        "1.0.post000",
+        "1.1.dev09000",
+        "00!1.2",
+        "0100!0.0",
+        # Various other normalizations
+        "v1.0",
+    ]
+
+    pkg_names = ['google_tran-s', 'opencv-python', 'aa_aa']
+
+    test_results = 'OK'
+    for pkg_name in pkg_names:
+        for operator in operators:
+            for version in versions:
+                req = f'{pkg_name}{operator}{version}'
+                match = re.match(r"([a-zA-Z0-9_-]+)([<>=!]*)([\dA-Za-z.+!_-]*)", req)
+
+                pkg_name_, operator_, version_ = match.groups()
+
+                if pkg_name_ != pkg_name or operator_ != operator or version_ != version:
+                    print(req)
+                    print(pkg_name_)
+                    print(operator_)
+                    print(version_)
+                    print()
+
+                    test_results = 'not OK'
+
+    print(test_results)

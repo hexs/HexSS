@@ -1,8 +1,7 @@
 import subprocess
-from typing import Sequence, List
-import re
+from typing import Sequence, List, Set, Tuple
 from packaging.version import Version, InvalidVersion
-from packaging.specifiers import SpecifierSet
+from packaging.requirements import Requirement
 
 import hexss
 from hexss.constants.terminal_color import *
@@ -15,29 +14,23 @@ PACKAGE_ALIASES = {
 }
 
 
-def get_installed_packages(python_path=get_python_path()) -> set[str]:
+def get_installed_packages(python_path=get_python_path()) -> Set[Tuple[str, str]]:
     """
-    Retrieves a set of installed Python packages using pip.
+    Retrieves a set of installed Python packages (name and version tuples)
+    using pip and importlib.metadata.
     """
     output = subprocess.check_output([
         str(python_path), "-c",
         "import importlib.metadata\n"
         "for dist in importlib.metadata.distributions():\n"
-        " print(dist.name,dist.version,sep='==')"
+        " print(dist.name, dist.version, sep='==')"
     ], text=True)
 
-    # Split the output into lines
-    lines = output.splitlines()
-
-    # Parse the lines to extract package name and version
-    packages = []
-    for line in lines:
+    packages: List[Tuple[str, str]] = []
+    for line in output.splitlines():
         if '==' in line:
             name, version = line.split('==')
-        else:
-            continue
-        packages.append((name, version))
-
+            packages.append((name.strip(), version.strip()))
     return set(packages)
 
 
@@ -46,49 +39,47 @@ def missing_packages(*packages: str) -> List[str]:
     Identifies missing packages from the list of required packages,
     including support for version specifiers.
 
-    example:
-    'package_name'
-    'package_name==1.3'
-    'package_name>=1.2,<2.0'
+    Requirements are parsed using packaging.requirements.Requirement.
+
+    Examples:
+        missing_packages('numpy', 'opencv-python')
+        missing_packages('numpy==2', 'opencv-python')
+        missing_packages('numpy==2.0.0', 'opencv-python')
+        missing_packages('numpy>=2.0.0', 'opencv-python')
     """
     # Build a dictionary of installed packages: {package_name_lower: version}
     installed_dict = {name.lower(): version for name, version in get_installed_packages()}
 
     missing = []
-    # Regex to capture package name and optional version specifier
-    pattern = re.compile(r"^([A-Za-z0-9_\-]+)([<>=!].+)?$")
-
     for req in packages:
-        # Check for alias mapping first.
-        # We apply alias mapping to the requirement string if available, but only to the package name part.
-        match = pattern.match(req)
-        if not match:
-            # if the requirement doesn't match our pattern, skip it.
+        try:
+            # Parse requirement string using packaging.requirements.Requirement
+            requirement = Requirement(req)
+        except Exception:
+            # If the requirement cannot be parsed, assume it's missing.
+            missing.append(req)
             continue
-        pkg_name, version_spec = match.groups()
-        # Apply alias if exists (alias should not include version specifiers)
+
+        pkg_name = requirement.name
+        specifier = requirement.specifier
+        # Apply alias mapping if needed
         actual_pkg = PACKAGE_ALIASES.get(pkg_name, pkg_name)
         actual_pkg_lower = actual_pkg.lower()
 
-        # Get installed version if available
         installed_version = installed_dict.get(actual_pkg_lower)
-
-        # If package is not installed, add to missing and continue.
+        # Package is not installed
         if installed_version is None:
             missing.append(req)
             continue
 
-        # If a version specifier is provided, check if the installed version satisfies it.
-        if version_spec:
+        # If there is a version specifier, check whether the installed version meets the requirement.
+        if specifier:
             try:
-                spec_set = SpecifierSet(version_spec)
-                # Compare using packaging.version.Version
-                if not spec_set.contains(Version(installed_version), prereleases=True):
+                if not specifier.contains(Version(installed_version), prereleases=True):
                     missing.append(req)
             except InvalidVersion:
-                # If version parsing fails, assume the package is missing or invalid.
+                # If the installed version cannot be parsed, consider the package as missing.
                 missing.append(req)
-        # No version specifier provided and package is installed, so it's fine.
     return missing
 
 
@@ -96,11 +87,11 @@ def generate_install_command(
         packages: Sequence[str], upgrade: bool = False, proxy: str = None
 ) -> List[str]:
     """
-    Generates the pip install command.
+    Generates the pip install command based on the specified packages.
     """
     command = [str(get_python_path()), "-m", "pip", "install"]
     if proxy or (hexss.proxies and hexss.proxies.get('http')):  # Add proxy if available
-        command += [f"--proxy={proxy or hexss.proxies['http']}"]
+        command.append(f"--proxy={proxy or hexss.proxies['http']}")
     if upgrade:
         command.append("--upgrade")
     command.extend(packages)
@@ -109,7 +100,7 @@ def generate_install_command(
 
 def run_command(command: List[str], verbose: bool = False) -> int:
     """
-    Executes a given command in a subprocess.
+    Executes a given command in a subprocess and returns the exit code.
     """
     try:
         if verbose:
@@ -156,7 +147,8 @@ def install_upgrade(*packages: str, verbose: bool = True) -> None:
 
 def check_packages(*packages: str, auto_install: bool = False, verbose: bool = True) -> None:
     """
-    Checks if the required Python packages are installed, and optionally installs missing packages.
+    Checks if the required Python packages are installed (and meet any version constraints).
+    Optionally, installs missing packages automatically if auto_install is set to True.
     """
     missing = missing_packages(*packages)
     if not missing:
@@ -167,6 +159,7 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         print(f"{PINK}Missing packages detected. Attempting to install: {BOLD}{', '.join(missing)}{END}")
         for package in missing:
             install(package, verbose=verbose)
+        # Recursively check packages again
         check_packages(*packages)
     else:
         try:

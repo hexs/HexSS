@@ -1,7 +1,12 @@
+from typing import Union
 import os
+from pathlib import Path
+
+import hexss
+hexss.check_packages('requests', 'tqdm', auto_install=True)
+
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import hexss
 from hexss.constants.terminal_color import *
 from tqdm import tqdm
 
@@ -73,13 +78,18 @@ def download_file(download_url, file_path):
         print(f"\n{RED}Failed to download {os.path.basename(file_path)}: {e}{END}")
 
 
-def download(api_url, max_workers=20):
+def download(owner, repo, path='', max_workers=20, dest_folder: Union[Path, str] = ''):
     """
     Recursively downloads content from a GitHub API URL using multi-threaded file downloads.
     Uses an overall progress bar to track total file downloads.
-    The destination folder is derived from the last segment of the API URL.
     """
-    dest_folder = api_url.rstrip('/').split('/')[-1]
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    if isinstance(dest_folder, str):
+        dest_folder = Path(dest_folder)
+
+    if not dest_folder.is_absolute():
+        dest_folder = hexss.path.get_script_dir() / dest_folder
+
     tasks = collect_file_tasks(api_url, dest_folder)
     print(f"\n{CYAN}Found {len(tasks)} files to download in '{dest_folder}'.{END}")
 
@@ -100,5 +110,26 @@ def download(api_url, max_workers=20):
 
 
 if __name__ == "__main__":
-    api_url = "https://api.github.com/repos/hexs/Image-Dataset/contents/flower_photos"
-    download(api_url)
+    # dir is `<script_dir>\photos`
+    download(
+        'hexs', 'Image-Dataset', 'flower_photos', max_workers=200,
+        dest_folder=Path('photos')
+    )
+
+    # dir is `C:\PythonProjects\data`
+    download(
+        'hexs', 'Image-Dataset', 'flower_photos', max_workers=200,
+        dest_folder=Path(r'C:\PythonProjects\data')
+    )
+
+    # dir is `<script_dir>\data`
+    download(
+        'hexs', 'auto_inspection_data__QC7-7990-000-Example', max_workers=200,
+        dest_folder=Path('data')
+    )
+
+    # dir is `C:\PythonProjects\data2`
+    download(
+        'hexs', 'auto_inspection_data__QC7-7990-000-Example', max_workers=200,
+        dest_folder=Path(r'C:\PythonProjects\data2')
+    )

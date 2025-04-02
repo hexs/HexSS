@@ -68,7 +68,7 @@ def run():
 
             if args.value is None:
                 try:
-                    config_data = json_load(hexss_dir / '.config' / f'{file_name}.json')
+                    config_data = json_load(hexss_dir / 'config' / f'{file_name}.json')
                     config_data = config_data.get(file_name, config_data)
                     show_config(config_data, keys)
 

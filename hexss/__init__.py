@@ -23,7 +23,7 @@ def get_username() -> str:
 
 
 def get_config(file_name):
-    config_ = json_load(hexss_dir / '.config' / f'{file_name}.json', {})
+    config_ = json_load(hexss_dir / 'config' / f'{file_name}.json', {})
     if file_name in config_:
         config = config_[file_name]
     else:
@@ -50,7 +50,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
     :rtype: Optional[Dict[str, str]]
     """
     try:
-        proxies_config = json_load(hexss_dir / '.config' / 'proxies.json', {
+        proxies_config = json_load(hexss_dir / 'config' / 'proxies.json', {
             "proxies": None,
             "proxies_example": {
                 "http": "http://<user>:<pass>@150.61.8.70:10086",
@@ -65,7 +65,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.14.14'
+__version__ = '0.14.15'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

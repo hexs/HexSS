@@ -28,7 +28,7 @@ def show_config(data, keys):
 def update_config(file_name, keys, new_value):
     """Update a JSON configuration file with a new value for the given keys."""
     try:
-        file_path = hexss_dir / '.config' / f'{file_name}.json'
+        file_path = hexss_dir / 'config' / f'{file_name}.json'
         config_data = json_load(file_path)
         data = config_data.get(file_name, config_data)
 
@@ -58,7 +58,7 @@ def run():
 
     elif args.action == "config":
         if args.key is None:
-            for config_file in os.listdir(hexss_dir / ".config"):
+            for config_file in os.listdir(hexss_dir / "config"):
                 print(f"- {config_file.split('.')[0]}")
 
         elif args.key:

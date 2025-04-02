@@ -65,8 +65,9 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return None
 
 
-__version__ = '0.14.13'
+__version__ = '0.14.14'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()
 proxies = initialize_proxies()
+system = platform.system()

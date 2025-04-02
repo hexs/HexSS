@@ -2,6 +2,7 @@ import subprocess
 from importlib.metadata import version as get_version, packages_distributions
 import re
 from typing import Sequence, List, Set, Tuple
+import sys
 
 import hexss
 from hexss.constants.terminal_color import *
@@ -102,6 +103,10 @@ def generate_install_command(
         command.append(f"--proxy={proxy or hexss.proxies['http']}")
     if upgrade:
         command.append("--upgrade")
+    if hexss.system == 'Linux':
+        if hexss.path.get_main_python_path() == hexss.path.get_python_path():
+            command.append("--break-system-packages")
+
     command.extend(packages)
     return command
 
@@ -153,10 +158,28 @@ def install_upgrade(*packages: str, verbose: bool = True) -> None:
         print(f"{RED}Failed to install/upgrade {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
 
 
-def check_packages(*packages: str, auto_install: bool = False, verbose: bool = True) -> None:
+def check_packages(*packages: str, auto_install: bool = False, venv_only: bool = True, verbose: bool = True) -> None:
     """
-    Checks if the required Python packages are installed (and meet any version constraints).
-    Optionally, installs missing packages automatically if auto_install is set to True.
+    Check that all required packages are installed (and meet version constraints).
+
+    If any packages are missing, then:
+      - If auto_install is True, attempt to install them.
+      - Otherwise, print an error message and exit.
+
+    When auto_install is enabled, the function enforces that package installations occur
+    only in a virtual environment if venv_only is True. If the current environment is the main
+    environment (i.e. not a virtual environment) and venv_only is True, the function prints an error
+    and exits.
+
+    Parameters:
+      * packages (str): The names of the required packages.
+      auto_install (bool): Whether to automatically install missing packages.
+      venv_only (bool): If True, do not allow automatic installation in the main environment.
+      verbose (bool): If True, print status messages.
+
+    Raises:
+      ImportError: If required packages are missing and auto_install is False,
+                   or if attempting installation in a non-virtual environment when venv_only is True.
     """
     missing = missing_packages(*packages)
     if not missing:
@@ -164,134 +187,55 @@ def check_packages(*packages: str, auto_install: bool = False, verbose: bool = T
         return
 
     if auto_install:
+        # Enforce installation only in a virtual environment if venv_only is True.
+        if venv_only and (hexss.path.get_main_python_path() == hexss.path.get_python_path()):
+            message = f"{RED}If installing in the main environment, set venv_only=False.{END}"
+            print(message)
+            sys.exit(1)
+
         print(f"{PINK}Missing packages detected. Attempting to install: {BOLD}{', '.join(missing)}{END}")
         for package in missing:
             install(package, verbose=verbose)
-        # Recursively check packages again
+
+        # Re-check
         check_packages(*packages)
     else:
-        try:
-            raise ImportError(
-                f"{RED.BOLD}The following packages are missing:{END.RED} "
-                f"{ORANGE.UNDERLINED}{', '.join(missing)}{END}\n"
-                f"{RED}Install them manually or set auto_install=True.{END}"
-            )
-        except ImportError as e:
-            print(e)
-            exit()
+        message = (
+            f"{RED.BOLD}The following packages are missing:{END.RED} "
+            f"{ORANGE.UNDERLINED}{', '.join(missing)}{END}\n"
+            f"{RED}Install them manually or set auto_install=True.{END}"
+        )
+        print(message)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    # test
-
+    # missing_packages test
     operators = ['==', '>=', '<=', '>', '<']
-
     versions = [
         # Various development release incarnations
-        "1.0dev",
-        "1.0.dev",
-        "1.0dev1",
-        "1.0-dev",
-        "1.0-dev1",
-        "1.0DEV",
-        "1.0.DEV",
-        "1.0DEV1",
-        "1.0.DEV1",
-        "1.0-DEV",
-        "1.0-DEV1",
+        "1.0dev", "1.0.dev", "1.0dev1", "1.0-dev", "1.0-dev1", "1.0DEV", "1.0.DEV",
+        "1.0DEV1", "1.0.DEV1", "1.0-DEV", "1.0-DEV1",
         # Various alpha incarnations
-        "1.0a",
-        "1.0.a",
-        "1.0.a1",
-        "1.0-a",
-        "1.0-a1",
-        "1.0alpha",
-        "1.0.alpha",
-        "1.0.alpha1",
-        "1.0-alpha",
-        "1.0-alpha1",
-        "1.0A",
-        "1.0.A",
-        "1.0.A1",
-        "1.0-A",
-        "1.0-A1",
-        "1.0ALPHA",
-        "1.0.ALPHA",
-        "1.0.ALPHA1",
-        "1.0-ALPHA",
-        "1.0-ALPHA1",
+        "1.0a", "1.0.a", "1.0.a1", "1.0-a", "1.0-a1", "1.0alpha", "1.0.alpha", "1.0.alpha1", "1.0-alpha", "1.0-alpha1",
+        "1.0A", "1.0.A", "1.0.A1", "1.0-A", "1.0-A1", "1.0ALPHA", "1.0.ALPHA", "1.0.ALPHA1", "1.0-ALPHA", "1.0-ALPHA1",
         # Various beta incarnations
-        "1.0b",
-        "1.0.b",
-        "1.0.b1",
-        "1.0-b",
-        "1.0-b1",
-        "1.0beta",
-        "1.0.beta",
-        "1.0.beta1",
-        "1.0-beta",
-        "1.0-beta1",
-        "1.0B",
-        "1.0.B",
-        "1.0.B1",
-        "1.0-B",
-        "1.0-B1",
-        "1.0BETA",
-        "1.0.BETA",
-        "1.0.BETA1",
-        "1.0-BETA",
-        "1.0-BETA1",
+        "1.0b", "1.0.b", "1.0.b1", "1.0-b", "1.0-b1", "1.0beta", "1.0.beta", "1.0.beta1", "1.0-beta", "1.0-beta1",
+        "1.0B", "1.0.B", "1.0.B1", "1.0-B", "1.0-B1", "1.0BETA", "1.0.BETA", "1.0.BETA1", "1.0-BETA", "1.0-BETA1",
         # Various release candidate incarnations
-        "1.0c",
-        "1.0.c",
-        "1.0.c1",
-        "1.0-c",
-        "1.0-c1",
-        "1.0rc",
-        "1.0.rc",
-        "1.0.rc1",
-        "1.0-rc",
-        "1.0-rc1",
-        "1.0C",
-        "1.0.C",
-        "1.0.C1",
-        "1.0-C",
-        "1.0-C1",
-        "1.0RC",
-        "1.0.RC",
-        "1.0.RC1",
-        "1.0-RC",
-        "1.0-RC1",
+        "1.0c", "1.0.c", "1.0.c1", "1.0-c", "1.0-c1", "1.0rc", "1.0.rc", "1.0.rc1", "1.0-rc", "1.0-rc1", "1.0C",
+        "1.0.C", "1.0.C1", "1.0-C", "1.0-C1", "1.0RC", "1.0.RC", "1.0.RC1", "1.0-RC", "1.0-RC1",
         # Various post release incarnations
-        "1.0post",
-        "1.0.post",
-        "1.0post1",
-        "1.0-post",
-        "1.0-post1",
-        "1.0POST",
-        "1.0.POST",
-        "1.0POST1",
-        "1.0.POST1",
-        "1.0-POST",
-        "1.0-POST1",
-        "1.0-5",
+        "1.0post", "1.0.post", "1.0post1", "1.0-post", "1.0-post1", "1.0POST", "1.0.POST",
+        "1.0POST1", "1.0.POST1", "1.0-POST", "1.0-POST1", "1.0-5",
         # Local version case insensitivity
         "1.0+AbC"
         # Integer Normalization
-        "1.01",
-        "1.0a05",
-        "1.0b07",
-        "1.0c056",
-        "1.0rc09",
-        "1.0.post000",
-        "1.1.dev09000",
-        "00!1.2",
-        "0100!0.0",
+        "1.01", "1.0a05", "1.0b07", "1.0c056", "1.0rc09", "1.0.post000", "1.1.dev09000", "00!1.2", "0100!0.0",
         # Various other normalizations
         "v1.0",
     ]
-
-    pkg_names = ['google_tran-s', 'opencv-python', 'aa_aa']
+    pkg_names = ['googletrans', 'opencv-python', 'aa_aa']
 
     test_results = 'OK'
     for pkg_name in pkg_names:
@@ -312,3 +256,6 @@ if __name__ == "__main__":
                     test_results = 'not OK'
 
     print(test_results)
+
+    # check_packages test
+    check_packages('googletrans==4.0.0rc1')

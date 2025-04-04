@@ -51,7 +51,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
     """
     try:
         proxies_config = json_load(hexss_dir / 'config' / 'proxies.json', {
-            "proxies": None,
+            "proxies": {},
             "proxies_example": {
                 "http": "http://<user>:<pass>@150.61.8.70:10086",
                 "https": "http://<user>:<pass>@150.61.8.70:10086"
@@ -62,10 +62,10 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
 
     except Exception as e:
         print(f"Error initializing proxies: {str(e)}")
-        return None
+        return {}
 
 
-__version__ = '0.14.17'
+__version__ = '0.14.18'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

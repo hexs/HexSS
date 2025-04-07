@@ -4,7 +4,6 @@ import hexss
 
 hexss.check_packages('pyserial', auto_install=True)
 
-
 import serial
 import serial.tools.list_ports
 
@@ -123,9 +122,9 @@ if __name__ == "__main__":
 
     res = ser.send_and_receive('<PINB>')
     print(res)  # PINB=40
-    v = int(res.split('=')[1])
+    v = res.split('=')[1]
     if v.isdigit():
-        if v & 0b100:
+        if int(v) & 0b100:
             print('on')
         else:
             print('off')

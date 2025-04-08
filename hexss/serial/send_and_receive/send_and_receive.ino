@@ -42,7 +42,7 @@ void loop() {
     clickMouse(ms);
   }
 
-  if (strcmp(splitResult[0], "move") == 0) {
+  else if (strcmp(splitResult[0], "move") == 0) {
     int x = atoi(splitResult[1]);
     int y = atoi(splitResult[2]);
     int velocity = atoi(splitResult[3]);
@@ -52,6 +52,35 @@ void loop() {
       velocity = 127;
 
     moveMouse(x, y, velocity, delayTime);
+  }
+
+  else if (strcmp(splitResult[0], "pinMode") == 0) {
+    int pin = atoi(splitResult[1]);
+    int mode = atoi(splitResult[2]);
+    pinMode(pin, mode);
+  }
+
+  else if (strcmp(splitResult[0], "digitalWrite") == 0) {
+    int pin = atoi(splitResult[1]);
+    int value = atoi(splitResult[2]);
+    digitalWrite(pin, value);
+  }
+
+  else if (strcmp(splitResult[0], "analogWrite") == 0) {
+    int pin = atoi(splitResult[1]);
+    int value = atoi(splitResult[2]);
+    analogWrite(pin, value);
+  }
+  else if (strcmp(splitResult[0], "digitalRead") == 0) {
+    int pin = atoi(splitResult[1]);
+    int value = digitalRead(pin);
+    Serial.println(value);
+  }
+
+  else if (strcmp(splitResult[0], "analogRead") == 0) {
+    int pin = atoi(splitResult[1]);
+    int value = analogRead(pin);
+    Serial.println(value);
   }
 
   // Free allocated memory for splitResult

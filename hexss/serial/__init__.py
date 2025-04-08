@@ -50,6 +50,13 @@ class Serial:
     A utility class for accessing and communicating over a serial connection.
     """
 
+    INPUT = 0
+    OUTPUT = 1
+    INPUT_PULLUP = 2
+
+    LOW = 0
+    HIGH = 1
+
     def __init__(self, *args: str, baudrate: int = 9600, timeout: Optional[float] = 1.0):
         """
         Initialize and connect to a serial device.
@@ -109,6 +116,60 @@ class Serial:
         if self.serial.is_open:
             self.serial.close()
             print(f"Serial port {self.port} closed.")
+
+    def pinMode(self, pin: int, mode: int) -> None:
+        """
+        Set the mode of a pin.
+
+        Args:
+            pin (int): The pin number.
+            mode (int): The mode (INPUT, OUTPUT, INPUT_PULLUP).
+        """
+        self.send_and_receive(f"<pinMode,{pin},{mode}>")
+
+    def digitalWrite(self, pin: int, value: bool) -> None:
+        """
+        Set the value of a pin.
+
+        Args:
+            pin (int): The pin number.
+            value (bool): The value (HIGH or LOW).
+        """
+        self.send_and_receive(f"<digitalWrite,{pin},{value}>")
+
+    def digitalRead(self, pin: int) -> bool:
+        """
+        Read the value of a pin.
+
+        Args:
+            pin (int): The pin number.
+
+        Returns:
+            bool: The value (HIGH or LOW).
+        """
+        return int(self.send_and_receive(f"<digitalRead,{pin}>"))
+
+    def analogWrite(self, pin: int, value: int) -> None:
+        """
+        Set the PWM value of a pin.
+
+        Args:
+            pin (int): The pin number.
+            value (int): The PWM value (0-255).
+        """
+        self.send_and_receive(f"<analogWrite,{pin},{value}>")
+
+    def analogRead(self, pin: int) -> int:
+        """
+        Read the analog value of a pin.
+
+        Args:
+            pin (int): The pin number.
+
+        Returns:
+            int: The analog value (0-1023).
+        """
+        return int(self.send_and_receive(f"<analogRead,{pin}>"))
 
 
 if __name__ == "__main__":

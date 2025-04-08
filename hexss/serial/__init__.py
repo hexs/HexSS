@@ -1,4 +1,5 @@
-from typing import List, Optional
+import json
+from typing import Optional
 import time
 import hexss
 
@@ -43,6 +44,8 @@ def get_comport(*args: str, show_status: bool = True) -> Optional[str]:
                     print(f"Connected to: {port.device}")
                 return port.device
         raise ValueError(f"No COM port found matching: {', '.join(args)}")
+    # If no arguments are provided, return the first available port.
+    return ports[0].device if ports else None
 
 
 class Serial:
@@ -50,26 +53,7 @@ class Serial:
     A utility class for accessing and communicating over a serial connection.
     """
 
-    INPUT = 0
-    OUTPUT = 1
-    INPUT_PULLUP = 2
-
-    LOW = 0
-    HIGH = 1
-
-    def __init__(self, *args: str, baudrate: int = 9600, timeout: Optional[float] = 1.0):
-        """
-        Initialize and connect to a serial device.
-
-        Args:
-            *args (str): Strings to match against port descriptions (case-insensitive).
-            baudrate (int): The baudrate for the serial communication. Defaults to 9600.
-            timeout (Optional[float]): Timeout in seconds for read/write operations. Defaults to 1.0.
-
-        Raises:
-            ValueError: If no matching COM port is found.
-            serial.SerialException: If the serial connection cannot be established.
-        """
+    def __init__(self, *args: str, baudrate: int = 9600, timeout: Optional[float] = 1.0) -> None:
         self.port = get_comport(*args)
         if not self.port:
             raise ValueError(f"No matching COM port found for: {', '.join(args)}")
@@ -81,6 +65,9 @@ class Serial:
         self.show_status = True
 
     def write(self, text: str) -> None:
+        """
+        Writes a string to the serial port.
+        """
         if self.serial.is_open:
             self.serial.write(text.encode())
             if self.show_status:
@@ -89,20 +76,29 @@ class Serial:
             raise serial.SerialException(f"Serial port {self.port} is not open.")
 
     def read(self, size: int = 1) -> str:
+        """
+        Reads a specified number of bytes from the serial port.
+        """
         if self.serial.is_open:
             data = self.serial.read(size)
-            return data.decode()
+            return data.decode(errors='ignore')
         else:
             raise serial.SerialException(f"Serial port {self.port} is not open.")
 
     def readline(self) -> str:
+        """
+        Reads one line (until newline) from the serial port.
+        """
         if self.serial.is_open:
             line = self.serial.readline()
-            return line.decode().strip()
+            return line.decode(errors='ignore').strip()
         else:
             raise serial.SerialException(f"Serial port {self.port} is not open.")
 
     def send_and_receive(self, text: str) -> str:
+        """
+        Sends a text command over serial and returns the response.
+        """
         self.write(text)
         response = self.readline()
         if self.show_status:
@@ -111,81 +107,78 @@ class Serial:
 
     def close(self) -> None:
         """
-        Close the serial connection.
+        Closes the serial connection.
         """
         if self.serial.is_open:
             self.serial.close()
             print(f"Serial port {self.port} closed.")
 
+
+class Arduino(Serial):
+    INPUT = 0
+    OUTPUT = 1
+    INPUT_PULLUP = 2
+    LOW = 0
+    HIGH = 1
+
+    def echo(self, text):
+        return self.send_and_receive(f"<echo,{text}>")
+
+    def waiting_for_reply(self):
+        while True:
+            try:
+                res = (json.loads(self.echo('hi')))
+                if res.get('text') == 'hi':
+                    break
+            except:
+                ...
+            print('waiting_for_reply')
+            time.sleep(1)
+
     def pinMode(self, pin: int, mode: int) -> None:
         """
-        Set the mode of a pin.
-
-        Args:
-            pin (int): The pin number.
-            mode (int): The mode (INPUT, OUTPUT, INPUT_PULLUP).
+        Sets the mode of the specified pin.
         """
-        self.send_and_receive(f"<pinMode,{pin},{mode}>")
+        print(self.send_and_receive(f"<pinMode,{pin},{mode}>"))
 
-    def digitalWrite(self, pin: int, value: bool) -> None:
+    def digitalWrite(self, pin: int, value: int) -> None:
         """
-        Set the value of a pin.
-
-        Args:
-            pin (int): The pin number.
-            value (bool): The value (HIGH or LOW).
+        Writes a digital value to the specified pin.
         """
-        self.send_and_receive(f"<digitalWrite,{pin},{value}>")
+        print(self.send_and_receive(f"<digitalWrite,{pin},{value}>"))
 
     def digitalRead(self, pin: int) -> bool:
         """
-        Read the value of a pin.
-
-        Args:
-            pin (int): The pin number.
-
-        Returns:
-            bool: The value (HIGH or LOW).
+        Reads and returns the digital value (HIGH/LOW) from the specified pin.
         """
-        return int(self.send_and_receive(f"<digitalRead,{pin}>"))
+        response = self.send_and_receive(f"<digitalRead,{pin}>")
+        return bool(int(response))
 
     def analogWrite(self, pin: int, value: int) -> None:
         """
-        Set the PWM value of a pin.
-
-        Args:
-            pin (int): The pin number.
-            value (int): The PWM value (0-255).
+        Writes an analog (PWM) value (0–255) to the specified pin.
         """
         self.send_and_receive(f"<analogWrite,{pin},{value}>")
 
     def analogRead(self, pin: int) -> int:
         """
-        Read the analog value of a pin.
-
-        Args:
-            pin (int): The pin number.
-
-        Returns:
-            int: The analog value (0-1023).
+        Reads and returns the analog value (0–1023) from the specified pin.
         """
-        return int(self.send_and_receive(f"<analogRead,{pin}>"))
+        response = self.send_and_receive(f"<analogRead,{pin}>")
+        return int(response)
 
 
 if __name__ == "__main__":
-    ser = Serial('Arduino Uno')
-    time.sleep(5)
-    for _ in range(3):
-        ser.write('<setLED,relay,0,0,0,255>')
-        time.sleep(0.5)
-        ser.write('<clsLED>')
-        time.sleep(0.5)
+    ar = Arduino("USB-SERIAL CH340")
+    ar.show_status = False
+    ar.waiting_for_reply()
 
-    res = ser.send_and_receive('<PINB>')
-    print(res)  # PINB=40
-    v = res.split('=')[1]
-    if v.isdigit():
-        if int(v) & 0b100:
-            print('on')
-        else:
-            print('off')
+    ar.show_status = True
+    # Set pin 13 as OUTPUT and toggle it 10 times.
+    ar.pinMode(13, ar.OUTPUT)
+    for _ in range(10):
+        ar.digitalWrite(13, ar.HIGH)
+        time.sleep(0.5)
+        ar.digitalWrite(13, ar.LOW)
+        time.sleep(0.5)
+    ar.close()

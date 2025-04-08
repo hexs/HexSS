@@ -94,6 +94,16 @@ void printResponseNumber2(const char* command, const char* key1, int value1, con
   });
 }
 
+void printResponseNumber4(const char* command, const char* key1, int value1, const char* key2, int value2, const char* key3, int value3, const char* key4, int value4) {
+  printJsonResponse([&](JsonDocument & doc) {
+    doc["command"] = command;
+    doc[key1] = value1;
+    doc[key2] = value2;
+    doc[key3] = value4;
+    doc[key4] = value3;
+  });
+}
+
 void printResponseText1(const char* command, const char* key1, const char* value1) {
   printJsonResponse([&](JsonDocument & doc) {
     doc["command"] = command;
@@ -136,7 +146,6 @@ void processSerialCommand() {
 #ifdef ARDUINO_AVR_MICRO
   ArMicroProcessCommand(tokens, tokenCount);
 #endif
-
 
   // Free allocated memory for tokens and command.
   for (int i = 0; i < tokenCount; i++) {

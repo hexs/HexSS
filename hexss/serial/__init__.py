@@ -120,6 +120,7 @@ class Arduino(Serial):
     INPUT_PULLUP = 2
     LOW = 0
     HIGH = 1
+    TOGGLE = 2
 
     def echo(self, text):
         return self.send_and_receive(f"<echo,{text}>")
@@ -170,15 +171,9 @@ class Arduino(Serial):
 
 if __name__ == "__main__":
     ar = Arduino("USB-SERIAL CH340")
-    ar.show_status = False
     ar.waiting_for_reply()
-
-    ar.show_status = True
-    # Set pin 13 as OUTPUT and toggle it 10 times.
     ar.pinMode(13, ar.OUTPUT)
     for _ in range(10):
-        ar.digitalWrite(13, ar.HIGH)
-        time.sleep(0.5)
-        ar.digitalWrite(13, ar.LOW)
+        ar.digitalWrite(13, ar.TOGGLE)
         time.sleep(0.5)
     ar.close()

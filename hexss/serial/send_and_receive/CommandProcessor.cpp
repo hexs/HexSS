@@ -1,5 +1,6 @@
 #include "CommandProcessor.h"
 #include "CommandHandler.h"
+#include "ArMicroCommandHandler.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ArduinoJson.h>
@@ -131,7 +132,11 @@ void processSerialCommand() {
   }
 
   // Process the command based on its name.
-  Process_the_command(tokens, tokenCount);
+  processCommand(tokens, tokenCount);
+#ifdef ARDUINO_AVR_MICRO
+  ArMicroProcessCommand(tokens, tokenCount);
+#endif
+
 
   // Free allocated memory for tokens and command.
   for (int i = 0; i < tokenCount; i++) {

@@ -8,7 +8,7 @@ extern void printResponseNumber2(const char* command, const char* key1, int valu
 extern void printResponseText1(const char* command, const char* key1, const char* value1);
 extern void printResponseNumber1(const char* command, const char* key1, int value1);
 
-void Process_the_command(const char* tokens[], int tokenCount) {
+void processCommand(const char* tokens[], int tokenCount) {
   if (strcmp(tokens[0], "pinMode") == 0) {
     if (tokenCount < 3) {
       printError("Missing arguments for pinMode");

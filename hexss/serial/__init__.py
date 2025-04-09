@@ -297,7 +297,7 @@ class Arduino:
 
 if __name__ == "__main__":
     # Example 1
-    ar = Arduino("USB-SERIAL CH340")
+    ar = Arduino('Arduino', 'USB-SERIAL CH340')
     ar.waiting_for_reply(max_wait=5)
     ar.pinMode(13, ar.OUTPUT)
     for _ in range(10):
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     ar.close()
 
     # Example 2
-    with Arduino("USB-SERIAL CH340") as ar:
+    with Arduino('Arduino', 'USB-SERIAL CH340') as ar:
         ar.waiting_for_reply(max_wait=5)
         ar.pinMode(13, ar.OUTPUT)
         for _ in range(10):

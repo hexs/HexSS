@@ -2,6 +2,7 @@ import argparse
 import os
 
 import hexss
+from hexss.constants.terminal_color import *
 from hexss import hexss_dir, json_load, json_update
 
 
@@ -32,9 +33,23 @@ def update_config(file_name, keys, new_value):
         config_data = json_load(file_path)
         data = config_data.get(file_name, config_data)
 
-        data[keys[-1]] = new_value
+        # Navigate through nested keys and create missing dictionaries
+        current = data
+        for key in keys[:-1]:
+            if key not in current or not isinstance(current[key], dict):
+                current[key] = {}
+            current = current[key]
+
+        # Set the new value at the final key
+        current[keys[-1]] = new_value
+
+        # Save the updated configuration
         json_update(file_path, {file_name: data})
-        print(f"Updated '{'.'.join(keys)}' to '{new_value}'")
+
+        if isinstance(new_value, (int, float)):
+            print(f"Updated {'.'.join(keys)} to {BLUE}{new_value}{END}")
+        else:
+            print(f"Updated {'.'.join(keys)} to {DARK_GREEN}'{new_value}'{END}")
     except Exception as e:
         print(f"Error while updating configuration: {e}")
 
@@ -45,6 +60,7 @@ def run():
     parser.add_argument("action", help="e.g., 'config', 'camera_server', 'file_manager_server'.")
     parser.add_argument("key", nargs="?", help="Configuration key, e.g., 'proxies' or 'proxies.http'.")
     parser.add_argument("value", nargs="?", help="New value for the configuration key (if updating).")
+    parser.add_argument("--number", "-N", action="store_true", help="Interpret the value as a number.")
 
     args = parser.parse_args()
 
@@ -77,7 +93,8 @@ def run():
                 except Exception as e:
                     print(f"Error while loading configuration: {e}")
             else:
-                update_config(file_name, keys, args.value)
+                new_value = int(args.value) if args.number else args.value
+                update_config(file_name, keys, new_value)
 
     elif args.action == "install":
         from hexss.python import install

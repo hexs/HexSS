@@ -19,7 +19,7 @@ def show_config(data, keys):
         if isinstance(data, dict):
             max_key_length = min(max((len(k) for k in data.keys()), default=0) + 1, 15)
             for k, v in data.items():
-                print(f"{k:{max_key_length}}: {v}")
+                print(f"{k:{max_key_length}}: {BLUE if isinstance(v, (int, float)) else DARK_GREEN}{v}{END}")
         else:
             print(data)
     except Exception as e:
@@ -45,8 +45,9 @@ def update_config(file_name, keys, new_value):
 
         # Save the updated configuration
         json_update(file_path, {file_name: data})
-
-        if isinstance(new_value, (int, float)):
+        if new_value is None:
+            print(f"Updated {'.'.join(keys)} to {ORANGE}{new_value}{END}")
+        elif isinstance(new_value, (int, float)):
             print(f"Updated {'.'.join(keys)} to {BLUE}{new_value}{END}")
         else:
             print(f"Updated {'.'.join(keys)} to {DARK_GREEN}'{new_value}'{END}")
@@ -60,7 +61,7 @@ def run():
     parser.add_argument("action", help="e.g., 'config', 'camera_server', 'file_manager_server'.")
     parser.add_argument("key", nargs="?", help="Configuration key, e.g., 'proxies' or 'proxies.http'.")
     parser.add_argument("value", nargs="?", help="New value for the configuration key (if updating).")
-    parser.add_argument("--number", "-N", action="store_true", help="Interpret the value as a number.")
+    parser.add_argument("--text", "-T", action="store_true", help="Interpret the value as a text.")
 
     args = parser.parse_args()
 
@@ -93,7 +94,13 @@ def run():
                 except Exception as e:
                     print(f"Error while loading configuration: {e}")
             else:
-                new_value = int(args.value) if args.number else args.value
+                if args.text:
+                    new_value = args.value
+                else:
+                    try:
+                        new_value = eval(args.value)
+                    except:
+                        new_value = args.value
                 update_config(file_name, keys, new_value)
 
     elif args.action == "install":

@@ -1,6 +1,6 @@
 # hexss
 
-[![pypi](https://badge.fury.io/py/hexss.svg)](https://pypi.python.org/pypi/hexss) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Downloads](https://pepy.tech/badge/hexss)](https://pepy.tech/project/hexss)
+[![pypi](https://badge.fury.io/py/hexss.svg)](https://pypi.python.org/pypi/hexss) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Downloads](https://pepy.tech/badge/hexss)](https://pepy.tech/project/hexss) [![Socket Badge](http://socket.dev/api/badge/pypi/package/hexss/0.16.0?artifact_id=tar-gz)](http://socket.dev/pypi/package/hexss/overview/0.16.0/tar-gz)
 
 ---
 

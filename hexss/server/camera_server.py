@@ -6,10 +6,10 @@ from typing import Dict, Any, List
 from hexss import json_load, json_update, check_packages
 
 if platform.system() == "Windows":
-    check_packages('numpy', 'opencv-python', 'Flask', 'mss', auto_install=True)
+    check_packages('numpy', 'opencv-python', 'Flask', 'mss', auto_install=True, venv_only=False)
     import mss
 else:
-    check_packages('numpy', 'opencv-python', 'Flask', auto_install=True)
+    check_packages('numpy', 'opencv-python', 'Flask', auto_install=True, venv_only=False)
 
 from hexss import get_hostname
 from hexss.network import get_all_ipv4, close_port

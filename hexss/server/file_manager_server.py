@@ -7,7 +7,7 @@ from pathlib import Path
 
 from hexss import check_packages, json_load, secure_filename
 
-check_packages('Flask', auto_install=True)
+check_packages('Flask', auto_install=True, venv_only=False)
 
 from hexss import get_hostname
 from hexss.network import get_all_ipv4, close_port

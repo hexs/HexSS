@@ -1,3 +1,7 @@
+import hexss
+
+hexss.check_packages('pandas', auto_install=True)
+
 import pandas as pd
 from typing import Dict, List
 

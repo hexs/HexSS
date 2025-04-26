@@ -64,6 +64,9 @@ def run_config(args):
     key_parts = (args.key or '').split('.')
     file_name, *keys = key_parts
 
+    if  file_name == '':
+        return
+
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'
     try:
         raw = json_load(cfg_path)

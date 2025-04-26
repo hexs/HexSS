@@ -157,6 +157,10 @@ def main():
     pr = subparsers.add_parser('proxy', help='get proxy settings')
     pr.set_defaults(func=lambda args: print(hexss.proxies))
 
+    # system
+    sy = subparsers.add_parser('system', help='get system')
+    sy.set_defaults(func=lambda args: print(hexss.system))
+
     # constant
     gc = subparsers.add_parser('constant', help='print hexss constants')
     gc.set_defaults(func=lambda args: import_get_constants())

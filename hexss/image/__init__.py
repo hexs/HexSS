@@ -1,10 +1,23 @@
+from typing import Optional, Tuple
 from hexss import check_packages
 
-check_packages('numpy', 'opencv-python', 'pygame', auto_install=True)
+check_packages('numpy', 'opencv-python', 'pygame', 'pillow', auto_install=True)
 
 from .func import get_image, get_image_from_cam, get_image_from_url
 import cv2
 import numpy as np
+from PIL import ImageGrab
+
+
+def take_screenshot(
+        region: Optional[Tuple[int, int, int, int]] = None,
+        color: str = "RGB",
+) -> np.ndarray:
+    img = np.array(ImageGrab.grab(region))
+    if color == "RGB":
+        return img.copy()
+    else:  # "BGR"
+        img[:, :, ::-1].copy()
 
 
 def rotate(image, angle, center=None, scale=1):

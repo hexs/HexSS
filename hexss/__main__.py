@@ -90,7 +90,7 @@ def run_config(args):
             else:
                 print("Invalid choice. Exiting.")
                 return
-        except ValueError:
+        except:
             return
 
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'
@@ -123,8 +123,19 @@ def print_env():
 def main():
     parser = argparse.ArgumentParser(
         prog='hexss',
-        usage='hexss [-h]'
+        usage='hexss [-h] [-v] [-u]'
     )
+    parser.add_argument(
+        '-v', '-V', '--version',
+        action='version',
+        version=f'%(prog)s {hexss.__version__}'
+    )
+    parser.add_argument(
+        '-u', '-U', '--upgrade',
+        action='store_true',
+        help='upgrade hexss'
+    )
+
     subparsers = parser.add_subparsers(
         title='positional arguments',
         dest='action',
@@ -187,12 +198,16 @@ def main():
     sy = subparsers.add_parser('system', help='get system')
     sy.set_defaults(func=lambda args: print(hexss.system))
 
-    # constant
-    gc = subparsers.add_parser('constant', help='print hexss constants')
-    gc.set_defaults(func=lambda args: import_get_constants())
+    # details
+    gc = subparsers.add_parser('details', help='print hexss details')
+    gc.set_defaults(func=lambda args: get_details())
 
     # Parse arguments
     args = parser.parse_args()
+
+    if args.upgrade:
+        importlib.import_module('hexss.python').install_upgrade('hexss')
+        return
 
     # If no arguments are provided, display a menu
     if args.action is None:
@@ -201,10 +216,11 @@ def main():
         args.func(args)
 
 
-def import_get_constants():
+def get_details():
+    print('--general--')
     print('hostname         :', hexss.hostname)
     print('username         :', hexss.username)
-    print()
+    print('system           :', hexss.system)
     print('proxies          :', hexss.proxies)
     print()
     print('--path--')
@@ -218,19 +234,13 @@ def import_get_constants():
 
 def show_menu():
     options = [
-        "upgrade",
-        "config",
         "camera_server",
         "file_manager_server",
 
+        "config",
         "set_proxy_env",
 
-        "hostname",
-        "username",
-        "proxy",
-        "system",
-
-        "constant"
+        "details"
     ]
     print("Choose an option:")
     for i, option in enumerate(options, 1):
@@ -252,7 +262,7 @@ def show_menu():
             main()
         else:
             print("Invalid choice. Exiting.")
-    except ValueError:
+    except:
         pass
 
 

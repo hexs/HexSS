@@ -5,6 +5,7 @@ import importlib
 import hexss
 from hexss.constants.terminal_color import *
 from hexss import hexss_dir, json_load, json_update
+from hexss.config import list_config_files
 
 
 def show_config(data, keys):
@@ -64,7 +65,13 @@ def run_config(args):
     key_parts = (args.key or '').split('.')
     file_name, *keys = key_parts
 
-    if  file_name == '':
+    if file_name == '':
+        list_config = list_config_files()
+        if not list_config:
+            print(f'No configuration file found.')
+        else:
+            for i, config_file in enumerate(list_config, start=1):
+                print(f'({i}): {config_file}')
         return
 
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'

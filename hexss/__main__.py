@@ -21,7 +21,11 @@ def show_config(data, keys):
         if isinstance(data, dict):
             max_key_length = min(max((len(k) for k in data.keys()), default=0) + 1, 15)
             for k, v in data.items():
-                print(f"{k:{max_key_length}}: {BLUE if isinstance(v, (int, float)) else DARK_GREEN}{v}{END}")
+                print(f"{k:{max_key_length}}: {
+                BLUE if isinstance(v, (int, float)) else
+                CYAN if isinstance(v, (list, dict)) else
+                DARK_GREEN
+                }{f"'{v}'" if isinstance(v, str) else v}{END}")
         else:
             print(data)
     except Exception as e:
@@ -52,6 +56,7 @@ def update_config(file_name, keys, new_value):
         val_color = (
             ORANGE if new_value is None else
             BLUE if isinstance(new_value, (int, float)) else
+            CYAN if isinstance(new_value, (list, dict)) else
             DARK_GREEN
         )
         disp_val = new_value if isinstance(new_value, (int, float, type(None))) else f"'{new_value}'"
@@ -68,12 +73,25 @@ def run_config(args):
     if file_name == '':
         list_config = list_config_files()
         if not list_config:
-            print(f'No configuration file found.')
-        else:
-            print('Choose an option:')
-            for i, config_file in enumerate(list_config, start=1):
-                print(f'({i}) {config_file}')
-        return
+            print('No configuration file found.')
+            return
+
+        print('Choose a configuration file:')
+        for i, config_file in enumerate(list_config, start=1):
+            print(f'({i}) {config_file}')
+
+        try:
+            choice = int(input(">> ").strip())
+            if choice == 0:
+                print("Exiting.")
+                return
+            elif choice <= len(list_config):
+                file_name = list_config[choice - 1]
+            else:
+                print("Invalid choice. Exiting.")
+                return
+        except ValueError:
+            return
 
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'
     try:
@@ -234,7 +252,7 @@ def show_menu():
             main()
         else:
             print("Invalid choice. Exiting.")
-    except:
+    except ValueError:
         pass
 
 

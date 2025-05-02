@@ -70,8 +70,9 @@ def run_config(args):
         if not list_config:
             print(f'No configuration file found.')
         else:
+            print('Choose an option:')
             for i, config_file in enumerate(list_config, start=1):
-                print(f'({i}): {config_file}')
+                print(f'({i}) {config_file}')
         return
 
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'
@@ -109,7 +110,7 @@ def main():
     subparsers = parser.add_subparsers(
         title='positional arguments',
         dest='action',
-        required=True,
+        required=False,
         metavar=''  # hide the choice list placeholder in help
     )
 
@@ -172,8 +173,14 @@ def main():
     gc = subparsers.add_parser('constant', help='print hexss constants')
     gc.set_defaults(func=lambda args: import_get_constants())
 
+    # Parse arguments
     args = parser.parse_args()
-    args.func(args)
+
+    # If no arguments are provided, display a menu
+    if args.action is None:
+        show_menu()
+    else:
+        args.func(args)
 
 
 def import_get_constants():
@@ -189,6 +196,46 @@ def import_get_constants():
     print('main python exec :', hexss.path.get_main_python_path())
     print('working dir      :', hexss.path.get_current_working_dir())
     print('script dir       :', hexss.path.get_script_dir())
+
+
+def show_menu():
+    options = [
+        "upgrade",
+        "config",
+        "camera_server",
+        "file_manager_server",
+
+        "set_proxy_env",
+
+        "hostname",
+        "username",
+        "proxy",
+        "system",
+
+        "constant"
+    ]
+    print("Choose an option:")
+    for i, option in enumerate(options, 1):
+        print(f"({i:{int(len(options) / 10) + 1}}) {option}")
+
+    try:
+        choice = input(">> ").strip()
+        choice = int(choice)
+        if choice == 0:
+            print("Exiting.")
+            return
+
+        elif choice <= len(options):
+            action = options[choice - 1]
+            main_args = [action]
+
+            import sys
+            sys.argv = [sys.argv[0]] + main_args
+            main()
+        else:
+            print("Invalid choice. Exiting.")
+    except:
+        pass
 
 
 if __name__ == '__main__':

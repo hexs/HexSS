@@ -1,11 +1,16 @@
-import cv2
-import numpy as np
-import requests
+from typing import Union, Tuple, Optional, Self
 from io import BytesIO
+import hexss
+
+hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_install=True)
+
+import numpy as np
+import cv2
+import requests
+
 from PIL import ImageFilter
 import PIL.Image
 from PIL.Image import Transpose, Resampling, Dither, Palette
-from typing import Union, Tuple, Optional, Self
 
 
 class Image:

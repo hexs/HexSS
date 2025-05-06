@@ -7,47 +7,36 @@ hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_instal
 import numpy as np
 import cv2
 import requests
-
-from PIL import ImageFilter
-import PIL.Image
+from PIL import Image as PILImage, ImageFilter
 from PIL.Image import Transpose, Resampling, Dither, Palette
 
 
 class Image:
-    """
-    Wrapper around PIL.Image with convenient utilities, OpenCV interoperability,
-    and support for loading from URLs.
-    """
-
     def __init__(
             self,
-            source: Union[str, np.ndarray, PIL.Image.Image],
-            mode: Optional[str] = "RGB"
-    ):
-        if isinstance(source, str) and not source.lower().startswith(("http://", "https://")):
-            img = PIL.Image.open(source)
-
-        elif isinstance(source, str) and source.lower().startswith(("http://", "https://")):
-            resp = requests.get(source)
-            resp.raise_for_status()
-            img = PIL.Image.open(BytesIO(resp.content))
-
+            source: Union[str, bytes, np.ndarray, PILImage.Image],
+            size: Tuple[int, int] = (0, 0),
+            color: Union[float, Tuple[float, ...], str, None] = 0,
+    ) -> None:
+        if isinstance(source, str):
+            mode = source.upper()
+            if mode in {"RGB", "RGBA", "L", "1"}:
+                self.image = PILImage.new(mode, size, color)
+            elif source.startswith(('http://', 'https://')):
+                resp = requests.get(source)
+                resp.raise_for_status()
+                self.image = PILImage.open(BytesIO(resp.content)).convert('RGBA')
+            else:
+                self.image = PILImage.open(source).convert('RGBA')
+        elif isinstance(source, bytes):
+            self.image = PILImage.open(BytesIO(source)).convert('RGBA')
         elif isinstance(source, np.ndarray):
             rgb = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
-            img = PIL.Image.fromarray(rgb)
-
-        elif isinstance(source, PIL.Image.Image):
-            img = source.copy()
-
+            self.image = PILImage.fromarray(rgb)
+        elif isinstance(source, PILImage.Image):
+            self.image = source.copy()
         else:
-            raise TypeError(
-                f"Unsupported source type: {type(source)}. "
-                "Provide a file path, URL string, NumPy array, or PIL.Image."
-            )
-
-        if mode is not None:
-            img = img.convert(mode)
-        self.image = img
+            raise TypeError(f"Unsupported source type: {type(source)}")
 
     @property
     def size(self) -> Tuple[int, int]:
@@ -61,66 +50,69 @@ class Image:
     def format(self) -> Optional[str]:
         return self.image.format
 
-    def numpy(self, mode='RGB') -> np.ndarray:
+    def numpy(self, mode: str = 'BGR') -> np.ndarray:
         arr = np.array(self.image)
         if mode == 'RGB':
             return arr
         elif mode == 'BGR':
             return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+        raise ValueError("mode must be 'RGB' or 'BGR'")
+
+    def overlay(self, overlay_img: Union[Self, np.ndarray, PILImage.Image], box: Tuple[int, int]) -> Self:
+        if isinstance(overlay_img, Image):
+            img = overlay_img.image
+        elif isinstance(overlay_img, np.ndarray):
+            img = PILImage.fromarray(cv2.cvtColor(overlay_img, cv2.COLOR_BGR2RGB))
+        elif isinstance(overlay_img, PILImage.Image):
+            img = overlay_img
         else:
-            raise ValueError(f"Unsupported mode: {mode}. Use 'RGB' or 'BGR'.")
+            raise TypeError(f"Unsupported overlay image type: {type(overlay_img)}")
 
-    def detect(self, model) -> list[dict]:
-        return model.detect(self.image)
-
-    def classify(self, model) -> tuple[str, float]:
-        return model.classify(self.image)
-
-    def show(self) -> None:
-        self.image.show()
-
-    def save(self, path: str, **kwargs) -> None:
-        self.image.save(path, **kwargs)
-
-    def __repr__(self) -> str:
-        name = self.image.__class__.__name__
-        return f"<Image {name} mode={self.mode} size={self.size}>"
+        if img.mode == 'RGBA':
+            self.image.paste(img, box, mask=img.split()[3])
+        else:
+            self.image.paste(img, box)
+        return self
 
     def filter(self, filter: ImageFilter.Filter | type[ImageFilter.Filter]) -> Self:
-        return self.image.filter(filter)
+        return Image(self.image.filter(filter))
 
     def convert(
             self,
-            mode: str | None = None,
-            matrix: tuple[float, ...] | None = None,
-            dither: Dither | None = None,
-            palette: Palette = Palette.WEB,
-            colors: int = 256,
+            mode: str,
+            **kwargs
     ) -> Self:
-        return self.image.convert(mode, matrix, dither, palette, colors)
+        if self.mode == 'RGBA' and mode == 'RGB':
+            bg = PILImage.new('RGB', self.size, (255, 255, 255))
+            bg.paste(self.image, mask=self.image.split()[3])
+            return Image(bg)
+        return Image(self.image.convert(mode, **kwargs))
 
     def rotate(
             self,
             angle: float,
-            resample: Resampling = Resampling.NEAREST,
-            expand: Union[int, bool] = False,
-            center: Optional[Tuple[float, float]] = None,
-            translate: Optional[Tuple[int, int]] = None,
-            fillcolor: Optional[Union[float, Tuple[float, ...], str]] = None
+            expand: bool = False,
+            **kwargs
     ) -> Self:
-        return self.image.rotate(angle, resample, expand, center, translate, fillcolor)
+        return Image(self.image.rotate(angle, expand=expand, **kwargs))
 
     def transpose(self, method: Transpose) -> Self:
-        return self.image.transpose(method)
+        return Image(self.image.transpose(method))
 
     def crop(self, box: Tuple[int, int, int, int]) -> Self:
-        return self.image.crop(box)
+        return Image(self.image.crop(box))
 
-    def resize(
-            self,
-            size: tuple[int, int],
-            resample: int | None = None,
-            box: tuple[float, float, float, float] | None = None,
-            reducing_gap: float | None = None,
-    ) -> Self:
-        return self.image.resize(size, resample, box, reducing_gap)
+    def resize(self, size: Tuple[int, int], **kwargs) -> Self:
+        return Image(self.image.resize(size, **kwargs))
+
+    def save(self, path: str, **kwargs) -> Self:
+        self.image.save(path, **kwargs)
+        return self
+
+    def show(self) -> Self:
+        self.image.show()
+        return self
+
+    def __repr__(self) -> str:
+        name = self.image.__class__.__name__
+        return f"<Image {name} mode={self.mode} size={self.size[0]}x{self.size[1]}>"

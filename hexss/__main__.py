@@ -180,7 +180,7 @@ def main():
 
     # set_proxy_env
     wp = subparsers.add_parser('set_proxy_env', help='print commands to set proxy env vars')
-    wp.set_defaults(func=lambda args: importlib.import_module('hexss.python').generate_proxy_env_commands())
+    wp.set_defaults(func=lambda args: importlib.import_module('hexss.env').generate_proxy_env_commands())
 
     # hostname
     hn = subparsers.add_parser('hostname', help='get hostname')
@@ -234,13 +234,14 @@ def get_details():
 
 def show_menu():
     options = [
-        "camera_server",
-        "file_manager_server",
+        'camera_server',
+        'file_manager_server',
 
-        "config",
-        "set_proxy_env",
+        'upgrade'
+        'config',
+        'set_proxy_env',
 
-        "details"
+        'details'
     ]
     print("Choose an option:")
     for i, option in enumerate(options, 1):

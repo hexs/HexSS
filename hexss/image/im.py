@@ -25,11 +25,11 @@ class Image:
             elif source.startswith(('http://', 'https://')):
                 resp = requests.get(source)
                 resp.raise_for_status()
-                self.image = PILImage.open(BytesIO(resp.content)).convert('RGBA')
+                self.image = PILImage.open(BytesIO(resp.content))
             else:
-                self.image = PILImage.open(source).convert('RGBA')
+                self.image = PILImage.open(source)
         elif isinstance(source, bytes):
-            self.image = PILImage.open(BytesIO(source)).convert('RGBA')
+            self.image = PILImage.open(BytesIO(source))
         elif isinstance(source, np.ndarray):
             rgb = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
             self.image = PILImage.fromarray(rgb)
@@ -88,12 +88,7 @@ class Image:
             return Image(bg)
         return Image(self.image.convert(mode, **kwargs))
 
-    def rotate(
-            self,
-            angle: float,
-            expand: bool = False,
-            **kwargs
-    ) -> Self:
+    def rotate(self, angle: float, expand: bool = False, **kwargs) -> Self:
         return Image(self.image.rotate(angle, expand=expand, **kwargs))
 
     def transpose(self, method: Transpose) -> Self:

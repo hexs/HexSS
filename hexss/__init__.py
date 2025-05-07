@@ -1,13 +1,13 @@
 import os
 import platform
 from typing import Optional, Dict
-from pathlib import Path
 from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
 from .string import secure_filename, random_str
 from .python import check_packages, install, install_upgrade
 from .path import get_hexss_dir
+from . import env
 
 
 def get_hostname() -> str:
@@ -65,7 +65,7 @@ def initialize_proxies() -> Optional[Dict[str, str]]:
         return {}
 
 
-__version__ = '0.17.1'
+__version__ = '0.17.2'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

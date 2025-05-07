@@ -1,5 +1,4 @@
 import subprocess
-from importlib.metadata import version as get_version, packages_distributions
 import re
 from typing import Sequence, List, Set, Tuple
 import sys
@@ -255,7 +254,7 @@ if __name__ == "__main__":
 
                     test_results = 'not OK'
 
-    print(test_results)
+    print(f'missing packages, test results are {test_results}')
 
     # check_packages test
     check_packages('googletrans==4.0.0rc1')

@@ -237,7 +237,7 @@ def show_menu():
         'camera_server',
         'file_manager_server',
 
-        'upgrade'
+        'upgrade',
         'config',
         'set_proxy_env',
 

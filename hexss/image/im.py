@@ -183,10 +183,10 @@ class Image:
         self.image.show(title=title)
         return self
 
-    def detect(self, model) -> List[dict]:
+    def detect(self, model):
         return model.detect(self)
 
-    def classify(self, model) -> Tuple[str, float]:
+    def classify(self, model):
         return model.classify(self)
 
     def __repr__(self) -> str:

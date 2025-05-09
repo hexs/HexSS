@@ -3,7 +3,7 @@ import hexss
 from hexss.image import Image
 
 hexss.check_packages(
-    'ultralytics', 'numpy', 'opencv-python', 'pillow',
+    'numpy', 'opencv-python', 'pillow',
     auto_install=True
 )
 
@@ -12,6 +12,8 @@ import numpy as np
 
 
 class Detection:
+    hexss.check_packages('ultralytics', auto_install=True)
+
     def __init__(self, class_index: int, class_name: str, confidence: float,
                  xywhn: np.ndarray, xywh: np.ndarray, xyxyn: np.ndarray, xyxy: np.ndarray):
         """

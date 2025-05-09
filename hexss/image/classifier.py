@@ -3,7 +3,7 @@ import hexss
 from hexss.image import Image
 
 hexss.check_packages(
-    'tensorflow', 'numpy', 'opencv-python', 'pillow',
+    'numpy', 'opencv-python', 'pillow',
     auto_install=True
 )
 
@@ -28,6 +28,8 @@ class Classification:
 
 
 class Classifier:
+    hexss.check_packages('tensorflow', auto_install=True)
+
     def __init__(self, model_path: str, json_data: Dict):
         """
         Args:

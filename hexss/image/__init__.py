@@ -6,6 +6,5 @@ from .func import get_image, get_image_from_cam, get_image_from_url, \
     take_screenshot, rotate, overlay, crop_img, controller
 
 from .im import Image, ImageFilter, Transpose
-# from .detector import Detector
-# from .classifier import Classifier
-
+from .detector import Detector
+from .classifier import Classifier

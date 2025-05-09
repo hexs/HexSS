@@ -1,46 +1,97 @@
-from typing import Union
+from typing import Union, Optional, Dict
 import hexss
 from hexss.image import Image
 
 hexss.check_packages(
-    'tensorflow', 'numpy', 'opencv-python',
+    'tensorflow', 'numpy', 'opencv-python', 'pillow',
     auto_install=True
 )
 
+from PIL import Image as PILImage
 import numpy as np
 import cv2
 
 
-class Classifier:
-    def __init__(self, model_path: str, data: dict):
+class Classification:
+    def __init__(self, predictions: np.ndarray, class_index: int, class_name: str, confidence: float):
+        """
+        Args:
+            predictions (np.ndarray): Array of prediction scores for each class.
+            class_index (int): Index of the predicted class.
+            class_name (str): Name of the predicted class.
+            confidence (float): Confidence score of the predicted class.
+        """
+        self.predictions = predictions
+        self.class_index = class_index
+        self.class_name = class_name
+        self.confidence = confidence
 
+
+class Classifier:
+    def __init__(self, model_path: str, json_data: Dict):
+        """
+        Args:
+            model_path (str): Path to the pre-trained model.
+            json_data (Dict): Configuration dictionary containing:
+                              - 'img_size': Tuple[int, int], e.g., (180, 180)
+                              - 'class_names': List[str], e.g., ['ok', 'ng']
+        """
         from keras import models
 
+        # Load the pre-trained model
         self.model = models.load_model(model_path)
-        self.data = data
-        # {
+
+        # Validate required keys in the configuration dictionary
+        if 'img_size' not in json_data or 'class_names' not in json_data:
+            raise ValueError("The 'json_data' dictionary must contain 'img_size' and 'class_names' keys.")
+
+        self.json_data = json_data
+        # json_data = {
         #     'img_size': (180, 180),
         #     'class_names': ['ok', 'ng']
         # }
-        self.predictions = None  # [     2.6491     -3.4541]
-        self.class_index = None  # 0
-        self.class_name = None  # happy
-        self.confidence = None  # 2.649055
+        self.classification: Optional[Classification] = None
 
-    def classify(self, image: Union[Image, np.ndarray]) -> tuple[str, float]:
+    def classify(self, image: Union[Image, PILImage.Image, np.ndarray]) -> Classification:
+        """
+        Classify an image using the pre-trained model.
+
+        Args:
+            image (Union[Image, PILImage.Image, np.ndarray]): The input image to classify. Can be:
+                                                              - hexss.Image
+                                                              - PIL Image
+                                                              - NumPy array
+
+        Returns:
+            Classification: The classification result.
+
+        Raises:
+            TypeError: If the input image type is not supported.
+        """
+        # Convert hexss.Image to a NumPy array
         if isinstance(image, Image):
-            arr = image.numpy()
+            image_arr = image.numpy()
+        elif isinstance(image, PILImage.Image):
+            image_arr = np.array(image)[:, :, ::-1].copy()
         elif isinstance(image, np.ndarray):
-            arr = image
+            image_arr = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
             raise TypeError(
-                f"Unsupported image type: {type(image)}. "
-                "Provide an Im or NumPy array."
-            )
-        arr = cv2.resize(arr, self.data['img_size'])
-        arr = np.expand_dims(arr, axis=0) / 255.0
-        self.predictions = self.model.predict_on_batch(arr)[0]
-        self.class_index = np.argmax(self.predictions)
-        self.class_name = self.data['class_names'][self.class_index]
-        self.confidence = self.predictions[self.class_index]
-        return self.class_name, self.confidence
+                f"Unsupported image type: {type(image)}. Supported types: hexss.Image, PIL.Image, np.ndarray.")
+
+        img_size = self.json_data['img_size']
+        arr = cv2.resize(image_arr, img_size)  # Resize image
+        arr = np.expand_dims(arr, axis=0) / 255.0  # Normalize and add batch dimension
+
+        predictions = self.model.predict_on_batch(arr)[0]  # [     2.6491     -3.4541]
+        class_index = np.argmax(predictions)  # 0
+        class_name = self.json_data['class_names'][class_index]  # happy
+        confidence = predictions[class_index]  # 2.649055
+
+        self.classification = Classification(
+            predictions=predictions,
+            class_index=int(class_index),
+            class_name=class_name,
+            confidence=float(confidence)
+        )
+        return self.classification

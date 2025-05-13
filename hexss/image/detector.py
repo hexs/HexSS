@@ -1,19 +1,11 @@
 from typing import Union, Optional, List, Dict
 import hexss
 from hexss.image import Image
-
-hexss.check_packages(
-    'numpy', 'opencv-python', 'pillow',
-    auto_install=True
-)
-
 from PIL import Image as PILImage
 import numpy as np
 
 
 class Detection:
-    hexss.check_packages('ultralytics', auto_install=True)
-
     def __init__(self, class_index: int, class_name: str, confidence: float,
                  xywhn: np.ndarray, xywh: np.ndarray, xyxyn: np.ndarray, xyxy: np.ndarray):
         """
@@ -55,7 +47,11 @@ class Detector:
         Args:
             model_path (Optional[str]): Path to the YOLO model. If None, loads the default YOLO model.
         """
-        from ultralytics import YOLO
+        try:
+            from ultralytics import YOLO
+        except ImportError:
+            hexss.check_packages('ultralytics', auto_install=True)
+            from ultralytics import YOLO
 
         # Load YOLO model
         self.model = YOLO(model_path) if model_path else YOLO()

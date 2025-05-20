@@ -122,9 +122,9 @@ def update_cameras():
             data['config']['camera'][camera_id]['setup'] = True
 
             # update config file
-            config = load_config('camera_server_config')
+            config = load_config('camera_server')
             config['camera'][camera_id]['width_height'] = [int(width), int(height)]
-            update_config('camera_server_config', config)
+            update_config('camera_server', config)
 
     return redirect(url_for('index'))
 
@@ -170,7 +170,7 @@ def run_server(data: Dict[str, Any]) -> None:
 
 
 def run():
-    config = load_config('camera_server_config', {
+    config = load_config('camera_server', {
         "ipv4": '0.0.0.0',
         "port": 2002,
         "camera": [

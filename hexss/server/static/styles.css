@@ -70,7 +70,7 @@ ul {
     padding: 20px;
     border: 1px solid #888;
     width: 80%;
-    max-width: 800px;
+    max-width: 900px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
@@ -84,6 +84,7 @@ ul {
 #edit-content {
     flex-grow: 1;
     resize: vertical;
+    height: 550px;
     min-height: 300px;
     margin-bottom: 10px;
     padding: 5px;

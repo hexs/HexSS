@@ -10,6 +10,7 @@ from hexss import check_packages, json_load, secure_filename
 check_packages('Flask', auto_install=True, venv_only=False)
 
 from hexss import get_hostname
+from hexss.config import load_config
 from hexss.network import get_all_ipv4, close_port
 from flask import Flask, render_template, request, send_file, redirect, url_for, jsonify, abort
 
@@ -184,10 +185,11 @@ def extract_file():
 
 
 def run():
-    config = json_load('file_manager_server_config.json', {
+    config = load_config('file_manager_server', {
         "ipv4": '0.0.0.0',
         'port': 2001
-    }, True)
+    })
+
     close_port(config['ipv4'], config['port'], verbose=False)
     ipv4 = config['ipv4']
     port = config['port']

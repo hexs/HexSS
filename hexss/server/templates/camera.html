@@ -63,16 +63,18 @@
     </tr>
     <tr>
         <td>
-            for image: <a href="/image?source=display_capture">/image?source=display_capture</a><br>
-            for video: <a href="/video?source=display_capture">/video?source=display_capture</a>
+            for image: <a href="/image?source=display_capture&quality=100">/image?source=display_capture</a><br>
+            for video: <a href="/video?source=display_capture&quality=30">/video?source=display_capture</a>
         </td>
         <td><img src="{{ url_for('get_video') }}" width="300" alt="Display Capture"></td>
     </tr>
     {% for i in range(camera_states|length) %}
     <tr>
         <td>
-            for image: <a href="/image?source=video_capture&id={{ i }}">/image?source=video_capture&id={{ i }}</a><br>
-            for video: <a href="/video?source=video_capture&id={{ i }}">/video?source=video_capture&id={{ i }}</a>
+            for image: <a href="/image?source=video_capture&id={{ i }}&quality=100"
+        >/image?source=video_capture&id={{ i }} </a><br>
+            for video: <a href="/video?source=video_capture&id={{ i }}&quality=30"
+        >/video?source=video_capture&id={{ i }} </a>
         </td>
         <td><img src="{{ url_for('get_video') }}?source=video_capture&id={{ i }}" width="300" alt="Video Capture"></td>
     </tr>
@@ -99,8 +101,8 @@
     <button type="submit">Update Cameras</button>
 </form>
 <h1>Note</h1>
-/<a style="color: red">image</a>?source=<a style="color: blue">video_capture</a>&id=<a style="color: Orange">0</a>
-&quality=<a style="color: fuchsia">30</a><br>
+/<a style="color: red">image</a>?source=<a style="color: blue">video_capture</a>&id=<a style="color: Orange">0</a>&quality=<a
+        style="color: fuchsia">30</a><br>
 <table>
     <tr>
         <td><b>path</b></td>

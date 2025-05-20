@@ -12,6 +12,7 @@ else:
     check_packages('numpy', 'opencv-python', 'Flask', auto_install=True, venv_only=False)
 
 from hexss import get_hostname
+from hexss.config import load_config, update_config
 from hexss.network import get_all_ipv4, close_port
 from hexss.threading import Multithread
 import numpy as np
@@ -121,9 +122,9 @@ def update_cameras():
             data['config']['camera'][camera_id]['setup'] = True
 
             # update config file
-            config = json_load('camera_server_config.json')
+            config = load_config('camera_server_config')
             config['camera'][camera_id]['width_height'] = [int(width), int(height)]
-            json_update('camera_server_config.json', config)
+            update_config('camera_server_config', config)
 
     return redirect(url_for('index'))
 
@@ -169,7 +170,7 @@ def run_server(data: Dict[str, Any]) -> None:
 
 
 def run():
-    config = json_load('camera_server_config.json', {
+    config = load_config('camera_server_config', {
         "ipv4": '0.0.0.0',
         "port": 2002,
         "camera": [
@@ -177,7 +178,7 @@ def run():
                 "width_height": [640, 480]
             }
         ]
-    }, dump=True)
+    })
     close_port(config['ipv4'], config['port'], verbose=False)
 
     data = {

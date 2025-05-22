@@ -76,6 +76,7 @@ class Robot:
         self.logger = logging.getLogger(__name__)
         self.dry_run = dry_run
         self.table_data = pd.DataFrame()
+        self.stop_waiting = False
 
         if not dry_run:
             self.client = ModbusSerialClient(port=comport, baudrate=baudrate, timeout=timeout)
@@ -198,10 +199,13 @@ class Robot:
                 if len(prev) < 5 or len(set(prev)) > 1 or distance > 3:
                     all_reached = False
 
-            print(f"\rWait: ({' | '.join(distance_status)}) {', is pause' if is_pause else ''}", end='')
+            print(f"\rWait: ({' | '.join(distance_status)}) {', is pause' if is_pause else ''}     ", end='')
 
             if all_reached:
                 print()
+                break
+
+            if self.stop_waiting:
                 break
 
             time.sleep(0.1)

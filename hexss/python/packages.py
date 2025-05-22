@@ -188,7 +188,8 @@ def check_packages(*packages: str, auto_install: bool = False, venv_only: bool =
     if auto_install:
         # Enforce installation only in a virtual environment if venv_only is True.
         if venv_only and (hexss.path.get_main_python_path() == hexss.path.get_python_path()):
-            message = f"{RED}If installing in the main environment, set venv_only=False.{END}"
+            message = (f"{YELLOW}Must be installed: {', '.join(missing)}\n"
+                       f"{RED}To auto_install packages in the main environment, set venv_only=False.{END}")
             print(message)
             sys.exit(1)
 

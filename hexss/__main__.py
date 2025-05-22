@@ -21,11 +21,23 @@ def show_config(data, keys):
         if isinstance(data, dict):
             max_key_length = min(max((len(k) for k in data.keys()), default=0) + 1, 15)
             for k, v in data.items():
-                print(f"{k:{max_key_length}}: {
-                BLUE if isinstance(v, (int, float)) else
-                CYAN if isinstance(v, (list, dict)) else
-                DARK_GREEN
-                }{f"'{v}'" if isinstance(v, str) else v}{END}")
+                if isinstance(v, (int, float)):
+                    color = BLUE
+                elif isinstance(v, (list, dict)):
+                    color = CYAN
+                else:
+                    color = DARK_GREEN
+
+                value_str = f"'{v}'" if isinstance(v, str) else v
+                print(f"{k:{max_key_length}}: {color}{value_str}{END}")
+
+                # for python 3.12
+                # print(f"{k:{max_key_length}}: {
+                # BLUE if isinstance(v, (int, float)) else
+                # CYAN if isinstance(v, (list, dict)) else
+                # DARK_GREEN
+                # }{f"'{v}'" if isinstance(v, str) else v}{END}")
+
         else:
             print(data)
     except Exception as e:
@@ -53,12 +65,22 @@ def update_config(file_name, keys, new_value):
         json_update(file_path, {file_name: data})
 
         # Feedback
-        val_color = (
-            ORANGE if new_value is None else
-            BLUE if isinstance(new_value, (int, float)) else
-            CYAN if isinstance(new_value, (list, dict)) else
-            DARK_GREEN
-        )
+        if new_value is None:
+            val_color = ORANGE
+        elif isinstance(new_value, (int, float)):
+            val_color = BLUE
+        elif isinstance(new_value, (list, dict)):
+            val_color = CYAN
+        else:
+            val_color = DARK_GREEN
+
+        # for python 3.12
+        # val_color = (
+        #     ORANGE if new_value is None else
+        #     BLUE if isinstance(new_value, (int, float)) else
+        #     CYAN if isinstance(new_value, (list, dict)) else
+        #     DARK_GREEN
+        # )
         disp_val = new_value if isinstance(new_value, (int, float, type(None))) else f"'{new_value}'"
         print(f"Updated {'.'.join(keys)} to {val_color}{disp_val}{END}")
     except Exception as e:

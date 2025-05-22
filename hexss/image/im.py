@@ -107,7 +107,27 @@ class Image:
             return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
         raise ValueError("Mode must be 'RGB' or 'BGR'")
 
-    def overlay(self, overlay_img: Union[Self, np.ndarray, PILImage.Image], box: Tuple[int, int]) -> Self:
+    def overlay(
+            self,
+            overlay_img: Union[Self, np.ndarray, PILImage.Image],
+            box: Tuple[int, int],
+            opacity: float = 1.0
+    ) -> Self:
+        """
+        Overlay another image on top of this image at the given box with the specified opacity.
+
+        Args:
+            overlay_img: The image to overlay (Image, np.ndarray, or PILImage.Image).
+            box: The (x, y) position to place the overlay.
+            opacity: Opacity of the overlay image (0.0 transparent - 1.0 opaque).
+
+        Returns:
+            Self: The modified image object.
+        """
+        if not (0.0 <= opacity <= 1.0):
+            raise ValueError("Opacity must be between 0.0 and 1.0")
+
+        # Prepare the overlay image as PIL Image
         if isinstance(overlay_img, Image):
             img = overlay_img.image
         elif isinstance(overlay_img, np.ndarray):
@@ -117,10 +137,22 @@ class Image:
         else:
             raise TypeError(f"Unsupported overlay image type: {type(overlay_img)}")
 
-        if img.mode == 'RGBA':
-            self.image.paste(img, box, mask=img.split()[3])
-        else:
-            self.image.paste(img, box)
+        # Convert overlay to RGBA if not already
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+
+        # Apply opacity to the overlay alpha channel
+        if opacity < 1.0:
+            alpha = img.split()[3]
+            alpha = alpha.point(lambda px: int(px * opacity))
+            img.putalpha(alpha)
+
+        # Create a base image in RGBA
+        base = self.image.convert('RGBA')
+
+        # Paste overlay onto base
+        base.paste(img, box, mask=img)
+        self.image = base.convert(self.image.mode)
         return self
 
     def invert_colors(self) -> Self:

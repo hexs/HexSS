@@ -1,6 +1,7 @@
 import time
 
-from hexss import json_load, get_ipv4, close_port
+from hexss import close_port
+from hexss.config import load_config
 from hexss.constants.terminal_color import *
 from hexss.control_robot.robot import Robot
 from hexss.serial import get_comport
@@ -27,10 +28,10 @@ def main():
         print(f"Failed to initialize robot: {e}")
         exit()
 
-    config = json_load('control_robot_server_config.json', {
+    config = load_config('control_robot_server', {
         "ipv4": '0.0.0.0',
         "port": 2005,
-    }, True)
+    })
     close_port(config['ipv4'], config['port'])
 
     data = {

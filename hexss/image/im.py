@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import Union, Optional, Tuple, List, Self
+from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any
 from io import BytesIO
+
 import hexss
 
 hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_install=True)
@@ -8,8 +9,7 @@ hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_instal
 import numpy as np
 import cv2
 import requests
-from PIL import Image as PILImage, ImageFilter
-from PIL.Image import Transpose, Resampling, Dither, Palette
+from PIL import Image as PILImage, ImageFilter, ImageGrab, ImageWin
 
 
 class Image:
@@ -17,13 +17,10 @@ class Image:
     A wrapper class for handling images with various sources and operations.
     Supports formats like Path, URL, bytes, numpy arrays, and PIL images.
     """
-    _MODES = {"RGB", "RGBA", "L", "1"}  # Supported image modes
 
     def __init__(
             self,
             source: Union[Path, str, bytes, np.ndarray, PILImage.Image],
-            size: Tuple[int, int] = (0, 0),
-            color: Union[float, Tuple[float, ...], str, None] = 0,
             session: Optional[requests.Session] = None,
     ) -> None:
         self._session = session or requests.Session()
@@ -37,8 +34,6 @@ class Image:
             self.image = self._from_file(source)
         elif isinstance(source, str) and source.startswith(("http://", "https://")):
             self.image = self._from_url(source)
-        elif isinstance(source, str) and source.upper() in self._MODES:
-            self.image = self._blank_from_mode(source.upper(), size, color)
         elif isinstance(source, bytes):
             self.image = self._from_bytes(source)
         else:
@@ -59,7 +54,7 @@ class Image:
         try:
             return PILImage.open(source)
         except Exception as e:
-            raise IOError(f"Cannot open image file {source!r}") from e
+            raise IOError(f"Cannot open image file {source!r}: {e}") from e
 
     def _from_url(self, url: str) -> PILImage.Image:
         resp = self._session.get(url, timeout=(3.05, 27))
@@ -67,24 +62,42 @@ class Image:
         try:
             return PILImage.open(BytesIO(resp.content))
         except Exception as e:
-            raise IOError(f"Downloaded data from {url!r} is not a valid image") from e
+            raise IOError(f"Downloaded data from {url!r} is not a valid image: {e}") from e
 
     @staticmethod
     def _from_bytes(data: bytes) -> PILImage.Image:
         return PILImage.open(BytesIO(data))
 
     @classmethod
-    def _blank_from_mode(
+    def new(
             cls,
             mode: str,
             size: Tuple[int, int],
-            color: Union[float, Tuple[float, ...], str, None]
-    ) -> PILImage.Image:
-        return PILImage.new(mode, size, color)
+            color: float | tuple[float, ...] | str | None = 0,
+    ) -> Self:
+        pil_im = PILImage.new(mode, size, color)
+        return cls(pil_im)
 
     @classmethod
-    def open(cls, fp, mode="r", formats=None) -> Self:
+    def open(
+            cls,
+            fp: Union[str, Path, IO[bytes]],
+            mode: Literal["r"] = "r",
+            formats: Optional[Union[List[str], Tuple[str, ...]]] = None,
+    ) -> Self:
         pil_im = PILImage.open(fp, mode, formats)
+        return cls(pil_im)
+
+    @classmethod
+    def screenshot(
+            cls,
+            bbox: Optional[Tuple[int, int, int, int]] = None,
+            include_layered_windows: bool = False,
+            all_screens: bool = False,
+            xdisplay: Optional[str] = None,
+            window: Optional[Union[int, "ImageWin.HWND"]] = None,
+    ) -> Self:
+        pil_im = ImageGrab.grab(bbox, include_layered_windows, all_screens, xdisplay, window)
         return cls(pil_im)
 
     @property
@@ -99,7 +112,7 @@ class Image:
     def format(self) -> Optional[str]:
         return self.image.format
 
-    def numpy(self, mode: str = 'BGR') -> np.ndarray:
+    def numpy(self, mode: Literal['RGB', 'BGR'] = 'BGR') -> np.ndarray:
         arr = np.array(self.image)
         if mode == 'RGB':
             return arr
@@ -129,30 +142,30 @@ class Image:
 
         # Prepare the overlay image as PIL Image
         if isinstance(overlay_img, Image):
-            img = overlay_img.image
+            pil_im = overlay_img.image
         elif isinstance(overlay_img, np.ndarray):
-            img = PILImage.fromarray(cv2.cvtColor(overlay_img, cv2.COLOR_BGR2RGB))
+            pil_im = PILImage.fromarray(cv2.cvtColor(overlay_img, cv2.COLOR_BGR2RGB))
         elif isinstance(overlay_img, PILImage.Image):
-            img = overlay_img
+            pil_im = overlay_img
         else:
             raise TypeError(f"Unsupported overlay image type: {type(overlay_img)}")
 
         # Convert overlay to RGBA if not already
-        if img.mode != 'RGBA':
-            img = img.convert('RGBA')
+        if pil_im.mode != 'RGBA':
+            pil_im = pil_im.convert('RGBA')
 
         # Apply opacity to the overlay alpha channel
         if opacity < 1.0:
-            alpha = img.split()[3]
+            alpha = pil_im.split()[3]
             alpha = alpha.point(lambda px: int(px * opacity))
-            img.putalpha(alpha)
+            pil_im.putalpha(alpha)
 
         # Create a base image in RGBA
         base = self.image.convert('RGBA')
 
         # Paste overlay onto base
-        base.paste(img, box, mask=img)
-        self.image = base.convert(self.image.mode)
+        base.paste(pil_im, box, mask=pil_im)
+        self.image = base.convert(self.mode)
         return self
 
     def invert_colors(self) -> Self:
@@ -178,11 +191,13 @@ class Image:
                 g.point(lambda px: 255 - px),
                 b.point(lambda px: 255 - px)
             ))
+        elif img.mode == 'L':
+            inverted = img.point(lambda px: 255 - px)
         else:
             raise NotImplementedError(f"Inversion not implemented for mode {img.mode!r}")
         return Image(inverted)
 
-    def filter(self, filter: ImageFilter.Filter | type[ImageFilter.Filter]) -> Self:
+    def filter(self, filter: Union[ImageFilter.Filter, Type[ImageFilter.Filter]]) -> Self:
         return Image(self.image.filter(filter))
 
     def convert(self, mode: str, **kwargs) -> Self:
@@ -195,7 +210,7 @@ class Image:
     def rotate(self, angle: float, expand: bool = False, **kwargs) -> Self:
         return Image(self.image.rotate(angle, expand=expand, **kwargs))
 
-    def transpose(self, method: Transpose) -> Self:
+    def transpose(self, method: PILImage.Transpose) -> Self:
         return Image(self.image.transpose(method))
 
     def crop(self, box: Tuple[float, float, float, float]) -> Self:
@@ -207,8 +222,8 @@ class Image:
     def copy(self) -> Self:
         return Image(self.image.copy())
 
-    def save(self, path: str, **kwargs) -> Self:
-        self.image.save(path, **kwargs)
+    def save(self, fp: Union[str, Path, IO[bytes]], format: Optional[str] = None, **params: Any) -> Self:
+        self.image.save(fp, format, **params)
         return self
 
     def show(self, title: Optional[str] = None) -> Self:

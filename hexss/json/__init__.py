@@ -22,7 +22,6 @@ def json_load(
 
     Raises:
         ValueError: If the file does not have a .json extension or the JSON content is not a dict.
-        json.JSONDecodeError: If the file contains invalid JSON.
     """
     path = Path(file_path)
     if path.suffix.lower() != '.json':
@@ -41,9 +40,14 @@ def json_load(
                 )
             data.update(loaded)
         except json.JSONDecodeError as e:
-            raise json.JSONDecodeError(
-                f"Invalid JSON in {file_path}: {e.msg}", e.doc, e.pos
-            ) from e
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            if content != '':
+                pass
+            else:
+                raise json.JSONDecodeError(
+                    f"Invalid JSON in {file_path}: {e.msg}", e.doc, e.pos
+                ) from e
 
     # Dump default data to file if specified
     if dump:
@@ -56,7 +60,7 @@ def json_dump(
         file_path: Union[str, Path],
         data: Dict[str, Any],
         indent: int = 4
-) -> None:
+) -> Dict[str, Any]:
     """
     Write JSON data to a file.
 
@@ -81,19 +85,22 @@ def json_dump(
             json.dump(data, f, indent=indent, ensure_ascii=False)
     except OSError as e:
         raise OSError(f"Error writing to {file_path}: {e.strerror}") from e
+    return data
 
 
 def json_update(
         file_path: Union[str, Path],
         new_data: Dict[str, Any],
+        deep: bool = False,
         indent: int = 4
 ) -> Dict[str, Any]:
     """
-    Update an existing JSON file with new data.
+    Update an existing JSON file with new data, supporting dot notation for nested keys.
 
     Args:
         file_path (Union[str, Path]): Path to the JSON file.
         new_data (Dict[str, Any]): Data to update in the JSON file.
+        deep (bool): If True, allows deep updates using dot notation.
         indent (int): The number of spaces for indentation in the JSON file.
 
     Returns:
@@ -104,6 +111,14 @@ def json_update(
         json.JSONDecodeError: If the existing file contains invalid JSON.
         OSError: If there is an issue writing to the file.
     """
+
+    def deep_update(d: Dict[str, Any], keys: list, value: Any):
+        for key in keys[:-1]:
+            if key not in d or not isinstance(d[key], dict):
+                d[key] = {}
+            d = d[key]
+        d[keys[-1]] = value
+
     path = Path(file_path)
     if path.suffix.lower() != '.json':
         raise ValueError("File extension must be .json")
@@ -117,7 +132,16 @@ def json_update(
         ) from e
 
     # Update the existing data with new values.
-    data.update(new_data)
+    if deep:
+        for k, v in new_data.items():
+            if '.' in k:
+                keys = k.split('.')
+                deep_update(data, keys, v)
+            else:
+                # Direct key assignment (replace, do NOT merge dicts)
+                data[k] = v
+    else:
+        data.update(new_data)
 
     # Write the updated data back to the file.
     try:
@@ -130,16 +154,74 @@ def json_update(
 
 if __name__ == '__main__':
     # Example usage:
-    default_config = {
-        'device': 'PC',
-        'model_name': '-',
-        'version': '1.0'
-    }
+    from pprint import pprint
+    from hexss import json_update
 
-    # Load the JSON file and create it with the default config if it doesn't exist.
-    config = json_load('config.json', default=default_config, dump=True)
-    print("Loaded config:", config)
+    d1 = json_dump('config.json', {
+        "device": "Laptop",
+        "model_name": "-",
+        "version": "1.1"
+    })
+    print('d1')
+    pprint(d1)
+    # {
+    #     "device": "Laptop",
+    #     "model_name": "-",
+    #     "version": "1.1"
+    # }
 
-    # Update the JSON file with new data.
-    updated_config = json_update('config.json', {'device': 'Laptop', 'version': '1.1'})
-    print("Updated config:", updated_config)
+    d2 = json_update('config.json', {'data': {'a1': 1, 'a2': 2, 'a3': 3}})
+    print('d2')
+    pprint(d2)
+    # {
+    #     "device": "Laptop",
+    #     "model_name": "-",
+    #     "version": "1.1",
+    #     "data": {
+    #         "a1": 1,
+    #         "a2": 2,
+    #         "a3": 3
+    #     }
+    # }
+
+    d3 = json_update('config.json', {'data': {'a4': 2}})
+    print('d3')
+    pprint(d3)
+    # {
+    #     "device": "Laptop",
+    #     "model_name": "-",
+    #     "version": "1.1",
+    #     "data": {
+    #         "a4": 2
+    #     }
+    # }
+    #
+
+    d4 = json_update('config.json', {'data.a3': 4}, deep=True)
+    print('d4')
+    pprint(d4)
+    # {
+    #     "device": "Laptop",
+    #     "model_name": "-",
+    #     "version": "1.1",
+    #     "data": {
+    #         "a4": 2,
+    #         "a3": 4
+    #     }
+    # }
+    #
+
+    d5 = json_update('config.json', {'data.a3': {'b1': 3}}, deep=True)
+    print('d5')
+    pprint(d5)
+    # {
+    #     "device": "Laptop",
+    #     "model_name": "-",
+    #     "version": "1.1",
+    #     "data": {
+    #         "a4": 2,
+    #         "a3": {
+    #             "b1": 3
+    #         }
+    #     }
+    # }

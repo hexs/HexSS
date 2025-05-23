@@ -42,7 +42,7 @@ def json_load(
         except json.JSONDecodeError as e:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            if content != '':
+            if content == '':
                 pass
             else:
                 raise json.JSONDecodeError(

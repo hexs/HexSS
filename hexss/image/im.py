@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import requests
 from PIL import Image as PILImage, ImageFilter, ImageGrab, ImageWin
+from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize
 
 
 class Image:

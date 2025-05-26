@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import hexss
+
 hexss.check_packages('requests', 'tqdm', auto_install=True)
 
 import requests
@@ -78,12 +79,16 @@ def download_file(download_url, file_path):
         print(f"\n{RED}Failed to download {os.path.basename(file_path)}: {e}{END}")
 
 
-def download(owner, repo, path='', max_workers=20, dest_folder: Union[Path, str] = ''):
+def download(owner=None, repo=None, path='', dest_folder: Union[Path, str] = '', max_workers=20, api_url=None):
     """
     Recursively downloads content from a GitHub API URL using multi-threaded file downloads.
     Uses an overall progress bar to track total file downloads.
     """
-    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    if api_url is None:
+        if not owner or not repo:
+            raise ValueError("Both 'owner' and 'repo' must be specified if 'api_url' is not provided.")
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+
     if isinstance(dest_folder, str):
         dest_folder = Path(dest_folder)
 

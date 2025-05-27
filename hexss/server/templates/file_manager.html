@@ -17,7 +17,15 @@
     </form>
 </header>
 <div class="main-content">
-    <p>Current Path: {{ current_path.replace('\\', '/') }}</p>
+    <!--<p>Current Path: {{ current_path }}</p>-->
+    <p>
+        Current Path:
+        {% for crumb, crumb_path in breadcrumbs %}
+        <a href="{{ url_for('path', subpath=crumb_path) }}">{{ crumb }}</a>
+        {% if not loop.last %}/{% endif %}
+        {% endfor %}
+    </p>
+
     <h3>Directories:</h3>
     <ul id="directory-list">
         {% if current_path %}

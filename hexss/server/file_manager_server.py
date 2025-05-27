@@ -74,8 +74,19 @@ def path(subpath=''):
         elif item.is_dir():
             directories.append(item.name)
 
-    return render_template('file_manager.html', files=files, directories=directories,
-                           current_path=os.path.relpath(current_path, ROOT_DIR))
+    rel_path = os.path.relpath(current_path, ROOT_DIR).replace("\\", "/")
+    parts = rel_path.split("/") if rel_path != "." else []
+    breadcrumbs = []
+    path_accum = ""
+    for part in parts:
+        path_accum = f"{path_accum}/{part}" if path_accum else part
+        breadcrumbs.append((part, path_accum))
+
+    return render_template('file_manager.html',
+                           files=files,
+                           directories=directories,
+                           current_path=rel_path,
+                           breadcrumbs=breadcrumbs)
 
 
 @app.route('/create_folder', methods=['POST'])
@@ -96,8 +107,7 @@ def upload_file():
     if file.filename == '':
         return redirect(request.url)
     if file:
-        filename = secure_filename(file.filename)
-        file_path = os.path.normpath(os.path.join(ROOT_DIR, request.form['current_path'], filename))
+        file_path = os.path.normpath(os.path.join(ROOT_DIR, request.form['current_path'], file.filename))
         file.save(file_path)
     return redirect(url_for('path', subpath=request.form['current_path']))
 

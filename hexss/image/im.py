@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any
+from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any, Sequence
 from io import BytesIO
 
 import hexss
@@ -9,8 +9,12 @@ hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_instal
 import numpy as np
 import cv2
 import requests
-from PIL import Image as PILImage, ImageFilter, ImageGrab, ImageWin
+from PIL._typing import Coords
+from PIL import Image as PILImage
+from PIL import ImageDraw as PILImageDraw
+from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont
 from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize
+from PIL.ImageDraw import _Ink
 
 
 class Image:
@@ -240,3 +244,117 @@ class Image:
     def __repr__(self) -> str:
         name = self.image.__class__.__name__
         return f"<Image {name} mode={self.mode} size={self.size[0]}x{self.size[1]}>"
+
+    def draw(self, origin: Union[str, Tuple[float, float]] = 'topleft') -> "ImageDraw":
+        return ImageDraw(self, origin)
+
+
+class ImageDraw:
+    def __init__(self, im: Image, origin: Union[str, Tuple[float, float]] = 'topleft') -> None:
+        self.im = im
+        self.draw = PILImageDraw.Draw(self.im.image)
+        self.origin = np.zeros(2, dtype=float)
+        self.set_origin(origin)
+
+    def set_origin(self, origin: Union[str, Tuple[float, float]]) -> Self:
+        if isinstance(origin, str):
+            mapping = {
+                'topleft': (0.0, 0.0),
+                'topright': (1.0, 0.0),
+                'bottomleft': (0.0, 1.0),
+                'bottomright': (1.0, 1.0),
+                'center': (0.5, 0.5),
+            }
+            if origin not in mapping:
+                raise ValueError(f"Unknown origin string: {origin}")
+            self.set_abs_origin(mapping[origin])
+        else:
+            self.origin = np.array(origin, dtype=float)
+        return self
+
+    def set_abs_origin(self, abs_origin: Tuple[float, float]) -> Self:
+        self.origin = np.array(abs_origin) * self.im.size
+        return self
+
+    def move_origin(self, xy: Tuple[float, float]):
+        self.origin += np.array(xy)
+        return self
+
+    def _translate(self, xy: Any) -> Any:
+        arr_xy = np.array(xy, dtype=float)
+        origin_broadcast = np.resize(self.origin, arr_xy.shape)
+        return (arr_xy + origin_broadcast).tolist()
+
+    def point(
+            self,
+            xy: Coords,
+            fill: _Ink
+    ) -> Self:
+        self.draw.point(self._translate(xy), fill=fill)
+        return self
+
+    def line(
+            self,
+            xy,
+            fill=None,
+            width: int = 0,
+    ) -> Self:
+        self.draw.line(self._translate(xy), fill=fill, width=width)
+        return self
+
+    def rectangle(
+            self,
+            xy: Coords,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        self.draw.rectangle(self._translate(xy), fill=fill, outline=outline, width=width)
+        return self
+
+    def circle(
+            self,
+            xy: Sequence[float],
+            radius: float,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        self.draw.circle(self._translate(xy), radius=radius, fill=fill, outline=outline, width=width)
+        return self
+
+    def ellipse(
+            self,
+            xy: Coords,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        self.draw.ellipse(self._translate(xy), fill=fill, outline=outline, width=width)
+        return self
+
+    def text(
+            self,
+            xy: tuple[float, float],
+            text,
+            fill: _Ink = None,
+            font=None,
+            anchor: str = None,
+            spacing: float = 4,
+            align: str = "left",
+            direction: str = None,
+            features: list[str] = None,
+            language: str = None,
+            stroke_width: float = 0,
+            stroke_fill: _Ink = None,
+            embedded_color: bool = False,
+            *args: Any,
+            **kwargs: Any,
+    ) -> Self:
+        xy = self._translate(xy)
+        self.draw.text(
+            xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing, align=align, direction=direction,
+            features=features, language=language, stroke_width=stroke_width, stroke_fill=stroke_fill,
+            embedded_color=embedded_color, *args, **kwargs
+        )
+        return self

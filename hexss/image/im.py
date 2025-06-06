@@ -13,7 +13,7 @@ from PIL._typing import Coords
 from PIL import Image as PILImage
 from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont
-from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize
+from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize, SupportsArrayInterface
 from PIL.ImageDraw import _Ink
 
 
@@ -93,6 +93,18 @@ class Image:
             formats: Optional[Union[List[str], Tuple[str, ...]]] = None,
     ) -> Self:
         pil_im = PILImage.open(fp, mode, formats)
+        return cls(pil_im)
+
+    @classmethod
+    def frombuffer(
+            cls,
+            mode: str,
+            size: Tuple[int, int],
+            data: bytes | SupportsArrayInterface,
+            decoder_name: str = "raw",
+            *args: Any
+    ):
+        pil_im = PILImage.frombuffer(mode, size, data, decoder_name, *args)
         return cls(pil_im)
 
     @classmethod
@@ -244,8 +256,25 @@ class Image:
 
         return Image(self.image.crop(xyxy))
 
-    def resize(self, size: Tuple[int, int], **kwargs) -> Self:
-        return Image(self.image.resize(size, **kwargs))
+    def resize(
+            self,
+            size: Union[Tuple[int, int], str],
+            resample: int | None = None,
+            box: tuple[float, float, float, float] | None = None,
+            reducing_gap: float | None = None
+    ) -> Self:
+        '''
+        example:
+        resize((600,400))
+        resize('80%')
+        '''
+        if isinstance(size, str):
+            if size.endswith('%'):
+                percent = float(size[:-1]) / 100.0
+                size = (int(self.size[0] * percent), int(self.size[1] * percent))
+            else:
+                raise ValueError(f"Invalid size string: {size!r}. Use format like '80%'")
+        return Image(self.image.resize(size=size, resample=resample, box=box, reducing_gap=reducing_gap))
 
     def copy(self) -> Self:
         return Image(self.image.copy())

@@ -1,104 +1,151 @@
-from typing import Union, Optional, Dict
+from pathlib import Path
+from typing import Union, Optional, Dict, List
+import math
+
 import hexss
-from hexss.image import Image
-from PIL import Image as PILImage
+from hexss import json_load
+from hexss.image import Image, ImageFont, PILImage
 import numpy as np
 import cv2
 
 
 class Classification:
-    def __init__(self, predictions: np.ndarray, class_index: int, class_name: str, confidence: float):
-        """
-        Args:
-            predictions (np.ndarray): Array of prediction scores for each class.
-            class_index (int): Index of the predicted class.
-            class_name (str): Name of the predicted class.
-            confidence (float): Confidence score of the predicted class.
-        """
+    def __init__(
+            self,
+            predictions: np.ndarray,
+            class_names: Optional[List[str]],
+    ):
         self.predictions = predictions
-        self.class_index = class_index
-        self.class_name = class_name
-        self.confidence = confidence
+        self.class_names = class_names
+
+        self.idx = int(np.argmax(self.predictions))
+        self.name = self.class_names[self.idx]
+        self.conf = float(self.predictions[self.idx])
+
+    def expo_preds(self, base: float = math.e) -> np.ndarray:
+        """
+        Exponentiate predictions by `base` and normalize to sum=1.
+        """
+        exps = np.power(base, self.predictions.astype(np.float64))
+        return exps / exps.sum()
+
+    def softmax_preds(self) -> np.ndarray:
+        """
+        Standard softmax over predictions.
+        """
+        z = self.predictions.astype(np.float64)
+        e = np.exp(z - np.max(z))
+        return e / e.sum()
 
 
 class Classifier:
+    """
+    Wraps a Keras model for image classification.
+    """
 
-    def __init__(self, model_path: str, json_data: Dict = None):
-        """
-        Args:
-            model_path (str): Path to the pre-trained model.
-            json_data (Dict): Configuration dictionary containing:
-                              - 'img_size': Tuple[int, int], e.g., (180, 180)
-                              - 'class_names': List[str], e.g., ['ok', 'ng']
-        """
+    def __init__(
+            self,
+            model_path: Union[Path, str],
+            json_data: Optional[Dict] = None,
+    ):
+        model_path = Path(model_path)
         try:
-            from keras import models
+            from keras.models import load_model
         except ImportError:
             hexss.check_packages('tensorflow', auto_install=True)
-            from keras import models
+            from keras.models import load_model  # type: ignore
 
-        # Load the pre-trained model
-        self.model = models.load_model(model_path)
+        self.model = load_model(model_path)
+        self._load_metadata(model_path, json_data)
 
+    def _load_metadata(
+            self,
+            model_path: Path,
+            json_data: Optional[Dict]
+    ) -> None:
         if json_data is None:
-            json_path = model_path.replace('.h5', '.json')
-            json_data = hexss.json_load(json_path)
+            json_path = model_path.with_suffix('.json')
+            json_data = json_load(json_path)
 
-        # Fixed bugs to be compatible with older model.
-        if 'class_names' not in json_data and json_data.get('model_class_names'):
-            json_data['class_names'] = json_data['model_class_names']
+        # Backwards compatibility
+        if 'model_class_names' in json_data and 'class_names' not in json_data:
+            json_data['class_names'] = json_data.pop('model_class_names')
 
-        # Validate required keys in the configuration dictionary
-        if 'img_size' not in json_data or 'class_names' not in json_data:
-            raise ValueError("json_data must contain 'img_size' and 'class_names' keys.")
+        # Defaults
+        json_data.setdefault('img_size', (180, 180))
 
-        self.json_data = json_data
-        # json_data = {
-        #     'img_size': (180, 180),
-        #     'class_names': ['ok', 'ng']
-        # }
-        self.classification: Optional[Classification] = None
+        if 'class_names' not in json_data:
+            raise ValueError("json_data missing 'class_names'")
 
-    def classify(self, image: Union[Image, PILImage.Image, np.ndarray]) -> Classification:
+        self.class_names: List[str] = json_data['class_names']
+        self.img_size: tuple = tuple(json_data['img_size'])
+
+    def _prepare_image(
+            self,
+            image: Union[Image, PILImage.Image, np.ndarray]
+    ) -> np.ndarray:
         """
-        Classify an image using the pre-trained model.
-
-        Args:
-            image (Union[Image, PILImage.Image, np.ndarray]): The input image to classify. Can be:
-                                                              - hexss.Image |RGB
-                                                              - PIL Image   |RGB
-                                                              - NumPy array |BGR
-
-        Returns:
-            Classification: The classification result.
-
-        Raises:
-            TypeError: If the input image type is not supported.
+        Convert input to RGB array resized to `img_size` and batch of 1.
         """
-        # Convert hexss.Image to a NumPy array
         if isinstance(image, Image):
-            image_arr = image.numpy('RGB')
+            arr = image.numpy('RGB')
         elif isinstance(image, PILImage.Image):
-            image_arr = np.array(image).copy()
+            arr = np.array(image.convert('RGB'))
         elif isinstance(image, np.ndarray):
-            image_arr = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            arr = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
-            raise TypeError(
-                f"Unsupported image type: {type(image)}. Supported types: hexss.Image, PIL.Image, np.ndarray.")
+            raise TypeError(f"Unsupported image type: {type(image)}")
 
-        img_size = self.json_data['img_size']
-        arr = cv2.resize(image_arr, img_size)  # Resize image
-        arr = np.expand_dims(arr, axis=0) / 255.0  # Normalize and add batch dimension
+        arr = cv2.resize(arr, self.img_size)
+        return np.expand_dims(arr, axis=0)
 
-        predictions = self.model.predict_on_batch(arr)[0]  # [     2.6491     -3.4541]
-        class_index = np.argmax(predictions)  # 0
-        class_name = self.json_data['class_names'][class_index]  # happy
-        confidence = predictions[class_index]  # 2.649055
-
-        self.classification = Classification(
-            predictions=predictions,
-            class_index=int(class_index),
-            class_name=class_name,
-            confidence=float(confidence)
+    def classify(
+            self,
+            image: Union[Image, PILImage.Image, np.ndarray]
+    ) -> Classification:
+        """
+        Run a forward pass and return a Classification.
+        """
+        batch = self._prepare_image(image)
+        preds = self.model.predict(batch, verbose=0)[0]
+        return Classification(
+            predictions=preds,
+            class_names=self.class_names,
         )
-        return self.classification
+
+
+class MultiClassifier:
+    """
+    Holds multiple Classifier instances and classifies predefined regions.
+    """
+
+    def __init__(self, base_path: Union[Path, str]):
+        base_path = Path(base_path)
+        config = json_load(base_path / 'frames pos.json')
+        self.frames = config['frames']
+        self.models: Dict[str, Classifier] = {}
+        for name in config['models']:
+            model_file = base_path / 'model' / f"{name}.h5"
+            self.models[name] = Classifier(model_file)
+
+    def classify_all(
+            self,
+            image: Union[Image, PILImage.Image, np.ndarray]
+    ) -> Dict[str, Classification]:
+        """
+        Crop each normalized frame region and classify.
+
+        Returns a dict mapping frame keys to Classification.
+        """
+        img = Image(image)
+        results: Dict[str, Classification] = {}
+
+        for key, frame in self.frames.items():
+            model_name = frame['model_used']
+            xywhn = np.array(frame['xywh'], dtype=float)
+            crop = img.crop(xywhn=xywhn)
+            results[key] = self.models[model_name].classify(crop)
+
+        return results
+
+

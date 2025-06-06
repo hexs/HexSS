@@ -33,6 +33,8 @@ class Image:
 
         if isinstance(source, PILImage.Image):
             self.image = source.copy()
+        elif isinstance(source, Image):
+            self.image = source.image.copy()
         elif isinstance(source, np.ndarray):
             self.image = self._from_numpy_array(source)
         elif isinstance(source, (Path, str)) and Path(source).is_file():
@@ -218,8 +220,29 @@ class Image:
     def transpose(self, method: PILImage.Transpose) -> Self:
         return Image(self.image.transpose(method))
 
-    def crop(self, box: Tuple[float, float, float, float]) -> Self:
-        return Image(self.image.crop(box))
+    def crop(self,
+             xyxy: Tuple[float, float, float, float] | np.ndarray = None,
+             xywh: Tuple[float, float, float, float] | np.ndarray = None,
+             xyxyn: Tuple[float, float, float, float] | np.ndarray = None,
+             xywhn: Tuple[float, float, float, float] | np.ndarray = None,
+             ) -> Self:
+        if xyxy is not None:
+            pass
+        elif xywh is not None:
+            xyxy = (xywh[0] - xywh[2] / 2, xywh[1] - xywh[3] / 2,
+                    xywh[0] + xywh[2] / 2, xywh[1] + xywh[3] / 2)
+        elif xyxyn is not None:
+            xyxy = (xyxyn[0] * self.size[0], xyxyn[1] * self.size[1],
+                    xyxyn[2] * self.size[0], xyxyn[3] * self.size[1])
+        elif xywhn is not None:
+            xyxy = (xywhn[0] * self.size[0] - xywhn[2] * self.size[0] / 2,
+                    xywhn[1] * self.size[1] - xywhn[3] * self.size[1] / 2,
+                    xywhn[0] * self.size[0] + xywhn[2] * self.size[0] / 2,
+                    xywhn[1] * self.size[1] + xywhn[3] * self.size[1] / 2)
+        else:
+            raise ValueError("At least one of xyxy, xywh, xyxyn, or xywhn must be provided")
+
+        return Image(self.image.crop(xyxy))
 
     def resize(self, size: Tuple[int, int], **kwargs) -> Self:
         return Image(self.image.resize(size, **kwargs))
@@ -357,4 +380,27 @@ class ImageDraw:
             features=features, language=language, stroke_width=stroke_width, stroke_fill=stroke_fill,
             embedded_color=embedded_color, *args, **kwargs
         )
+        return self
+
+    def line_abs(
+            self,
+            xy,
+            fill=None,
+            width: int = 0,
+    ) -> Self:
+        arr_xy = np.array(xy, dtype=float)
+        origin_broadcast = np.resize(self.im.size, arr_xy.shape)
+        xy = (arr_xy * origin_broadcast).tolist()
+        self.line(xy, fill=fill, width=width)
+        return self
+
+    def rectangle_abs(
+            self,
+            xy: Coords,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        xy = np.array(xy, dtype=float) * self.im.size
+        self.rectangle(xy, fill=fill, outline=outline, width=width)
         return self

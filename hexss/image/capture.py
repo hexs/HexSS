@@ -1,9 +1,12 @@
 import ctypes
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+import hexss
 from hexss.image import Image, ImageDraw
 from hexss.constants import BLUE, CYAN, END
+
+hexss.check_packages('pywin32', auto_install=True)
+
 import win32api
 import win32con
 import win32gui

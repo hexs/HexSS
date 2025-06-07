@@ -1,129 +1,170 @@
+from typing import Optional, Union, List
+import os
 import time
+
 import hexss
+from hexss.constants import *
 
 hexss.check_packages('requests', 'GitPython', auto_install=True)
 
-from hexss import json_load, proxies
 import requests
-from git import Repo
+from git import Repo, GitCommandError, InvalidGitRepositoryError
 
 
-def clone(path=".", url=None):
+def clone(path: str, url: str, branch: str = "main", timeout: Optional[int] = None) -> Repo:
     """
-    Clone a Git repository from the specified URL to the given path.
+    Clone a Git repository to the given path.
 
     Args:
-        url (str): The URL of the Git repository to clone.
-        path (str): The local directory where the repository should be cloned. Defaults to the current directory.
+        path (str): Destination directory path.
+        url (str): Repository URL.
+        branch (str): Branch to check out after cloning.
+        timeout (Optional[int]): Timeout for the clone operation in seconds.
 
     Returns:
-        str: The path to the cloned repository if successful.
+        Repo: GitPython Repo object for the cloned repository.
 
     Raises:
-        Exception: If the cloning operation fails for any reason.
+        ValueError: If url is empty or invalid.
+        RuntimeError: If Git command fails.
     """
+    if url is None:
+        raise ValueError("A repository URL must be provided for cloning.")
 
     try:
-        print(f"Cloning repository from {url} into {path}...")
-        # Clone the repository
-        repo = Repo.clone_from(url, path)
-        print(f"Repository successfully cloned to: {repo.working_dir}")
-        return repo.working_dir
+        print(f"Cloning '{url}' into '{path}'...")
+        repo = Repo.clone_from(url, path, branch=branch, single_branch=True, depth=1, timeout=timeout)
+        print(f"✅ {GREEN}Successfully cloned{END} '{url}' to '{repo.working_dir}'.")
+        return repo
+    except GitCommandError as e:
+        raise RuntimeError(f"{RED}Git clone failed{END}: {e.stderr.strip()}") from e
     except Exception as e:
-        raise Exception(f"Error occurred while cloning the repository: {e}")
+        raise RuntimeError(f"{RED}Unexpected error during clone{END}: {e}") from e
 
 
-def pull(path):
+def pull(path: str, branch: str = "main") -> str:
     """
-    Pull the latest changes from the origin/main branch of the Git repository at the given path.
+    Pull latest changes from origin for the given repository path and branch.
 
     Args:
-        path (str): The path to the Git repository.
+        path (str): Path to existing Git repository.
+        branch (str): Branch to pull from origin.
+
+    Returns:
+        str: Output from the Git pull command.
 
     Raises:
-        Exception: If the repository cannot be accessed or pull operation fails.
+        RuntimeError: If directory is not a Git repo or Git command fails.
     """
     try:
         repo = Repo(path)
-        res = repo.git.pull('origin', 'main')
-        print(res)
-        return res
+    except InvalidGitRepositoryError:
+        raise RuntimeError(f"'{path}' is not a valid Git repository.")
+
+    try:
+        print(f"Pulling latest changes in '{path}' (branch '{branch}')...")
+        output = repo.git.pull("origin", branch)
+        print(f"✅ {GREEN}Pull result{END}: {output}")
+        return output
+    except GitCommandError as e:
+        raise RuntimeError(f"Git pull failed: {e.stderr.strip()}") from e
     except Exception as e:
-        print(f"Error while pulling changes: {e}")
+        raise RuntimeError(f"Unexpected error during pull: {e}") from e
 
 
-def pull_loop(path):
-    while pull(path) is None:
-        time.sleep(10)
-
-
-def push_if_status_change(path):
+def clone_or_pull(path: str, url: Optional[str] = None, branch: str = "main") -> Union[Repo, str]:
     """
-    Push changes to the origin/main branch if there are modifications in the repository at the given path.
+    Clone the repository if not already present, otherwise pull latest changes.
 
     Args:
-        path (str): The path to the Git repository.
+        path (str): Local path for repository.
+        url (Optional[str]): Repository URL. Required if cloning.
+        branch (str): Branch name for both clone and pull.
 
-    Raises:
-        Exception: If the repository operation fails.
+    Returns:
+        Union[Repo, str]: Repo object if cloned, or pull output if pulled.
+    """
+    git_dir = os.path.join(path, ".git")
+    if not os.path.isdir(git_dir):
+        if not url:
+            raise ValueError("URL is required to clone into an empty directory.")
+        return clone(path, url, branch)
+    return pull(path, branch)
+
+
+def auto_pull(path: str, interval: int = 600, branch: str = "main") -> None:
+    """
+    Continuously pull latest changes at given time intervals.
+
+    Args:
+        path (str): Path to Git repository.
+        interval (int): Polling interval in seconds.
+        branch (str): Branch to pull.
+    """
+    while True:
+        try:
+            pull(path, branch)
+        except Exception as e:
+            print(f"{RED}Auto-pull error{END}: {e}")
+        time.sleep(interval)
+
+
+def push_if_dirty(path: str, branch: str = "main", commit_message: Optional[str] = None) -> None:
+    """
+    Commit and push changes if the working tree is dirty.
+
+    Args:
+        path (str): Path to Git repository.
+        branch (str): Target branch for push.
+        commit_message (Optional[str]): Custom commit message. Defaults to auto-generated.
     """
     try:
         repo = Repo(path)
-        status = repo.git.status()
-        print('status', status, '- -' * 30, sep='\n')
+    except InvalidGitRepositoryError:
+        raise RuntimeError(f"'{path}' is not a valid Git repository.")
 
-        if status.split('\n')[-1] != 'nothing to commit, working tree clean':
-            # Stage all changes
-            res = repo.git.add('.')
-            print('add', res, '- -' * 30, sep='\n')
+    if not repo.is_dirty(untracked_files=True):
+        print(f"{GREEN}Working tree clean; no changes to push.{END}")
+        return
 
-            # Get the file name of the first modified file
-            modified_file = ''
-            for line in status.split('\n'):
-                if '	modified:   ' in line:
-                    modified_file = line.split('	modified:   ')[-1]
-                    break
-
-            # Commit the changes
-            res = repo.git.commit('-am', f'auto update {modified_file.strip()}')
-            print('commit', res, '- -' * 30, sep='\n')
-
-            # Push the changes to origin/main
-            res = repo.git.push('origin', 'main')
-            print('push', res, '- -' * 30, sep='\n')
-        else:
-            print("No changes to push. Working tree is clean.")
-    except Exception as e:
-        print(f"Error while pushing changes: {e}")
+    repo.git.add(A=True)
+    modified = [item.a_path for item in repo.index.diff(None)]
+    msg = commit_message or f"Auto-update: {', '.join(modified)}"
+    repo.index.commit(msg)
+    print(f"{PINK}Committed changes{END}: {msg}")
+    origin = repo.remote(name="origin")
+    push_info = origin.push(branch)
+    for info in push_info:
+        if info.flags & info.ERROR:
+            raise RuntimeError(f"Push failed: {info.summary}")
+    print(f"✅ {GREEN}Pushed to origin/{branch} successfully.{END}")
 
 
-def get_repositories(username):
+def fetch_repositories(username: str) -> Optional[List[dict]]:
     """
     Fetch public repositories of a GitHub user.
 
     Args:
-        username (str): The GitHub username.
+        username (str): GitHub username.
+        use_proxy (bool): Whether to route through configured proxies.
 
     Returns:
-        list: A list of repositories (in JSON format) if successful, None otherwise.
-
-    Raises:
-        Exception: If the API request or JSON parsing fails.
+        Optional[List[dict]]: List of repo data or None on failure.
     """
+    if not username:
+        raise ValueError("GitHub username must be provided.")
+
     url = f"https://api.github.com/users/{username}/repos"
-
     try:
-        # Use proxies if available
-        if proxies:
-            response = requests.get(url, proxies=proxies)
-        else:
-            response = requests.get(url)
-
-        # Handle the response
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Failed to get repositories: {response.status_code} - {response.reason}")
+        response = requests.get(url, proxies=hexss.proxies)
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
-        print(f"Error while fetching repositories: {e}")
+        print(f"{RED}Failed to fetch repos for '{username}'{END}: {e}")
         return None
+
+
+if __name__ == '__main__':
+    from pprint import pprint
+
+    # clone_or_pull(r'C:\Users\c026730\Desktop\New folder (3)', 'https://github.com/hexs/play-manim.git')

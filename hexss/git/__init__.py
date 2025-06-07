@@ -1,6 +1,7 @@
 from typing import Optional, Union, List
 import os
 import time
+import fnmatch
 
 import hexss
 from hexss.constants import *
@@ -67,9 +68,9 @@ def pull(path: str, branch: str = "main") -> str:
         print(f"✅ {GREEN}Pull result{END}: {output}")
         return output
     except GitCommandError as e:
-        raise RuntimeError(f"Git pull failed: {e.stderr.strip()}") from e
+        raise RuntimeError(f"{RED}Git pull failed{END}: {e.stderr.strip()}") from e
     except Exception as e:
-        raise RuntimeError(f"Unexpected error during pull: {e}") from e
+        raise RuntimeError(f"{RED}Unexpected error during pull{END}: {e}") from e
 
 
 def clone_or_pull(path: str, url: Optional[str] = None, branch: str = "main") -> Union[Repo, str]:
@@ -109,15 +110,67 @@ def auto_pull(path: str, interval: int = 600, branch: str = "main") -> None:
         time.sleep(interval)
 
 
-def push_if_dirty(path: str, branch: str = "main", commit_message: Optional[str] = None) -> None:
+def status(path: str, file_patterns: Optional[List[str]] = None, filter_codes: str = 'MADRCU') -> str:
     """
-    Commit and push changes if the working tree is dirty.
+    Get the working tree status of the repository.
 
     Args:
         path (str): Path to Git repository.
-        branch (str): Target branch for push.
-        commit_message (Optional[str]): Custom commit message. Defaults to auto-generated.
+        file_patterns (List[str]): List of filename patterns to include (e.g., ['*.py', 'docs/*']).
+        status_codes (str): Status types to include (e.g., 'MADRCU?' for modified, added, etc.).
+
+    Returns:
+        str: Comma-separated status summary.
     """
+    repo = Repo(path)
+    status_lines = repo.git.status('--porcelain').splitlines()
+
+    status_map = {
+        "M": "modify",
+        "A": "add",
+        "D": "delete",
+        "R": "rename",
+        "C": "copy",
+        "U": "update",
+        "?": "untrack"
+    }
+
+    details = []
+    for line in status_lines:
+        code = line[:2].strip()
+        file_path = line[3:].strip()
+        if code and code[0] in filter_codes:
+            if file_patterns:
+                if not any(fnmatch.fnmatch(file_path, pattern) for pattern in file_patterns):
+                    continue
+            status_key = status_map.get(code[0], code)
+            details.append(f"{status_key} {file_path}")
+    return ", ".join(details)
+
+
+def add(path: str, file_patterns: Optional[List[str]] = None) -> None:
+    repo = Repo(path)
+    git_root = repo.working_tree_dir
+
+    if file_patterns:
+        matched_files = []
+        for root, dirs, files in os.walk(git_root):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), git_root).replace("\\", "/")
+                if any(fnmatch.fnmatch(rel_path, pattern) for pattern in file_patterns):
+                    matched_files.append(rel_path)
+        if matched_files:
+            repo.index.add(matched_files)
+            print(f"✅ Staged files: {', '.join(matched_files)}")
+        else:
+            print("⚠️ No files matched the given patterns.")
+    else:
+        repo.git.add(A=True)
+        print("✅ Staged all changes.")
+
+
+def push_if_dirty(path: str, file_patterns: Optional[List[str]] = None, branch: str = "main",
+                  commit_message: Optional[str] = None) -> None:
     try:
         repo = Repo(path)
     except InvalidGitRepositoryError:
@@ -127,11 +180,11 @@ def push_if_dirty(path: str, branch: str = "main", commit_message: Optional[str]
         print(f"{GREEN}Working tree clean; no changes to push.{END}")
         return
 
-    repo.git.add(A=True)
-    modified = [item.a_path for item in repo.index.diff(None)]
-    msg = commit_message or f"Auto-update: {', '.join(modified)}"
+    add(path, file_patterns)
+    msg = commit_message or f"Auto-update: {status(path, file_patterns)}"
     repo.index.commit(msg)
     print(f"{PINK}Committed changes{END}: {msg}")
+
     origin = repo.remote(name="origin")
     push_info = origin.push(branch)
     for info in push_info:
@@ -141,16 +194,6 @@ def push_if_dirty(path: str, branch: str = "main", commit_message: Optional[str]
 
 
 def fetch_repositories(username: str) -> Optional[List[dict]]:
-    """
-    Fetch public repositories of a GitHub user.
-
-    Args:
-        username (str): GitHub username.
-        use_proxy (bool): Whether to route through configured proxies.
-
-    Returns:
-        Optional[List[dict]]: List of repo data or None on failure.
-    """
     if not username:
         raise ValueError("GitHub username must be provided.")
 
@@ -165,6 +208,6 @@ def fetch_repositories(username: str) -> Optional[List[dict]]:
 
 
 if __name__ == '__main__':
-    from pprint import pprint
-
-    # clone_or_pull(r'C:\Users\c026730\Desktop\New folder (3)', 'https://github.com/hexs/play-manim.git')
+    path = r'C:\Users\c026730\Desktop\func'
+    clone_or_pull(path, 'https://github.com/hexs/func.git')
+    push_if_dirty(path, ['img/*', '*.txt'])

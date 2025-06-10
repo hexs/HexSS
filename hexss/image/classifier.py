@@ -10,31 +10,39 @@ import cv2
 
 
 class Classification:
+    __slots__ = ('predictions', 'class_names', 'idx', 'name', 'conf', 'mapping_name')
+
     def __init__(
             self,
             predictions: np.ndarray,
-            class_names: Optional[List[str]],
-    ):
-        self.predictions = predictions
+            class_names: List[str],
+            mapping: Optional[Dict[str, List[str]]] = None
+    ) -> None:
+        self.predictions = predictions.astype(np.float64)
         self.class_names = class_names
-
-        self.idx = int(np.argmax(self.predictions))
-        self.name = self.class_names[self.idx]
+        self.idx = int(self.predictions.argmax())
+        self.name = class_names[self.idx]
         self.conf = float(self.predictions[self.idx])
+
+        self.mapping_name: Optional[str] = None
+        for group, names in mapping.items() or {}:
+            if self.name in names:
+                self.mapping_name = group
+                break
 
     def expo_preds(self, base: float = math.e) -> np.ndarray:
         """
         Exponentiate predictions by `base` and normalize to sum=1.
         """
-        exps = np.power(base, self.predictions.astype(np.float64))
-        return exps / exps.sum()
+        e = np.power(base, self.predictions)
+        return e / e.sum()
 
     def softmax_preds(self) -> np.ndarray:
         """
         Standard softmax over predictions.
         """
-        z = self.predictions.astype(np.float64)
-        e = np.exp(z - np.max(z))
+        z = self.predictions - np.max(self.predictions)
+        e = np.exp(z)
         return e / e.sum()
 
 
@@ -42,34 +50,34 @@ class Classifier:
     """
     Wraps a Keras model for image classification.
     """
+    __slots__ = ('model', 'class_names', 'img_size')
 
     def __init__(
             self,
             model_path: Union[Path, str],
-            json_data: Optional[Dict] = None,
-    ):
+            json_data: Optional[Dict] = None
+    ) -> None:
         model_path = Path(model_path)
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+
         try:
             from keras.models import load_model
+            self.model = load_model(model_path)
         except ImportError:
-            hexss.check_packages('tensorflow', auto_install=True)
             from keras.models import load_model  # type: ignore
-
-        self.model = load_model(model_path)
-        self._load_metadata(model_path, json_data)
-
-    def _load_metadata(
-            self,
-            model_path: Path,
-            json_data: Optional[Dict]
-    ) -> None:
+            hexss.check_packages('tensorflow', auto_install=True)
+            self.model = load_model(model_path)
         if json_data is None:
             json_path = model_path.with_suffix('.json')
+            if not json_path.exists():
+                raise FileNotFoundError(f"JSON metadata missing: {json_path}")
             json_data = json_load(json_path)
 
-        # Backwards compatibility
+        ############################ for support old data ############################
         if 'model_class_names' in json_data and 'class_names' not in json_data:
             json_data['class_names'] = json_data.pop('model_class_names')
+        ###############################################################################
 
         # Defaults
         json_data.setdefault('img_size', (180, 180))
@@ -101,7 +109,8 @@ class Classifier:
 
     def classify(
             self,
-            im: Union[Image, PILImage.Image, np.ndarray]
+            im: Union[Image, PILImage.Image, np.ndarray],
+            mapping: Optional[Dict[str, List[str]]] = None
     ) -> Classification:
         """
         Run a forward pass and return a Classification.
@@ -111,18 +120,16 @@ class Classifier:
         return Classification(
             predictions=preds,
             class_names=self.class_names,
+            mapping=mapping
         )
 
 
 class MultiClassifier:
-    """
-    Holds multiple Classifier instances and classifies predefined regions.
-    """
-
     def __init__(self, base_path: Union[Path, str]):
         base_path = Path(base_path)
         config = json_load(base_path / 'frames pos.json')
         self.frames = config['frames']
+        self.classifications: Dict[str, Classification] = {}
 
         ############################ for support old data ############################
         for frame in self.frames.values():
@@ -143,17 +150,12 @@ class MultiClassifier:
             self,
             im: Union[Image, PILImage.Image, np.ndarray]
     ) -> Dict[str, Classification]:
-        """
-        Crop each normalized frame region and classify.
-
-        Returns a dict mapping frame keys to Classification.
-        """
         img = Image(im)
-        results: Dict[str, Classification] = {}
-
+        self.classifications: Dict[str, Classification] = {}
         for key, frame in self.frames.items():
             model_name = frame['model']
-            crop_im = img.crop(xywhn=frame['xywhn'])
-            results[key] = self.models[model_name].classify(crop_im)
-
-        return results
+            xywhn = frame['xywhn']
+            mapping = frame['resultMapping']
+            crop_im = img.crop(xywhn=xywhn)
+            self.classifications[key] = self.models[model_name].classify(crop_im, mapping=mapping)
+        return self.classifications

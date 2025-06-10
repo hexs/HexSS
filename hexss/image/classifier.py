@@ -101,12 +101,12 @@ class Classifier:
 
     def classify(
             self,
-            image: Union[Image, PILImage.Image, np.ndarray]
+            im: Union[Image, PILImage.Image, np.ndarray]
     ) -> Classification:
         """
         Run a forward pass and return a Classification.
         """
-        batch = self._prepare_image(image)
+        batch = self._prepare_image(im)
         preds = self.model.predict(batch, verbose=0)[0]
         return Classification(
             predictions=preds,
@@ -123,6 +123,17 @@ class MultiClassifier:
         base_path = Path(base_path)
         config = json_load(base_path / 'frames pos.json')
         self.frames = config['frames']
+
+        ############################ for support old data ############################
+        for frame in self.frames.values():
+            if "xywh" in frame:
+                frame["xywhn"] = frame.pop("xywh")
+            if "model_used" in frame:
+                frame["model"] = frame.pop("model_used")
+            if "res_show" in frame:
+                frame["resultMapping"] = frame.pop("res_show")
+        ###############################################################################
+
         self.models: Dict[str, Classifier] = {}
         for name in config['models']:
             model_file = base_path / 'model' / f"{name}.h5"
@@ -130,22 +141,19 @@ class MultiClassifier:
 
     def classify_all(
             self,
-            image: Union[Image, PILImage.Image, np.ndarray]
+            im: Union[Image, PILImage.Image, np.ndarray]
     ) -> Dict[str, Classification]:
         """
         Crop each normalized frame region and classify.
 
         Returns a dict mapping frame keys to Classification.
         """
-        img = Image(image)
+        img = Image(im)
         results: Dict[str, Classification] = {}
 
         for key, frame in self.frames.items():
-            model_name = frame['model_used']
-            xywhn = np.array(frame['xywh'], dtype=float)
-            crop = img.crop(xywhn=xywhn)
-            results[key] = self.models[model_name].classify(crop)
+            model_name = frame['model']
+            crop_im = img.crop(xywhn=frame['xywhn'])
+            results[key] = self.models[model_name].classify(crop_im)
 
         return results
-
-

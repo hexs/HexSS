@@ -25,22 +25,20 @@ class DisplayCapture:
 
     def __init__(self, display: Optional[int] = None) -> None:
         self.monitors = win32api.EnumDisplayMonitors()
+        self.show_displays(display)
+
         if display is None:
-            self.show_displays()
             raise ValueError("Please specify a display index from the above list.")
 
         if not (0 <= display < len(self.monitors)):
-            self.show_displays()
             raise ValueError(
                 f"Display index must be between 0 and {len(self.monitors) - 1}, got {display}."
             )
-        self.show_displays(display)
 
         _, _, rect = self.monitors[display]
         self.left, self.top, self.right, self.bottom = rect
         self.width, self.height = self.right - self.left, self.bottom - self.top
         self.fps: float = 0.0
-        self.show_displays(display)
 
     @staticmethod
     def list_displays() -> Dict[int, Dict[str, Union[Tuple[int, int, int, int], Tuple[int, int, int, int]]]]:
@@ -57,7 +55,7 @@ class DisplayCapture:
         displays = self.list_displays()
         print(f"{BLUE.BOLD}Display Index : Coordinates{END}")
         for idx, coords in displays.items():
-            line = f"{idx:<2}: {coords['xyxy']}"
+            line = f"{idx:<14}: {coords['xyxy']}"
             print(f"{CYAN}{line}{END}" if idx == highlight_index else line)
 
     def capture(self) -> Image:
@@ -138,7 +136,7 @@ class WindowCapture:
         return hwnds
 
     def show_windows(self, highlight: Optional[int] = None) -> None:
-        print(f"{BLUE.BOLD}HWND     : Window Title{END}")
+        print(f"{BLUE.BOLD}HWND    : Window Title{END}")
         for handle, title in self.list_windows():
             line = f"{handle:<8}: {title}"
             print(f"{CYAN}{line}{END}" if handle == highlight else line)

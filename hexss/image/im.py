@@ -139,6 +139,71 @@ class Image:
             return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
         raise ValueError("Mode must be 'RGB' or 'BGR'")
 
+    def to_xyxy(
+            self,
+            xyxy: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywh: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xyxyn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywhn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None
+    ) -> Tuple[float, float, float, float]:
+        """
+        Converts various bounding box formats to (x1, y1, x2, y2) format.
+
+        Args:
+            xyxy: (x1, y1, x2, y2) absolute coordinates.
+            xywh: (x_center, y_center, width, height) absolute coordinates.
+            xyxyn: (x1, y1, x2, y2) normalized [0,1] coordinates.
+            xywhn: (x_center, y_center, width, height) normalized [0,1] coordinates.
+
+        Returns:
+            (x1, y1, x2, y2) absolute coordinates.
+
+        Raises:
+            ValueError: If not exactly one format is provided or if input is invalid.
+        """
+
+        inputs = [xyxy, xywh, xyxyn, xywhn]
+        provided = [v is not None for v in inputs]
+
+        # if sum(provided) != 1:
+        #     raise ValueError("Exactly one of xyxy, xywh, xyxyn, or xywhn must be provided.")
+
+        def as_tuple(val):
+            if isinstance(val, np.ndarray):
+                val = val.flatten()
+                if val.shape[0] != 4:
+                    raise ValueError("Input array must be of shape (4,) or (4,1)")
+                return tuple(map(float, val))
+            elif isinstance(val, (list, tuple)):
+                if len(val) != 4:
+                    raise ValueError("Input must be a tuple or list of length 4")
+                return tuple(map(float, val))
+            else:
+                raise ValueError("Input must be a tuple, list, or numpy ndarray of length 4")
+
+        if xyxy is not None:
+            result = as_tuple(xyxy)
+        elif xywh is not None:
+            xc, yc, w, h = as_tuple(xywh)
+            result = (xc - w / 2, yc - h / 2, xc + w / 2, yc + h / 2)
+        elif xyxyn is not None:
+            x1n, y1n, x2n, y2n = as_tuple(xyxyn)
+            w, h = self.size
+            result = (x1n * w, y1n * h, x2n * w, y2n * h)
+        elif xywhn is not None:
+            xcn, ycn, wn, hn = as_tuple(xywhn)
+            w, h = self.size
+            result = (
+                xcn * w - wn * w / 2,
+                ycn * h - hn * h / 2,
+                xcn * w + wn * w / 2,
+                ycn * h + hn * h / 2,
+            )
+        else:
+            raise RuntimeError("Unknown error in to_xyxy")
+
+        return result
+
     def overlay(
             self,
             overlay_img: Union[Self, np.ndarray, PILImage.Image],
@@ -214,47 +279,47 @@ class Image:
             inverted = img.point(lambda px: 255 - px)
         else:
             raise NotImplementedError(f"Inversion not implemented for mode {img.mode!r}")
-        return Image(inverted)
+        self.image = inverted
+        return self
 
     def filter(self, filter: Union[ImageFilter.Filter, Type[ImageFilter.Filter]]) -> Self:
-        return Image(self.image.filter(filter))
+        self.image = self.image.filter(filter)
+        return self
 
     def convert(self, mode: str, **kwargs) -> Self:
         if self.mode == 'RGBA' and mode == 'RGB':
             bg = PILImage.new('RGB', self.size, (255, 255, 255))
             bg.paste(self.image, mask=self.image.split()[3])
-            return Image(bg)
-        return Image(self.image.convert(mode, **kwargs))
+            self.image = bg
+        self.image = self.image.convert(mode, **kwargs)
+        return self
 
-    def rotate(self, angle: float, expand: bool = False, **kwargs) -> Self:
-        return Image(self.image.rotate(angle, expand=expand, **kwargs))
+    def rotate(
+            self,
+            angle: float,
+            resample: Resampling = Resampling.NEAREST,
+            expand: Union[int, bool] = False,
+            center: Tuple[float, float] | None = None,
+            translate: Tuple[int, int] | None = None,
+            fillcolor: Union[float, Tuple[float, ...], str] | None = None,
+    ) -> Self:
+        self.image = self.image.rotate(angle, resample, expand, center, translate, fillcolor)
+        return self
 
     def transpose(self, method: PILImage.Transpose) -> Self:
-        return Image(self.image.transpose(method))
+        self.image = self.image.transpose(method)
+        return self
 
-    def crop(self,
-             xyxy: Tuple[float, float, float, float] | np.ndarray = None,
-             xywh: Tuple[float, float, float, float] | np.ndarray = None,
-             xyxyn: Tuple[float, float, float, float] | np.ndarray = None,
-             xywhn: Tuple[float, float, float, float] | np.ndarray = None,
-             ) -> Self:
-        if xyxy is not None:
-            pass
-        elif xywh is not None:
-            xyxy = (xywh[0] - xywh[2] / 2, xywh[1] - xywh[3] / 2,
-                    xywh[0] + xywh[2] / 2, xywh[1] + xywh[3] / 2)
-        elif xyxyn is not None:
-            xyxy = (xyxyn[0] * self.size[0], xyxyn[1] * self.size[1],
-                    xyxyn[2] * self.size[0], xyxyn[3] * self.size[1])
-        elif xywhn is not None:
-            xyxy = (xywhn[0] * self.size[0] - xywhn[2] * self.size[0] / 2,
-                    xywhn[1] * self.size[1] - xywhn[3] * self.size[1] / 2,
-                    xywhn[0] * self.size[0] + xywhn[2] * self.size[0] / 2,
-                    xywhn[1] * self.size[1] + xywhn[3] * self.size[1] / 2)
-        else:
-            raise ValueError("At least one of xyxy, xywh, xyxyn, or xywhn must be provided")
-
-        return Image(self.image.crop(xyxy))
+    def crop(
+            self,
+            box: tuple[float, float, float, float] | None = None,
+            xyxy: Tuple[float, float, float, float] | np.ndarray = None,
+            xywh: Tuple[float, float, float, float] | np.ndarray = None,
+            xyxyn: Tuple[float, float, float, float] | np.ndarray = None,
+            xywhn: Tuple[float, float, float, float] | np.ndarray = None,
+    ) -> Self:
+        box = box or self.to_xyxy(xyxy, xywh, xyxyn, xywhn)
+        return Image(self.image.crop(box))
 
     def resize(
             self,
@@ -274,7 +339,8 @@ class Image:
                 size = (int(self.size[0] * percent), int(self.size[1] * percent))
             else:
                 raise ValueError(f"Invalid size string: {size!r}. Use format like '80%'")
-        return Image(self.image.resize(size=size, resample=resample, box=box, reducing_gap=reducing_gap))
+        self.image = self.image.resize(size=size, resample=resample, box=box, reducing_gap=reducing_gap)
+        return self
 
     def copy(self) -> Self:
         return Image(self.image.copy())
@@ -356,11 +422,16 @@ class ImageDraw:
 
     def rectangle(
             self,
-            xy: Coords,
+            xy: Coords = None,
             fill: _Ink = None,
             outline: _Ink = None,
             width: int = 1,
+            xyxy: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywh: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xyxyn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywhn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
     ) -> Self:
+        xy = xy or self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)
         self.draw.rectangle(self._translate(xy), fill=fill, outline=outline, width=width)
         return self
 

@@ -12,7 +12,7 @@ import requests
 from PIL._typing import Coords
 from PIL import Image as PILImage
 from PIL import ImageDraw as PILImageDraw
-from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont
+from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont, ImageEnhance
 from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize, SupportsArrayInterface
 from PIL.ImageDraw import _Ink
 
@@ -37,8 +37,11 @@ class Image:
             self.image = source.image.copy()
         elif isinstance(source, np.ndarray):
             self.image = self._from_numpy_array(source)
-        elif isinstance(source, (Path, str)) and Path(source).is_file():
-            self.image = self._from_file(source)
+        elif isinstance(source, (Path, str)):
+            if Path(source).is_file():
+                self.image = self._from_file(source)
+            else:
+                raise FileNotFoundError(f"File does not exist: {source}")
         elif isinstance(source, str) and source.startswith(("http://", "https://")):
             self.image = self._from_url(source)
         elif isinstance(source, bytes):
@@ -162,8 +165,8 @@ class Image:
             ValueError: If not exactly one format is provided or if input is invalid.
         """
 
-        inputs = [xyxy, xywh, xyxyn, xywhn]
-        provided = [v is not None for v in inputs]
+        # inputs = [xyxy, xywh, xyxyn, xywhn]
+        # provided = [v is not None for v in inputs]
 
         # if sum(provided) != 1:
         #     raise ValueError("Exactly one of xyxy, xywh, xyxyn, or xywhn must be provided.")
@@ -317,9 +320,44 @@ class Image:
             xywh: Tuple[float, float, float, float] | np.ndarray = None,
             xyxyn: Tuple[float, float, float, float] | np.ndarray = None,
             xywhn: Tuple[float, float, float, float] | np.ndarray = None,
+            shift: Tuple[float, float] = (0, 0),
     ) -> Self:
         box = box or self.to_xyxy(xyxy, xywh, xyxyn, xywhn)
+        box = np.tile(shift, 2) + box
         return Image(self.image.crop(box))
+
+    def brightness(self, factor):
+        '''
+        (factor > 1), e.g., 1.5 means 50% brighter
+        (factor < 1), e.g., 0.5 means 50% darker
+        '''
+        if factor == 1.0:
+            return self
+        enhancer = ImageEnhance.Brightness(self.image)
+        self.image = enhancer.enhance(factor)
+        return self
+
+    def contrast(self, factor):
+        '''
+        (factor > 1), e.g., 2.0 means double the contrast
+        (factor < 1), e.g., 0.5 means half the contrast
+        '''
+        if factor == 1.0:
+            return self
+        enhancer = ImageEnhance.Contrast(self.image)
+        self.image = enhancer.enhance(factor)
+        return self
+
+    def sharpness(self, factor):
+        '''
+        (factor > 1), e.g., 2.0 means double the sharpness
+        (factor < 1), e.g., 0.0 means a blurred image
+        '''
+        if factor == 1.0:
+            return self
+        enhancer = ImageEnhance.Sharpness(self.image)
+        self.image = enhancer.enhance(factor)
+        return self
 
     def resize(
             self,
@@ -346,6 +384,8 @@ class Image:
         return Image(self.image.copy())
 
     def save(self, fp: Union[str, Path, IO[bytes]], format: Optional[str] = None, **params: Any) -> Self:
+        if isinstance(fp, str) or isinstance(fp, Path):
+            Path(fp).parent.mkdir(parents=True, exist_ok=True)
         self.image.save(fp, format, **params)
         return self
 
@@ -458,8 +498,8 @@ class ImageDraw:
 
     def text(
             self,
-            xy: tuple[float, float],
-            text,
+            xy: tuple[float, float] = None,
+            text='',
             fill: _Ink = None,
             font=None,
             anchor: str = None,
@@ -471,9 +511,12 @@ class ImageDraw:
             stroke_width: float = 0,
             stroke_fill: _Ink = None,
             embedded_color: bool = False,
+            xyn=None,
             *args: Any,
             **kwargs: Any,
     ) -> Self:
+        if xyn is not None:
+            xy = np.array(xyn) * self.im.size
         xy = self._translate(xy)
         self.draw.text(
             xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing, align=align, direction=direction,

@@ -2,7 +2,7 @@ import os
 import sys
 import platform
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 
 def get_venv_dir() -> Optional[Path]:
@@ -135,6 +135,51 @@ def get_hexss_dir():
     return hexss_dir
 
 
+def shorten(
+        path: Union[Path, str],
+        num_leading: int = 3,
+        num_trailing: int = 4,
+        sep: str = ' ... '
+) -> str:
+    """
+    Shortens a path by keeping the first `num_leading` and last `num_trailing` parts
+
+    Args:
+        path: The path to shorten. Can be a Path object or a string.
+        num_leading: Number of leading path components to keep.
+        num_trailing: Number of trailing path components to keep.
+        sep: Separator string to use in place of omitted parts.
+
+    Returns:
+        A string representing the shortened path.
+    """
+    path = Path(path)
+    parts = path.parts
+
+    # If not enough parts to shorten, return the original path as string
+    if len(parts) <= num_leading + num_trailing:
+        return str(path)
+
+    # Leading
+    leading = Path(*parts[:num_leading])
+    # Trailing
+    trailing = Path(*parts[-num_trailing:])
+
+    # Special handling for Windows drive/root
+    if leading.drive:
+        if num_leading == 1:
+            leading_str = leading.drive + leading.root
+        else:
+            leading_str = leading.drive + leading.root + str(Path(*parts[1:num_leading]))
+    else:
+        leading_str = str(leading)
+
+    leading_str = leading_str.rstrip("\\/")
+
+    # Compose result
+    return f"{leading_str}{sep}{trailing}"
+
+
 if __name__ == "__main__":
     main_python_path = get_main_python_path()
     python_path = get_python_path()
@@ -152,3 +197,7 @@ if __name__ == "__main__":
     print("Ascended Path (2 levels up) :", ascended_path)
 
     print(sys.base_prefix)
+
+    path = Path(r'C:\Users\<user>\Desktop\folder\img_frame\ok\241209.png')
+    print(shorten(path))  # C:\Users\<user> ... folder\img_frame\ok\241209.png
+    print(shorten(path, 2, 3))  # C:\Users ... img_frame\ok\241209.png

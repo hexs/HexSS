@@ -7,5 +7,5 @@ from .func import get_image, get_image_from_cam, get_image_from_url, \
 
 from .im import PILImage, PILImageDraw
 from .im import Image, ImageDraw, ImageFilter, ImageFont, Transpose, Transform, Resampling, Dither, Palette, Quantize
-from .detector import Detector
-from .classifier import Classifier, MultiClassifier
+# from .detector import Detector
+# from .classifier import Classifier, MultiClassifier

@@ -414,7 +414,7 @@ class ImageDraw:
         self.origin = np.zeros(2, dtype=float)
         self.set_origin(origin)
 
-    def set_origin(self, origin: Union[str, Tuple[float, float]]) -> Self:
+    def set_origin(self, origin: str | tuple[float, float] | list[float]) -> Self:
         if isinstance(origin, str):
             mapping = {
                 'topleft': (0.0, 0.0),
@@ -430,11 +430,11 @@ class ImageDraw:
             self.origin = np.array(origin, dtype=float)
         return self
 
-    def set_abs_origin(self, abs_origin: Tuple[float, float]) -> Self:
+    def set_abs_origin(self, abs_origin: tuple[float, float] | list[float]) -> Self:
         self.origin = np.array(abs_origin) * self.im.size
         return self
 
-    def move_origin(self, xy: Tuple[float, float]):
+    def move_origin(self, xy: tuple[float, float] | list[float]):
         self.origin += np.array(xy)
         return self
 
@@ -466,10 +466,10 @@ class ImageDraw:
             fill: _Ink = None,
             outline: _Ink = None,
             width: int = 1,
-            xyxy: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
-            xywh: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
-            xyxyn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
-            xywhn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xyxy: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
+            xywh: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
+            xyxyn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
+            xywhn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
     ) -> Self:
         xy = xy or self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)
         self.draw.rectangle(self._translate(xy), fill=fill, outline=outline, width=width)
@@ -498,7 +498,7 @@ class ImageDraw:
 
     def text(
             self,
-            xy: tuple[float, float] = None,
+            xy: tuple[float, float] | list[float] | None = None,
             text='',
             fill: _Ink = None,
             font=None,

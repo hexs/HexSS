@@ -71,7 +71,7 @@ def missing_packages(*packages: str) -> List[str]:
 
     missing = []
     for req in packages:
-        match = re.match(r"([a-zA-Z0-9_-]+)([<>=!]*)([\dA-Za-z.+!_-]*)", req)
+        match = re.match(r"([a-zA-Z0-9_.-]+)([<>=!~]+)?(.*)", req)
         if not match:
             missing.append(req)
             continue
@@ -86,7 +86,7 @@ def missing_packages(*packages: str) -> List[str]:
             missing.append(req)
             continue
 
-        if not version_satisfies(installed_version, operator + version):
+        if not version_satisfies(installed_version, (operator or '') + (version or '')):
             missing.append(req)
     return missing
 
@@ -229,31 +229,31 @@ if __name__ == "__main__":
         "1.0post", "1.0.post", "1.0post1", "1.0-post", "1.0-post1", "1.0POST", "1.0.POST",
         "1.0POST1", "1.0.POST1", "1.0-POST", "1.0-POST1", "1.0-5",
         # Local version case insensitivity
-        "1.0+AbC"
+        "1.0+AbC",
         # Integer Normalization
         "1.01", "1.0a05", "1.0b07", "1.0c056", "1.0rc09", "1.0.post000", "1.1.dev09000", "00!1.2", "0100!0.0",
         # Various other normalizations
         "v1.0",
     ]
-    pkg_names = ['googletrans', 'opencv-python', 'aa_aa']
+    pkg_names = ['googletrans', 'opencv-python', 'aa_aa', 'discord.py']
 
-    test_results = 'OK'
+    test_results = f'{GREEN.BOLD}OK{END}'
     for pkg_name in pkg_names:
         for operator in operators:
             for version in versions:
                 req = f'{pkg_name}{operator}{version}'
-                match = re.match(r"([a-zA-Z0-9_-]+)([<>=!]*)([\dA-Za-z.+!_-]*)", req)
+                match = re.match(r"([a-zA-Z0-9_.-]+)([<>=!~]+)?(.*)", req)
 
                 pkg_name_, operator_, version_ = match.groups()
 
                 if pkg_name_ != pkg_name or operator_ != operator or version_ != version:
-                    print(req)
-                    print(pkg_name_)
-                    print(operator_)
-                    print(version_)
+                    print(f'req      = {req}')
+                    print(f'pkg_name = {pkg_name_}')
+                    print(f'operator = {operator_}')
+                    print(f'version  = {version_}')
                     print()
 
-                    test_results = 'not OK'
+                    test_results = f'{RED.BOLD}not OK{END}'
 
     print(f'missing packages, test results are {test_results}')
 

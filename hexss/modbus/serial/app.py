@@ -1,10 +1,7 @@
 import json
-import time
 import traceback
-from datetime import datetime
 from functools import wraps
-from typing import Dict, Any
-import struct
+
 import hexss
 
 hexss.check_packages('pandas', 'Flask', auto_install=True)
@@ -115,7 +112,6 @@ def read_register_socket():
     def generate():
         last = None
         while True:
-            print(f'read_register_socket {slave}')
             robot.update_registers(slave, show_results=False)
             json_data = robot.to_json(slave).replace('\n', '').replace('  ', '')
             if json_data != last:
@@ -135,7 +131,6 @@ def current_position_socket():
     def generate():
         last_data = ''
         while True:
-            print('current_position_socket')
             out = {}
             for slave_id in range(num_slaves):
                 slave = robot.slaves[slave_id]

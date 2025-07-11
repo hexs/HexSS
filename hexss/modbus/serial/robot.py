@@ -1,7 +1,8 @@
 import json
 import time
+from functools import wraps
 from pprint import pprint
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from hexss import check_packages
 from hexss.numpy import split_int32_to_uint16, int16, int32
 
@@ -786,6 +787,9 @@ class Slave:
     def move(self, position: int):
         self.registers.PCMD.write(split_int32_to_uint16(position).tolist())
 
+    def move_to(self, row: int):
+        self.registers.POSR2.write([row])
+
     def is_moving(self) -> bool:
         return bool(self.registers.DSSE.get_bit(Signal.MOVE))
 
@@ -874,6 +878,43 @@ class Robot:
                 reg_just_val_dict[symbol] = {'val': reg.value}
             result[f"Slave {slave.id}"] = reg_just_val_dict if just_vas else reg_dict
         return json.dumps(result, indent=4)
+
+    def alarm_reset(self) -> None:
+        for slave in self.slaves:
+            slave.alarm_reset()
+
+    def servo(self, on: bool = True) -> None:
+        for slave in self.slaves:
+            slave.servo(on)
+
+    def pause(self, pause: bool = True) -> None:
+        for slave in self.slaves:
+            slave.pause(pause)
+
+    def home(self, alarm_reset=False, on_servo=False, unpause=False) -> None:
+        for slave in self.slaves:
+            slave.home(alarm_reset, on_servo, unpause)
+
+    def move_to(self, row: int):
+        for slave in self.slaves:
+            slave.move_to(row)
+
+    def is_any_moving(self):
+        return any(slave.is_moving() for slave in self.slaves)
+
+    def is_any_paused(self):
+        return any(slave.is_paused() for slave in self.slaves)
+
+    def is_any_servo_off(self):
+        return not all(slave.is_servo_on() for slave in self.slaves)
+
+    def wait_for_target(self) -> Optional[str]:
+        while self.is_any_moving():  # wait
+            while self.is_any_paused():
+                pass
+            if self.is_any_servo_off():
+                return 'servo off'
+        return None
 
 
 if __name__ == "__main__":

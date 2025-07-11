@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime
 from functools import wraps
 from typing import Dict, Any
-
+import struct
 import hexss
 
 hexss.check_packages('pandas', 'Flask', auto_install=True)
@@ -13,7 +13,7 @@ from flask import Flask, render_template, request, jsonify, abort, Response
 from werkzeug.exceptions import HTTPException
 from hexss import get_hostname
 from hexss.network import get_all_ipv4
-from robot import Robot
+from .robot import Robot
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -127,7 +127,7 @@ def read_register_socket():
     return Response(generate(), mimetype='text/event-stream')
 
 
-@app.route('/socket/current_position', methods=['GET'])
+@app.route('/api/socket/current_position', methods=['GET'])
 def current_position_socket():
     robot = app.config['robot']
     num_slaves = app.config.get('num_slaves', 1)

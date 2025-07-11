@@ -52,3 +52,35 @@ def split_int32_to_uint16(value: Union[np.int32, int, np.ndarray]) -> np.ndarray
     high = np.uint16(unsigned_value >> 16)
     low = np.uint16(unsigned_value & 0xFFFF)
     return np.array([high, low], dtype=np.uint16)
+
+
+def uint8(x: int) -> int:
+    return int(np.uint8(x & 0xFF))
+
+
+def uint16(x: int) -> int:
+    return int(np.uint16(x & 0xFFFF))
+
+
+def uint32(x: int) -> int:
+    return int(np.uint32(x & 0xFFFFFFFF))
+
+
+def int8(x: int) -> int:
+    return int(np.uint8(x & 0xFF).view(np.int8))
+
+
+def int16(x: int) -> int:
+    return int(np.uint16(x & 0xFFFF).view(np.int16))
+
+
+def int32(x: int) -> int:
+    return int(np.uint32(x & 0xFFFFFFFF).view(np.int32))
+
+
+if __name__ == '__main__':
+    x_list = [-2, 0, 2, 65534, 4294967294]
+    for x in x_list:
+        print(f"16 bit {x} -> {int16(x)}")
+        print(f"32 bit {x} -> {int32(x)}")
+        print()

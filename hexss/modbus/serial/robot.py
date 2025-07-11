@@ -3,7 +3,7 @@ import time
 from pprint import pprint
 from typing import List, Optional, Dict, Any
 from hexss import check_packages
-from hexss.numpy import split_int32_to_uint16
+from hexss.numpy import split_int32_to_uint16, int16, int32
 
 check_packages('pandas', 'pymodbus', 'Flask', 'pyserial', auto_install=True)
 
@@ -555,7 +555,8 @@ class Register:
         }
 
     def read(self) -> Optional[List[int]]:
-        resp = self.client.read_input_registers(self.address[0], count=len(self.address), slave=self.id + 1)
+        l = len(self.address)
+        resp = self.client.read_input_registers(self.address[0], count=l, slave=self.id + 1)
         if resp.isError():
             print(f"Error reading SLAVE {self.id} @ 0x{self.address[0]:04X}: {resp}")
             self.value = None
@@ -564,7 +565,7 @@ class Register:
         value = 0
         for v in self.values:
             value = (value << 16) | v
-        self.value = value
+        self.value = int16(value) if l == 1 else int32(value)
         return self.values
 
     def write(self, values: List[int]) -> bool:

@@ -4,7 +4,7 @@ from hexss.constants.terminal_color import *
 from hexss.serial import get_comport
 from hexss.threading import Multithread
 from hexss.modbus.serial import app
-from robot import Robot
+from hexss.modbus.serial.robot import Robot
 
 
 def main():

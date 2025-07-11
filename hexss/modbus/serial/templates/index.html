@@ -66,50 +66,48 @@
     {% endfor %}
 </div>
 <script>
-    // Get min/max positions for each slave from template context
     const minMaxPosition = {{ min_max_position | tojson }};
     function getMinMax(slave) {
         return minMaxPosition[String(slave)] || [0, 4000];
     }
 
+    const numSlaves = {{ num_slaves }};
     document.querySelectorAll('.action-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const slave = parseInt(btn.getAttribute('data-slave'));
-        const action = btn.getAttribute('data-action');
-        const payload = { slave };
-        const valueAttr = btn.getAttribute('data-value');
+        btn.addEventListener('click', () => {
+            const slave = parseInt(btn.getAttribute('data-slave'));
+            const action = btn.getAttribute('data-action');
+            const payload = { slave };
+            const valueAttr = btn.getAttribute('data-value');
 
-        // Only move is handled below, so skip here
-        if (action === 'move') return;
+            if (action === 'move') return;
 
-        if (valueAttr !== null) {
-          // servo uses 'on', others use action name
-          const key = action === 'servo' ? 'on' : action;
-          payload[key] = (valueAttr === 'true');
-        }
+            if (valueAttr !== null) {
+                const key = action === 'servo' ? 'on' : action;
+                payload[key] = (valueAttr === 'true');
+            }
 
-        fetch(`/api/${action}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(json => {
-          if (json.status === 'success') {
-            console.log(`${action} on slave ${slave} succeeded`);
-          } else {
-            console.error(`${action} error: ${json.message}`);
-            alert(`Error: ${json.message}`);
-          }
-        })
-        .catch(err => {
-          console.error('Network error:', err);
-          alert('Network error');
+            fetch(`/api/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(json => {
+                if (json.status === 'success') {
+                    console.log(`${action} on slave ${slave} succeeded`);
+                } else {
+                    console.error(`${action} error: ${json.message}`);
+                    alert(`Error: ${json.message}`);
+                }
+            })
+            .catch(err => {
+                console.error('Network error:', err);
+                alert('Network error');
+            });
         });
-      });
     });
 
-    // -- Move slider logic --
+    // --- Move Slider Logic ---
     document.querySelectorAll('.move-slider').forEach(slider => {
         slider.addEventListener('input', function() {
             const slave = parseInt(this.getAttribute('data-slave'));
@@ -124,7 +122,8 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slave: slave, value: value })
-            }).then(res => res.json())
+            })
+            .then(res => res.json())
             .then(json => {
                 if (json.status !== 'success') {
                     alert(`Error: ${json.message}`);
@@ -133,7 +132,7 @@
         });
     });
 
-    // Decrease/Increase buttons logic (decrease LEFT, increase RIGHT)
+    // --- Decrease/Increase Buttons Logic ---
     document.querySelectorAll('.btn-dec').forEach(btn => {
         btn.addEventListener('click', function() {
             const slave = parseInt(this.getAttribute('data-slave'));
@@ -169,7 +168,7 @@
         });
     });
 
-    // Allow direct editing of current-position-value-x-slider and send move on <Enter>
+    // --- Direct Entry in Slider Number Input ---
     document.querySelectorAll('.current-position-value').forEach(input => {
         input.addEventListener('input', function() {
             let value = parseInt(this.value) || 0;
@@ -196,11 +195,11 @@
         });
     });
 
-    // Real-time status updates for position, emergency_status, servo_on, pause_status
-    const numSlaves = {{ num_slaves }};
+    // --- Real-time Status Updates ---
     function updateStatus(data) {
         for (let slave = 0; slave < numSlaves; slave++) {
             const info = data[slave] || {};
+            // Position
             const el = document.getElementById(`position-${slave}`);
             if (el) {
                 el.querySelector('.current-position-value').textContent =
@@ -212,7 +211,7 @@
             //    sliderPosBox.value = info.position;
             //}
 
-            // Emergency status
+            // Emergency
             const emergencyEl = document.getElementById(`emergency-${slave}`);
             if (emergencyEl) {
                 const val = info.emergency_status;
@@ -229,7 +228,7 @@
                     valSpan.textContent = "--";
                 }
             }
-            // Servo ON
+            // Servo
             const servoEl = document.getElementById(`servo-${slave}`);
             if (servoEl) {
                 const val = info.servo_on;
@@ -246,7 +245,7 @@
                     valSpan.textContent = "--";
                 }
             }
-            // Pause status
+            // Pause
             const pauseEl = document.getElementById(`pause-${slave}`);
             if (pauseEl) {
                 const val = info.pause_status;
@@ -266,8 +265,27 @@
         }
     }
 
-    // Connect to SSE endpoint
-    const evtSource = new EventSource('/socket/current_position');
+    // --- One-time SYNC: On first status update ---
+    const hasSynced = {};
+    const originalUpdateStatus = updateStatus;
+    window.updateStatus = function(data) {
+        for (let slave = 0; slave < numSlaves; slave++) {
+            const info = data[slave] || {};
+            if (!hasSynced[slave] && typeof info.position !== "undefined") {
+                const slider = document.getElementById(`move-slider-${slave}`);
+                const posInput = document.getElementById(`current-position-value-${slave}-slider`);
+                if (slider && posInput) {
+                    slider.value = info.position;
+                    posInput.value = info.position;
+                    hasSynced[slave] = true;
+                }
+            }
+        }
+        originalUpdateStatus(data);
+    };
+
+    // --- SSE Real-time Data Connection ---
+    const evtSource = new EventSource('/api/socket/current_position');
     evtSource.onmessage = function(event) {
         try {
             const data = JSON.parse(event.data);

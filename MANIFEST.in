@@ -8,3 +8,5 @@ include hexss/control_robot/static/*.css
 include hexss/control_robot/static/css/*.css
 
 include hexss/example/templates/index.html
+
+include hexss/modbus/serial/templates/*.html

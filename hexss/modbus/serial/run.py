@@ -3,7 +3,7 @@ from hexss.config import load_config
 from hexss.constants.terminal_color import *
 from hexss.serial import get_comport
 from hexss.threading import Multithread
-import app
+from hexss.modbus.serial import app
 from robot import Robot
 
 

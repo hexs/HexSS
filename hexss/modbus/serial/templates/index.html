@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Slave Control</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+{% include "header.html" %}
+<div class="container py-4">
+    <h1 class="mb-4">Slave Control Panel</h1>
+    {% for slave in range(num_slaves) %}
+    {% set min_pos = min_max_position.get(slave, (0, 4000))[0] %}
+    {% set max_pos = min_max_position.get(slave, (0, 4000))[1] %}
+    <div class="card mb-4" id="slave-card-{{ slave }}">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Slave {{ slave }}</strong>
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-info text-dark" id="position-{{ slave }}">
+                    Position: <span class="current-position-value" id="current-position-value-{{ slave }}">--</span>
+                </span>
+                <span class="badge bg-secondary" id="emergency-{{ slave }}">
+                    Emergency: <span class="emergency-value">--</span>
+                </span>
+                <span class="badge bg-secondary" id="servo-{{ slave }}">
+                    Servo: <span class="servo-value">--</span>
+                </span>
+                <span class="badge bg-secondary" id="pause-{{ slave }}">
+                    Pause: <span class="pause-value">--</span>
+                </span>
+            </div>
+        </div>
+        <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn btn-warning action-btn"
+                    data-slave="{{ slave }}" data-action="alarm_reset">Alarm Reset
+            </button>
+            <button class="btn btn-dark action-btn"
+                    data-slave="{{ slave }}" data-action="home">Home
+            </button>
+            <button class="btn btn-primary action-btn"
+                    data-slave="{{ slave }}" data-action="servo" data-value="true"> Servo On
+            </button>
+            <button class="btn btn-secondary action-btn"
+                    data-slave="{{ slave }}" data-action="servo" data-value="false">Servo Off
+            </button>
+            <button class="btn btn-danger action-btn"
+                    data-slave="{{ slave }}" data-action="pause" data-value="true"> Pause
+            </button>
+            <button class="btn btn-success action-btn"
+                    data-slave="{{ slave }}" data-action="pause" data-value="false"> Unpause
+            </button>
+            <div class="slidecontainer d-flex align-items-center" style="width:280px;max-width:98vw;">
+                <button class="btn btn-danger btn-dec" data-slave="{{ slave }}" style="width:36px;height:36px;">-
+                </button>
+                <input type="range" min="{{ min_pos }}" max="{{ max_pos }}" value="{{ min_pos }}"
+                       class="form-range move-slider mx-2" id="move-slider-{{ slave }}" data-slave="{{ slave }}"
+                       style="width:140px;">
+                <button class="btn btn-success btn-inc" data-slave="{{ slave }}" style="width:36px;height:36px;">+
+                </button>
+                <input class="current-position-value ms-2" id="current-position-value-{{ slave }}-slider"
+                       type="number" min="{{ min_pos }}" max="{{ max_pos }}" value="{{ min_pos }}">
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<script>
+    // Get min/max positions for each slave from template context
+    const minMaxPosition = {{ min_max_position | tojson }};
+    function getMinMax(slave) {
+        return minMaxPosition[String(slave)] || [0, 4000];
+    }
+
+    document.querySelectorAll('.action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const slave = parseInt(btn.getAttribute('data-slave'));
+        const action = btn.getAttribute('data-action');
+        const payload = { slave };
+        const valueAttr = btn.getAttribute('data-value');
+
+        // Only move is handled below, so skip here
+        if (action === 'move') return;
+
+        if (valueAttr !== null) {
+          // servo uses 'on', others use action name
+          const key = action === 'servo' ? 'on' : action;
+          payload[key] = (valueAttr === 'true');
+        }
+
+        fetch(`/api/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(json => {
+          if (json.status === 'success') {
+            console.log(`${action} on slave ${slave} succeeded`);
+          } else {
+            console.error(`${action} error: ${json.message}`);
+            alert(`Error: ${json.message}`);
+          }
+        })
+        .catch(err => {
+          console.error('Network error:', err);
+          alert('Network error');
+        });
+      });
+    });
+
+    // -- Move slider logic --
+    document.querySelectorAll('.move-slider').forEach(slider => {
+        slider.addEventListener('input', function() {
+            const slave = parseInt(this.getAttribute('data-slave'));
+            const value = parseInt(this.value);
+            const posInput = document.getElementById(`current-position-value-${slave}-slider`);
+            posInput.value = value;
+        });
+        slider.addEventListener('change', function() {
+            const slave = parseInt(this.getAttribute('data-slave'));
+            const value = parseInt(this.value);
+            fetch(`/api/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slave: slave, value: value })
+            }).then(res => res.json())
+            .then(json => {
+                if (json.status !== 'success') {
+                    alert(`Error: ${json.message}`);
+                }
+            });
+        });
+    });
+
+    // Decrease/Increase buttons logic (decrease LEFT, increase RIGHT)
+    document.querySelectorAll('.btn-dec').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const slave = parseInt(this.getAttribute('data-slave'));
+            const [minPos, maxPos] = getMinMax(slave);
+            const slider = document.getElementById(`move-slider-${slave}`);
+            const posInput = document.getElementById(`current-position-value-${slave}-slider`);
+            let value = parseInt(slider.value) || minPos;
+            value = Math.max(value - 1, minPos);
+            slider.value = value;
+            posInput.value = value;
+            fetch(`/api/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slave: slave, value: value })
+            });
+        });
+    });
+    document.querySelectorAll('.btn-inc').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const slave = parseInt(this.getAttribute('data-slave'));
+            const [minPos, maxPos] = getMinMax(slave);
+            const slider = document.getElementById(`move-slider-${slave}`);
+            const posInput = document.getElementById(`current-position-value-${slave}-slider`);
+            let value = parseInt(slider.value) || minPos;
+            value = Math.min(value + 1, maxPos);
+            slider.value = value;
+            posInput.value = value;
+            fetch(`/api/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slave: slave, value: value })
+            });
+        });
+    });
+
+    // Allow direct editing of current-position-value-x-slider and send move on <Enter>
+    document.querySelectorAll('.current-position-value').forEach(input => {
+        input.addEventListener('input', function() {
+            let value = parseInt(this.value) || 0;
+            const slave = parseInt(this.id.match(/current-position-value-(\d+)-slider/)[1]);
+            const [minPos, maxPos] = getMinMax(slave);
+            value = Math.max(minPos, Math.min(maxPos, value));
+            this.value = value;
+            document.getElementById(`move-slider-${slave}`).value = value;
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === "Enter") {
+                let value = parseInt(this.value) || 0;
+                const slave = parseInt(this.id.match(/current-position-value-(\d+)-slider/)[1]);
+                const [minPos, maxPos] = getMinMax(slave);
+                value = Math.max(minPos, Math.min(maxPos, value));
+                this.value = value;
+                document.getElementById(`move-slider-${slave}`).value = value;
+                fetch(`/api/move`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slave: slave, value: value })
+                });
+            }
+        });
+    });
+
+    // Real-time status updates for position, emergency_status, servo_on, pause_status
+    const numSlaves = {{ num_slaves }};
+    function updateStatus(data) {
+        for (let slave = 0; slave < numSlaves; slave++) {
+            const info = data[slave] || {};
+            const el = document.getElementById(`position-${slave}`);
+            if (el) {
+                el.querySelector('.current-position-value').textContent =
+                    typeof info.position !== "undefined" ? info.position : '--';
+            }
+            // Update slider current pos box
+            //const sliderPosBox = document.getElementById(`current-position-value-${slave}-slider`);
+            //if (sliderPosBox && typeof info.position !== "undefined") {
+            //    sliderPosBox.value = info.position;
+            //}
+
+            // Emergency status
+            const emergencyEl = document.getElementById(`emergency-${slave}`);
+            if (emergencyEl) {
+                const val = info.emergency_status;
+                const badge = emergencyEl;
+                const valSpan = badge.querySelector('.emergency-value');
+                if (val === true) {
+                    badge.className = "badge bg-danger";
+                    valSpan.textContent = "EMERGENCY";
+                } else if (val === false) {
+                    badge.className = "badge bg-success";
+                    valSpan.textContent = "Normal";
+                } else {
+                    badge.className = "badge bg-secondary";
+                    valSpan.textContent = "--";
+                }
+            }
+            // Servo ON
+            const servoEl = document.getElementById(`servo-${slave}`);
+            if (servoEl) {
+                const val = info.servo_on;
+                const badge = servoEl;
+                const valSpan = badge.querySelector('.servo-value');
+                if (val === true) {
+                    badge.className = "badge bg-primary";
+                    valSpan.textContent = "ON";
+                } else if (val === false) {
+                    badge.className = "badge bg-secondary";
+                    valSpan.textContent = "OFF";
+                } else {
+                    badge.className = "badge bg-secondary";
+                    valSpan.textContent = "--";
+                }
+            }
+            // Pause status
+            const pauseEl = document.getElementById(`pause-${slave}`);
+            if (pauseEl) {
+                const val = info.pause_status;
+                const badge = pauseEl;
+                const valSpan = badge.querySelector('.pause-value');
+                if (val === true) {
+                    badge.className = "badge bg-warning text-dark";
+                    valSpan.textContent = "PAUSED";
+                } else if (val === false) {
+                    badge.className = "badge bg-success";
+                    valSpan.textContent = "Running";
+                } else {
+                    badge.className = "badge bg-secondary";
+                    valSpan.textContent = "--";
+                }
+            }
+        }
+    }
+
+    // Connect to SSE endpoint
+    const evtSource = new EventSource('/socket/current_position');
+    evtSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            updateStatus(data);
+        } catch (e) {
+            console.error("Failed to parse current_position data", e, event.data);
+        }
+    };
+</script>
+</body>
+</html>

@@ -135,7 +135,7 @@ def current_position_socket():
             for slave_id in range(num_slaves):
                 slave = robot.slaves[slave_id]
                 out[slave_id] = {
-                    'position': slave.get_position(),
+                    'position': slave.get_current_position(),
                     'emergency_status': slave.is_emergency(),
                     'servo_on': slave.is_servo_on(),
                     'pause_status': slave.is_paused()

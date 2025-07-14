@@ -1,10 +1,10 @@
 import json
+import math
 import time
-from functools import wraps
-from pprint import pprint
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from hexss import check_packages
 from hexss.numpy import split_int32_to_uint16, int16, int32
+from hexss.num import unpack_16bit, pack_16bit
 
 check_packages('pandas', 'pymodbus', 'Flask', 'pyserial', auto_install=True)
 
@@ -71,13 +71,6 @@ REGISTERS: Dict[int, Dict[str, Any]] = {
     0x010E: {
         'symbol': 'CLBS', 'name': 'Load cell calibration status', 'description': '',
         'signals': {}
-    },
-
-    0x0400: {
-        'symbol': 'CPOS', 'name': 'current_position', 'description': '',
-    },
-    0x0401: {
-        'symbol': 'CPOS', 'name': 'current_position', 'description': '',
     },
 
     # 4.3.2 Details of Modbus Registers (page 35/388)
@@ -168,6 +161,23 @@ REGISTERS: Dict[int, Dict[str, Any]] = {
                     0: {'symbol': 'PC1', 'name': 'Position command bit 1', 'description': '-'}
                     }
     },
+    0x1000: {'name': 'Target position 0', 'symbol': 'PCMD0'},
+    0x1001: {'name': 'Target position 0', 'symbol': 'PCMD0'},
+    0x1002: {'name': 'Positioning band 0', 'symbol': 'INP0'},
+    0x1003: {'name': 'Positioning band 0', 'symbol': 'INP0'},
+    0x1004: {'name': 'Speed command 0', 'symbol': 'VCMD0'},
+    0x1005: {'name': 'Speed command 0', 'symbol': 'VCMD0'},
+    0x1006: {'name': 'Individual zone boundary + 0', 'symbol': 'ZNMP0'},
+    0x1007: {'name': 'Individual zone boundary + 0', 'symbol': 'ZNMP0'},
+    0x1008: {'name': 'Individual zone boundary - 0', 'symbol': 'ZNLP0'},
+    0x1009: {'name': 'Individual zone boundary - 0', 'symbol': 'ZNLP0'},
+    0x100A: {'name': 'Acceleration command 0', 'symbol': 'ACMD0'},
+    0x100B: {'name': 'Deceleration command 0', 'symbol': 'DCMD0'},
+    0x100C: {'name': 'Push-current limiting value 0', 'symbol': 'PPOW0'},
+    0x100D: {'name': 'Load current threshold 0', 'symbol': 'LPOW0'},
+    0x100E: {'name': 'Control flag specification 0', 'symbol': 'CTLF0'},
+
+    # 4000 to 83FF: Reserved for system
     0x8400: {
         'name': 'Total moving count', 'symbol': 'TLMC', 'description': '-', 'signals': {}
     },
@@ -535,7 +545,7 @@ class Register:
         self.name = name
         self.signals = signals
         self.description = description
-        self.values: List[int] = [0, 0]
+        self.values: List[int] = [0 for _ in address]
         self.value: Optional[int] = None
         self.client = client
         self.id = slave_id
@@ -556,25 +566,28 @@ class Register:
         }
 
     def read(self) -> Optional[List[int]]:
-        l = len(self.address)
-        resp = self.client.read_input_registers(self.address[0], count=l, slave=self.id + 1)
+        resp = self.client.read_input_registers(self.address[0], count=len(self.address), slave=self.id + 1)
         if resp.isError():
             print(f"Error reading SLAVE {self.id} @ 0x{self.address[0]:04X}: {resp}")
             self.value = None
             return None
         self.values = resp.registers
-        value = 0
-        for v in self.values:
-            value = (value << 16) | v
-        self.value = int16(value) if l == 1 else int32(value)
+        self.value = unpack_16bit(self.values)
         return self.values
 
     def write(self, values: List[int]) -> bool:
         resp = self.client.write_registers(self.address[0], values=values, slave=self.id + 1)
         if resp.isError():
-            print(f"Error writing SLAVE {self.id} @ 0x{self.address[0]:}: {resp}")
+            print(f"Error writing SLAVE {self.id} @ 0x{self.address[0]:04X}: {resp}")
             return False
         return True
+
+    def read_value(self) -> Optional[int]:
+        self.read()
+        return self.value
+
+    def write_value(self, value: int) -> None:
+        self.write(pack_16bit(value, len(self.address)))
 
     def get_bit(self, bit: int) -> bool:
         self.read()
@@ -628,7 +641,6 @@ class Registers:
         # 'PEND': [0x010C],
         # 'CEND': [0x010D],
         # 'CLBS': [0x010E],
-        'CPOS': [0x0400, 0x0401],
         # 'ALA0': [0x0500, 0x0501],
         # 'ALC0': [0x0503],
         # 'ALT0': [0x0504, 0x0505],
@@ -639,7 +651,7 @@ class Registers:
         # 'ODOM': [0x8402, 0x8403],
         # 'TIMN': [0x8422],
         # 'TFAN': [0x842E],
-        # 'PNOW': [0x9000, 0x9001],
+        'PNOW': [0x9000, 0x9001],
         # 'ALMC': [0x9002],
         # 'DIPM': [0x9003],
         # 'DOPM': [0x9004],
@@ -682,7 +694,6 @@ class Registers:
     PEND: Register = None
     CEND: Register = None
     CLBS: Register = None
-    CPOS: Register = None
     ALA0: Register = None
     ALC0: Register = None
     ALT0: Register = None
@@ -753,10 +764,21 @@ class Slave:
         self.client = client
         self.registers: Registers = _populate_registers(self.client, self.id)
 
+    def read_register(self, address: int, count: int = 1) -> Optional[int]:
+        resp = self.client.read_input_registers(address, count=count, slave=self.id + 1)
+        if resp.isError():
+            print(f"Error reading SLAVE {self.id} @ 0x{address:04X}: {resp}")
+            return None
+        values = resp.registers
+        value = 0
+        for v in values:
+            value = (value << 16) | v
+        value = int16(value) if count == 1 else int32(value)
+        return value
+
     def update_registers(self) -> None:
         for symbol in Registers.ADDRESS_DATA.keys():
-            reg: Register = getattr(self.registers, symbol)
-            reg.read()
+            getattr(self.registers, symbol).read()
 
     def alarm_reset(self) -> None:
         self.registers.DRG1.set_bit(Signal.ALRS)
@@ -774,21 +796,29 @@ class Slave:
         else:
             self.registers.DRG1.reset_bit(Signal.STP)
 
-    def home(self, alarm_reset=False, on_servo=False, unpause=False) -> None:
-        if alarm_reset:
-            self.alarm_reset()
-        if on_servo:
-            self.servo(True)
-        if unpause:
-            self.pause(False)
+    def home(self, alarm_reset: bool = False, servo_on: bool = False, unpause: bool = False) -> None:
+        if alarm_reset: self.alarm_reset()
+        if servo_on: self.servo(True)
+        if unpause: self.pause(False)
         self.registers.DRG1.set_bit(Signal.HOME)
         self.registers.DRG1.reset_bit(Signal.HOME)
 
-    def move(self, position: int):
+    def move(self, position: int) -> None:
         self.registers.PCMD.write(split_int32_to_uint16(position).tolist())
 
-    def move_to(self, row: int):
+    def move_to(self, row: int) -> None:
         self.registers.POSR2.write([row])
+
+    def wait(self, error_emergency: bool = True, error_servo_off: bool = True,
+             error_paused: bool = False) -> Optional[str]:
+        while self.is_moving():
+            if self.is_emergency() and error_emergency:
+                return 'emergency'
+            if self.is_servo_off() and error_servo_off:
+                return 'servo off'
+            if self.is_paused() and error_paused:
+                return 'paused'
+        return None
 
     def is_moving(self) -> bool:
         return bool(self.registers.DSSE.get_bit(Signal.MOVE))
@@ -799,12 +829,28 @@ class Slave:
     def is_servo_on(self) -> bool:
         return bool(self.registers.DSS1.get_bit(Signal.SON))
 
-    def is_emergency(self) -> bool:
-        return bool(self.registers.DSS1.get_bit(15))
+    def is_servo_off(self) -> bool:
+        return not self.is_servo_on()
 
-    def get_position(self) -> int:
-        self.registers.CPOS.read()
-        return self.registers.CPOS.value
+    def is_emergency(self) -> bool:
+        return bool(self.registers.DSS1.get_bit(Signal.EMG))
+
+    def get_current_position(self) -> int:
+        self.registers.PNOW.read()
+        return self.registers.PNOW.value
+
+    def get_target_position(self, row: Optional[int] = None) -> int:
+        if row is None:
+            self.registers.PCMD.read()
+            return self.registers.PCMD.value
+        else:
+            return self.read_register(0x1000 + 16 * row, count=2)
+
+    def set_target_position(self, pos: int) -> None:
+        self.registers.PCMD.write_value(pos)
+
+    def get_distance(self, row: Optional[int] = None) -> int:
+        return abs(self.get_target_position(row) - self.get_current_position())
 
 
 class Robot:
@@ -823,7 +869,7 @@ class Robot:
         if self.client:
             self.client.close()
 
-    def update_registers(self, slave_id=None, show_results: bool = False) -> None:
+    def update_registers(self, slave_id: Optional[int] = None, show_results: bool = False) -> None:
         def showbin(n):
             b = f"{n:032b}"
             left = b[:16]
@@ -848,7 +894,8 @@ class Robot:
                     txt += f'\t{YELLOW}{showbin(reg.value)} {CYAN}{reg.symbol}: {reg.value}{END}\n'
                 print(txt)
 
-    def to_json(self, slave_id=None, just_vas: bool = False) -> str:
+    def to_json(self, slave_id: Optional[int] = None, just_vals: bool = False) -> str:
+        # get all self.slaves if slave_id is None
         result: Dict[str, Any] = {}
         for slave in self.slaves:
             if slave_id and slave_id != slave.id:
@@ -876,7 +923,7 @@ class Robot:
                     'signals': signals_dict
                 }
                 reg_just_val_dict[symbol] = {'val': reg.value}
-            result[f"Slave {slave.id}"] = reg_just_val_dict if just_vas else reg_dict
+            result[f"Slave {slave.id}"] = reg_just_val_dict if just_vals else reg_dict
         return json.dumps(result, indent=4)
 
     def alarm_reset(self) -> None:
@@ -891,7 +938,7 @@ class Robot:
         for slave in self.slaves:
             slave.pause(pause)
 
-    def home(self, alarm_reset=False, on_servo=False, unpause=False) -> None:
+    def home(self, alarm_reset: bool = False, on_servo: bool = False, unpause: bool = False) -> None:
         for slave in self.slaves:
             slave.home(alarm_reset, on_servo, unpause)
 
@@ -899,22 +946,25 @@ class Robot:
         for slave in self.slaves:
             slave.move_to(row)
 
-    def is_any_moving(self):
-        return any(slave.is_moving() for slave in self.slaves)
-
-    def is_any_paused(self):
-        return any(slave.is_paused() for slave in self.slaves)
-
-    def is_any_servo_off(self):
-        return not all(slave.is_servo_on() for slave in self.slaves)
-
-    def wait_for_target(self) -> Optional[str]:
-        while self.is_any_moving():  # wait
+    def wait(self) -> Optional[str]:
+        while self.is_any_moving():
             while self.is_any_paused():
                 pass
             if self.is_any_servo_off():
                 return 'servo off'
         return None
+
+    def get_distance(self, row: Optional[int] = None):
+        return math.sqrt(sum((slave.get_distance(row)) ** 2 for slave in self.slaves))
+
+    def is_any_moving(self) -> bool:
+        return any(slave.is_moving() for slave in self.slaves)
+
+    def is_any_paused(self) -> bool:
+        return any(slave.is_paused() for slave in self.slaves)
+
+    def is_any_servo_off(self) -> bool:
+        return not all(slave.is_servo_on() for slave in self.slaves)
 
 
 if __name__ == "__main__":
@@ -933,26 +983,54 @@ if __name__ == "__main__":
     robot.update_registers()
     print(robot.to_json())
 
-    # test move
+    # setup slave and reset alarm
     slave = robot.slaves[0]
     slave.alarm_reset()
+
+    # on servo
+    if robot.is_any_servo_off():
+        robot.alarm_reset()
+        robot.servo(True)
+
+    # unpause
+    if robot.is_any_paused():
+        robot.pause(False)
+
+    # test move and wait (1)
+    slave.move_to(0)
+    while slave.is_moving(): pass
+
+    # test move and wait (2)
     slave.home()
+    status = slave.wait()
+    if status: print(f'{RED}{status}{END}')
 
-    while True:  # wait
-        if not slave.is_moving():
-            break
-        while slave.is_paused():
-            time.sleep(0.1)
-        if not slave.is_servo_on():
-            break
-        time.sleep(0.1)
-
+    # test move and wait (3)
     stop = False
-    for pos in [5000, 0, 2000, 0, 5000, 2000]:
+    for pos in [40000, 0, 40000, 0, 40000]:
+        print(pos)
         slave.move(pos)
-        while slave.is_moving():  # wait
+
+        # status = slave.wait()
+        # if status: print(f'{RED}{status}{END}')
+        # if status == 'servo off':
+        #     stop = True
+        #     break
+        # if stop:
+        #     break
+        # time.sleep(0.5)
+
+        ... or ...
+
+        while True:
+            slave.registers.PNOW.read()
+            slave.registers.PCMD.read()
+            print(f'{slave.registers.PNOW.value} -> {slave.registers.PCMD.value} | dist={slave.get_distance()}')
+
+            if not slave.is_moving():
+                break
             while slave.is_paused():
-                ...
+                pass
             if not slave.is_servo_on():
                 stop = True
                 break

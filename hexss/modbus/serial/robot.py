@@ -938,9 +938,9 @@ class Robot:
         for slave in self.slaves:
             slave.pause(pause)
 
-    def home(self, alarm_reset: bool = False, on_servo: bool = False, unpause: bool = False) -> None:
+    def home(self, alarm_reset: bool = False, servo_on: bool = False, unpause: bool = False) -> None:
         for slave in self.slaves:
-            slave.home(alarm_reset, on_servo, unpause)
+            slave.home(alarm_reset, servo_on, unpause)
 
     def move_to(self, row: int):
         for slave in self.slaves:

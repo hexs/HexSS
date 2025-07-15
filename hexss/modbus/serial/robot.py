@@ -533,12 +533,12 @@ class Signal:
 class Register:
     def __init__(
             self, address: List[int], symbol: str, name: str, signals: Dict[int, Signal], description: str = '-',
-            client: ModbusSerialClient = None, slave_id: int = None
+            client: Optional[ModbusSerialClient] = None, slave_id: Optional[int] = None
     ):
         """
         address example = [36872, 36873]
         symbol example  = STAT
-        signals example = {31: Signal(15, BATL), 17: Signal(1, ASOF), 16: Signal(0, AEEP), 4: Signal(4, RMDS), 3: Signal(3, HEND), 2: Signal(2, SV), 1: Signal(1, SON), 0: Signal(0, MPOW)}
+        signals example = {31: Signal(15, BATL), 17: Signal(1, ASOF), ..., 1: Signal(1, SON), 0: Signal(0, MPOW)}
         """
         self.address = address
         self.symbol = symbol
@@ -733,7 +733,7 @@ class Registers:
     CTLF: Register = None
 
 
-def _populate_registers(client: ModbusSerialClient = None, slave_id: int = None) -> Registers:
+def _populate_registers(client: Optional[ModbusSerialClient] = None, slave_id: Optional[int] = None) -> Registers:
     reg_obj = Registers()
     for symbol, addrs in Registers.ADDRESS_DATA.items():
         name = None
@@ -809,8 +809,12 @@ class Slave:
     def move_to(self, row: int) -> None:
         self.registers.POSR2.write([row])
 
-    def wait(self, error_emergency: bool = True, error_servo_off: bool = True,
-             error_paused: bool = False) -> Optional[str]:
+    def wait(
+            self,
+            error_emergency: bool = True,
+            error_servo_off: bool = True,
+            error_paused: bool = False
+    ) -> Optional[str]:
         while self.is_moving():
             if self.is_emergency() and error_emergency:
                 return 'emergency'
@@ -871,6 +875,8 @@ class Robot:
 
     def update_registers(self, slave_id: Optional[int] = None, show_results: bool = False) -> None:
         def showbin(n):
+            if n is None:
+                return "| -- | -- |"
             b = f"{n:032b}"
             left = b[:16]
             right = b[16:]
@@ -946,12 +952,19 @@ class Robot:
         for slave in self.slaves:
             slave.move_to(row)
 
-    def wait(self) -> Optional[str]:
+    def wait(
+            self,
+            error_emergency: bool = True,
+            error_servo_off: bool = True,
+            error_paused: bool = False
+    ) -> Optional[str]:
         while self.is_any_moving():
-            while self.is_any_paused():
-                pass
-            if self.is_any_servo_off():
+            if self.is_any_emergency() and error_emergency:
+                return 'emergency'
+            if self.is_any_servo_off() and error_servo_off:
                 return 'servo off'
+            if self.is_any_paused() and error_paused:
+                return 'paused'
         return None
 
     def get_distance(self, row: Optional[int] = None):
@@ -965,6 +978,9 @@ class Robot:
 
     def is_any_servo_off(self) -> bool:
         return not all(slave.is_servo_on() for slave in self.slaves)
+
+    def is_any_emergency(self) -> bool:
+        return any(slave.is_emergency() for slave in self.slaves)
 
 
 if __name__ == "__main__":

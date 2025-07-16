@@ -7,6 +7,9 @@ include hexss/control_robot/static/*.js
 include hexss/control_robot/static/*.css
 include hexss/control_robot/static/css/*.css
 
+include hexss/draw_app/templates/*.html
+include hexss/draw_app/static/*.js
+
 include hexss/example/templates/index.html
 
 include hexss/modbus/serial/templates/*.html

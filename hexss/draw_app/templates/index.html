@@ -93,7 +93,7 @@
             margin-bottom: 10px;
         }
 
-        #groupSelect {
+        select {
             padding: 5px 10px;
             margin-bottom: 10px;
             font-size: 14px;
@@ -264,7 +264,6 @@
         <span id="mouse-pos">Mouse Pos: (0, 0)</span>
         <span id="scale">Scale: 1.00</span>
         <span id="offset">Offset: (0, 0)</span>
-
     </header>
 
     <aside class="page-sidebar content">
@@ -298,22 +297,12 @@
         <button id="playBtn">⏵</button>
         <button id="nextFrameBtn">⏩</button>
         <button id="forwardBtn">⏭</button>
-        <input
-                type="range"
-                id="frameSlider"
-                class="slider"
-                min="0"
-                max="100"
-                value="0"
-                aria-labelledby="frameNumber"
-        />
+        <input type="range" id="frameSlider" class="slider" min="0" max="100" value="0" aria-labelledby="frameNumber"/>
         <span id="frameNumber">Frame: 0 / 0</span>
     </footer>
 </div>
-
 <script type="module" src="/static/script.js"></script>
 <script type="module" src="/static/media_control.js"></script>
 <script type="module" src="/static/canvas.js"></script>
-
 </body>
 </html>

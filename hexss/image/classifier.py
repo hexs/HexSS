@@ -20,7 +20,7 @@ try:
     import keras
     from keras.models import load_model
 except ImportError:
-    hexss.check_packages('tensorflow', 'matplotlib', auto_install=True)
+    hexss.check_packages('tensorflow', 'keras', auto_install=True)
     import tensorflow as tf
     import keras
     from keras.models import load_model  # type: ignore

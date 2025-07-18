@@ -4,6 +4,11 @@ from hexss.image import Image
 from PIL import Image as PILImage
 import numpy as np
 
+try:
+    from ultralytics import YOLO
+except ImportError:
+    hexss.check_packages('ultralytics', auto_install=True)
+    from ultralytics import YOLO
 
 class Detection:
     def __init__(self, class_index: int, class_name: str, confidence: float,
@@ -47,12 +52,6 @@ class Detector:
         Args:
             model_path (Optional[str]): Path to the YOLO model. If None, loads the default YOLO model.
         """
-        try:
-            from ultralytics import YOLO
-        except ImportError:
-            hexss.check_packages('ultralytics', auto_install=True)
-            from ultralytics import YOLO
-
         # Load YOLO model
         self.model = YOLO(model_path) if model_path else YOLO()
         self.class_names: List[str] = []  # {0: 'person', 1: 'bicycle', 2: 'car', ...}

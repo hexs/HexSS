@@ -3,6 +3,7 @@ from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any, S
 from io import BytesIO
 
 import hexss
+from hexss.box import Box
 
 hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_install=True)
 
@@ -315,16 +316,31 @@ class Image:
 
     def crop(
             self,
-            box: tuple[float, float, float, float] | None = None,
+            box: Tuple[float, float, float, float] | None = None,
             xyxy: Tuple[float, float, float, float] | np.ndarray = None,
             xywh: Tuple[float, float, float, float] | np.ndarray = None,
             xyxyn: Tuple[float, float, float, float] | np.ndarray = None,
             xywhn: Tuple[float, float, float, float] | np.ndarray = None,
+            points: Optional[Sequence[Tuple[float, float]]] = None,
+            pointsn: Optional[Sequence[Tuple[float, float]]] = None,
             shift: Tuple[float, float] = (0, 0),
     ) -> Self:
-        box = box or self.to_xyxy(xyxy, xywh, xyxyn, xywhn)
-        box = np.tile(shift, 2) + box
-        return Image(self.image.crop(box))
+        if box is not None:
+            if not isinstance(box, Box):
+                return Image(self.image.crop(box))
+        else:
+            box = Box(self.size, xyxy=xyxy, xywh=xywh, xyxyn=xyxyn, xywhn=xywhn, points=points, pointsn=pointsn)
+        box.move(*shift, normalized=False)
+        if box.type == 'polygon':
+            img = self.numpy()
+            mask = np.zeros(img.shape[:2], dtype=np.uint8)
+            cv2.fillPoly(mask, [box.points_int32()], 255)
+            masked = cv2.bitwise_and(img, img, mask=mask)
+            x, y, w, h = cv2.boundingRect(box.points_int32())
+            cropped = masked[y:y + h, x:x + w]
+            return Image(cropped)
+        elif box.type == 'box':
+            return Image(self.image.crop(box.xyxy))
 
     def brightness(self, factor):
         '''
@@ -453,16 +469,19 @@ class ImageDraw:
 
     def line(
             self,
-            xy,
+            xy=None,
             fill=None,
             width: int = 0,
+            xyxy=None,
+            xyxyn=None,
     ) -> Self:
+        xy = xy or self.im.to_xyxy(xyxy, xyxyn)
         self.draw.line(self._translate(xy), fill=fill, width=width)
         return self
 
     def rectangle(
             self,
-            xy: Coords = None,
+            xy: Union[Coords,Box] = None,
             fill: _Ink = None,
             outline: _Ink = None,
             width: int = 1,
@@ -471,6 +490,8 @@ class ImageDraw:
             xyxyn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
             xywhn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
     ) -> Self:
+        if isinstance(xy, Box):
+            xy = xy.xyxy
         xy = xy or self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)
         self.draw.rectangle(self._translate(xy), fill=fill, outline=outline, width=width)
         return self
@@ -494,6 +515,18 @@ class ImageDraw:
             width: int = 1,
     ) -> Self:
         self.draw.ellipse(self._translate(xy), fill=fill, outline=outline, width=width)
+        return self
+
+    def polygon(
+            self,
+            xy: Union[Sequence[float], Box],
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        if isinstance(xy, Box):
+            xy = xy.points
+        self.draw.polygon(self._translate(xy), fill=fill, outline=outline, width=width)
         return self
 
     def text(
@@ -523,27 +556,4 @@ class ImageDraw:
             features=features, language=language, stroke_width=stroke_width, stroke_fill=stroke_fill,
             embedded_color=embedded_color, *args, **kwargs
         )
-        return self
-
-    def line_abs(
-            self,
-            xy,
-            fill=None,
-            width: int = 0,
-    ) -> Self:
-        arr_xy = np.array(xy, dtype=float)
-        origin_broadcast = np.resize(self.im.size, arr_xy.shape)
-        xy = (arr_xy * origin_broadcast).tolist()
-        self.line(xy, fill=fill, width=width)
-        return self
-
-    def rectangle_abs(
-            self,
-            xy: Coords,
-            fill: _Ink = None,
-            outline: _Ink = None,
-            width: int = 1,
-    ) -> Self:
-        xy = np.array(xy, dtype=float) * self.im.size
-        self.rectangle(xy, fill=fill, outline=outline, width=width)
         return self

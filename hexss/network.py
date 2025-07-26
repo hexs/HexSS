@@ -5,6 +5,7 @@ import subprocess
 import platform
 from typing import List, Tuple, Dict, Optional
 
+import hexss
 from hexss.constants.terminal_color import *
 
 
@@ -197,3 +198,35 @@ def close_port(ip: str, port: int, verbose: bool = True) -> None:
         else:
             print(f"{RED}Failed to close port {port} on {ip}. Error:{END} {result.stderr}")
 
+
+def scan_wifi():
+    if hexss.system == 'Windows':
+        try:
+            from pywifi import PyWiFi
+        except ImportError:
+            hexss.check_packages('pywifi', 'comtypes', auto_install=True)
+            from pywifi import PyWiFi
+
+        wifi = PyWiFi()
+        for i, iface in enumerate(wifi.interfaces()):
+            print(f"{i}: {iface.name()}")
+            iface.scan()
+            results = iface.scan_results()
+            for network in results:
+                print(f"SSID: {network.ssid}, Signal: {network.signal}, Frequency: {network.freq}")
+    else:
+        try:
+            from wifi import Cell
+        except ImportError:
+            hexss.check_packages('wifi', auto_install=True)
+            from wifi import Cell
+
+        interfaces = os.listdir('/sys/class/net/')
+        for i, iface in enumerate(interfaces):
+            try:
+                print(f"{i}: {iface}")
+                networks = Cell.all(iface)
+                for network in networks:
+                    print(f"SSID: {network.ssid}, Signal: {network.signal}, Frequency: {network.frequency}")
+            except Exception as e:
+                ...

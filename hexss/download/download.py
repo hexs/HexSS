@@ -146,7 +146,7 @@ def download(url: str, filename: str = None) -> None:
         filename = get_filename_from_url(url)
     dest = Path(filename)
     if dest.exists():
-        print(f"{GREEN}{filename} already exists; {YELLOW}skipping.{END}")
+        print(f"{UNDERLINED}{filename}{END} {GREEN}already exists; {YELLOW}skipping.{END}")
         return
 
     total = get_total_size(sess, url)
@@ -165,7 +165,6 @@ def download(url: str, filename: str = None) -> None:
             continue
         tasks.append((start, end, part))
 
-    print(f"{YELLOW}Downloading {filename}: {total:,} bytes in {parts} chunks{END}")
     with tqdm(total=total, unit="B", unit_scale=True, desc=filename) as pbar:
         done = total - sum((e - s + 1) for s, e, _ in tasks)
         pbar.update(done)
@@ -181,7 +180,7 @@ def download(url: str, filename: str = None) -> None:
     print(f"{GREEN}All chunks done; {YELLOW}assembling file…{END}")
     assembled = assemble_file(TEMP_DIR, filename, parts)
     shutil.move(str(assembled), filename)
-    print(f"{GREEN}✔ Download complete: {filename}{END}")
+    print(f"{GREEN}✔ Download complete:{END} {UNDERLINED}{filename}{END}")
 
 
 if __name__ == '__main__':

@@ -139,11 +139,15 @@ def assemble_file(tmp: Path, filename: str, chunks: int) -> Path:
     return out
 
 
-def download(url: str, filename: str = None) -> None:
+def download(url: str | tuple[str, str] | list[str], filename: str = None) -> None:
     sess = setup_session()
 
     if filename is None:
-        filename = get_filename_from_url(url)
+        if isinstance(url, str):
+            filename = get_filename_from_url(url)
+        else:
+            filename = url[1]
+            url = url[0]
     dest = Path(filename)
     if dest.exists():
         print(f"{UNDERLINED}{filename}{END} {GREEN}already exists; {YELLOW}skipping.{END}")
@@ -193,7 +197,4 @@ if __name__ == '__main__':
     ]
 
     for entry in urls:
-        if isinstance(entry, str):
-            download(entry)
-        else:
-            download(entry[0], entry[1])
+        download(entry)

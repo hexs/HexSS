@@ -5,7 +5,7 @@ import sys
 
 import hexss
 from hexss.constants.terminal_color import *
-from hexss.path import get_python_path
+from hexss.path import get_python_path, get_main_python_path
 
 # Map package aliases to actual package names for installation
 PACKAGE_ALIASES = {
@@ -103,7 +103,7 @@ def generate_install_command(
     if upgrade:
         command.append("--upgrade")
     if hexss.system == 'Linux':
-        if hexss.path.get_main_python_path() == hexss.path.get_python_path():
+        if get_main_python_path() == get_python_path():
             command.append("--break-system-packages")
 
     command.extend(packages)
@@ -187,7 +187,7 @@ def check_packages(*packages: str, auto_install: bool = False, venv_only: bool =
 
     if auto_install:
         # Enforce installation only in a virtual environment if venv_only is True.
-        if venv_only and (hexss.path.get_main_python_path() == hexss.path.get_python_path()):
+        if venv_only and (get_main_python_path() == get_python_path()):
             message = (f"{YELLOW}Must be installed: {', '.join(missing)}\n"
                        f"{RED}To auto_install packages in the main environment, set venv_only=False.{END}")
             print(message)

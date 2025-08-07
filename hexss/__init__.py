@@ -19,7 +19,8 @@ def get_username() -> str:
         user = os.environ.get(name)
         if user:
             return user
-    raise ValueError('No username was specified')
+    import pwd
+    return pwd.getpwuid(os.getuid())[0]
 
 
 def get_config(file_name):

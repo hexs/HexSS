@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any, Sequence
+from typing import Union, Optional, Tuple, List, Self, IO, Type, Literal, Any, Sequence, Dict
 from io import BytesIO
 
 import hexss
+from hexss import json_load
 from hexss.box import Box
 
 hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_install=True)
@@ -16,6 +17,9 @@ from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont, ImageEnhance
 from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize, SupportsArrayInterface
 from PIL.ImageDraw import _Ink
+
+Array2 = np.ndarray
+Coord4 = Union[Tuple[float, float, float, float], Sequence[float]]
 
 
 class Image:
@@ -49,6 +53,16 @@ class Image:
             self.image = self._from_bytes(source)
         else:
             raise TypeError(f"Unsupported source type: {type(source)}")
+
+        self.boxes = [],
+        '''
+        self.boxes = [
+            Box(name='x1', xywhn=xywhn, pointn=pointn),
+            Box(name='x2', xywhn=xywhn, pointn=pointn),
+        ]
+        '''
+        self.classification = None
+        self.detections = None
 
     @staticmethod
     def _from_numpy_array(arr: np.ndarray) -> PILImage.Image:
@@ -410,10 +424,12 @@ class Image:
         return self
 
     def detect(self, model):
-        return model.detect(self)
+        self.detections = model.detect(self)
+        return self.detections
 
     def classify(self, model):
-        return model.classify(self)
+        self.classification = model.classify(self)
+        return self.classification
 
     def __repr__(self) -> str:
         name = self.image.__class__.__name__
@@ -421,6 +437,20 @@ class Image:
 
     def draw(self, origin: Union[str, Tuple[float, float]] = 'topleft') -> "ImageDraw":
         return ImageDraw(self, origin)
+
+    def draw_box(self, box: Box) -> None:
+        if box.size is None:
+            box.set_size(self.size)
+        draw = self.draw()
+
+        if box.type == 'polygon':
+            draw.polygon(box, outline=box.color, width=box.width)
+            draw.text(xy=box.points[0], text=box.name, font=box.font,
+                      fill=box.text_color, stroke_width=box.width, stroke_fill=box.text_stroke_color)
+        elif box.type == 'box':
+            draw.rectangle(box, outline=box.color, width=box.width)
+            draw.text(xyn=box.x1y1n, text=box.name, font=box.font,
+                      fill=box.text_color, stroke_width=box.width, stroke_fill=box.text_stroke_color)
 
 
 class ImageDraw:
@@ -481,7 +511,7 @@ class ImageDraw:
 
     def rectangle(
             self,
-            xy: Union[Coords,Box] = None,
+            xy: Union[Coords, Box] = None,
             fill: _Ink = None,
             outline: _Ink = None,
             width: int = 1,
@@ -491,8 +521,9 @@ class ImageDraw:
             xywhn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
     ) -> Self:
         if isinstance(xy, Box):
-            xy = xy.xyxy
-        xy = xy or self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)
+            xy = xy.xyxy.tolist()
+        if xy is None:
+            xy = self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)
         self.draw.rectangle(self._translate(xy), fill=fill, outline=outline, width=width)
         return self
 
@@ -526,7 +557,8 @@ class ImageDraw:
     ) -> Self:
         if isinstance(xy, Box):
             xy = xy.points
-        self.draw.polygon(self._translate(xy), fill=fill, outline=outline, width=width)
+        xy = [tuple(map(int, pt)) for pt in self._translate(xy)]
+        self.draw.polygon(xy, fill=fill, outline=outline, width=width)
         return self
 
     def text(
@@ -557,3 +589,41 @@ class ImageDraw:
             embedded_color=embedded_color, *args, **kwargs
         )
         return self
+
+
+class Boxes:
+    def __init__(
+            self,
+            size: Optional[Tuple[float, float]] = None,
+            image: Image = None,
+            boxes: Optional[Dict[str, Box]] = None
+    ) -> None:
+        if size is not None:
+            self.width, self.height = map(float, size)
+            self.image = None
+        if image is not None:
+            self.width, self.height = image.size
+            self.image = image
+        self.boxes = boxes or {}
+
+    def add(
+            self,
+            name: str,
+            *,
+            xywh: Optional[Coord4] = None,
+            xyxy: Optional[Coord4] = None,
+            xywhn: Optional[Coord4] = None,
+            xyxyn: Optional[Coord4] = None,
+            points: Optional[Sequence[Tuple[float, float]]] = None,
+            pointsn: Optional[Sequence[Tuple[float, float]]] = None,
+            xy: Optional[Tuple[float, float]] = None,
+            xyn: Optional[Tuple[float, float]] = None,
+            x1y1: Optional[Tuple[float, float]] = None,
+            x1y1n: Optional[Tuple[float, float]] = None,
+            wh: Optional[Tuple[float, float]] = None,
+            whn: Optional[Tuple[float, float]] = None, ) -> None:
+        self.boxes[name] = Box(
+            (self.width, self.height),
+            xywh=xywh, xyxy=xyxy, xywhn=xywhn, xyxyn=xyxyn, points=points, pointsn=pointsn, xy=xy,
+            xyn=xyn, x1y1=x1y1, x1y1n=x1y1n, wh=wh, whn=whn
+        )

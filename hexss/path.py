@@ -1,8 +1,13 @@
 import os
+import re
+import subprocess
 import sys
 import platform
+import ctypes
 from pathlib import Path
 from typing import Optional, Union
+
+import hexss
 
 
 def get_venv_dir() -> Optional[Path]:
@@ -180,6 +185,130 @@ def shorten(
     return f"{leading_str}{sep}{trailing}"
 
 
+def list_drives():
+    system = platform.system()
+    if system == 'Windows':
+        _DRIVE_TYPES = {
+            0: "Unknown",
+            1: "No Root Directory",
+            2: "Removable",
+            3: "Fixed",
+            4: "Network",
+            5: "CD/DVD",
+            6: "RAM Disk"
+        }
+        drives = []
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+        for i, letter in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+            if mask & (1 << i):
+                path = f"{letter}:\\"
+                dtype = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(path))
+                drives.append({"path": path, "type": _DRIVE_TYPES.get(dtype, "Unknown")})
+        return drives
+    elif system == 'Linux':
+        ...
+
+
+def list_network_shares(server: str):
+    """Return a list of shared resources from a Windows SMB server using `net view`."""
+    result = subprocess.run(
+        ['net', 'view', server],
+        capture_output=True,
+        text=True,
+        shell=True
+    )
+
+    lines = result.stdout.splitlines()
+
+    # Find header line
+    header_index = None
+    for i, line in enumerate(lines):
+        if re.search(r'Share name', line, re.IGNORECASE):
+            header_index = i
+            break
+
+    if header_index is None:
+        return []
+
+    header_line = lines[header_index]
+    dash_index = None
+    for i in range(header_index, len(lines)):
+        if re.match(r'-+', lines[i]):
+            dash_index = i
+            break
+
+    if dash_index is None:
+        return []
+
+    # Detect column positions dynamically
+    columns = re.findall(r'\S+(?: \S+)*', header_line)
+    col_positions = []
+    last_pos = 0
+    for col in columns:
+        pos = header_line.index(col, last_pos)
+        col_positions.append((col.strip(), pos))
+        last_pos = pos + len(col)
+    col_positions.append(('__END__', None))  # End position marker
+
+    # Parse rows into dictionaries
+    shares = []
+    for line in lines[dash_index + 1:]:
+        if not line.strip() or "The command completed successfully" in line:
+            continue
+        row = {}
+        for j in range(len(col_positions) - 1):
+            col_name, start = col_positions[j]
+            _, next_start = col_positions[j + 1]
+            value = line[start:next_start].strip() if next_start is not None else line[start:].strip()
+            row[col_name] = value
+        shares.append(row)
+
+    return shares
+
+
+def iterdir(p: Path):
+    """
+    Extended iterdir:
+    - Local paths: behaves like Path.iterdir()
+    - UNC server paths (\\server): returns available shares as Path objects
+    """
+    # Normal local path or full UNC path to a share
+    if p.exists():
+        return p.iterdir()
+
+    # Detect UNC server root (\\server with no share name)
+    if str(p).startswith('\\\\'):
+        shares = list_network_shares(str(p))
+        return [Path(str(p) + '\\' + share['Share name']) for share in shares]
+
+    # Path does not exist
+    return []
+
+
+def last_component(p: Path) -> str:
+    if p.name:
+        return p.name
+    if p.drive and not p.root:  # UNC host root, e.g. //it
+        return p.drive
+    if p.drive and p.root:
+        # print(type(p.drive)) <class 'str'>
+        if p.drive.startswith('\\\\'):  # UNC share root, e.g. //it/a
+            # Split UNC into //server/share and take the share
+            return f'{p.drive}'.split('\\')[-1]
+        return p.drive + p.root  # Drive root like C:/
+    return str(p)
+
+    # UNC host root
+    print(last_component(Path(r'//it')))  # \\it
+
+    # UNC share root
+    print(last_component(Path(r'//it/a')))  # a
+
+    # Local drive
+    print(last_component(Path(r'C:/')))  # C:\
+    print(last_component(Path(r'C:/b')))  # b
+
+
 if __name__ == "__main__":
     main_python_path = get_main_python_path()
     python_path = get_python_path()
@@ -201,3 +330,28 @@ if __name__ == "__main__":
     path = Path(r'C:\Users\<user>\Desktop\folder\img_frame\ok\241209.png')
     print(shorten(path))  # C:\Users\<user> ... folder\img_frame\ok\241209.png
     print(shorten(path, 2, 3))  # C:\Users ... img_frame\ok\241209.png
+
+    for entry in list_drives():
+        print(f"{entry['path']} → {entry['type']}")
+        for p in Path(entry['path']).iterdir():
+            print(p)
+
+    paths = [
+        Path(r'\\it-dv-sv'),  # UNC host root
+        Path(r'\\it-dv-sv\a'),  # UNC share root
+        Path(r'C:\\'),  # Local drive
+    ]
+
+    for path in paths:
+        print(f"\nListing: {path}")
+        for d in iterdir(path):
+            print(f"  {d}  [DIR={d.is_dir()}]  [FILE={d.is_file()}]")
+            if d.is_dir():
+                try:
+                    children = [p.name for p in d.iterdir()]
+                    print(f"    -> {children}")
+                except PermissionError:
+                    print("    -> [Permission Denied]")
+                except OSError as e:
+                    print(f"    -> [Error: {e}]")
+

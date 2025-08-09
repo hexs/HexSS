@@ -1,204 +1,289 @@
+from typing import Optional, Sequence, Tuple, Union, List
 import numpy as np
-from typing import Optional, Sequence, Tuple, Union
 
+Coord2 = Union[Tuple[float, float], List[float], Sequence[float]]
+Coord4 = Union[Tuple[float, float, float, float], List[float], Sequence[float]]
+PointSeq = Sequence[Tuple[float, float]]
 Array2 = np.ndarray
-Coord4 = Union[Tuple[float, float, float, float], Sequence[float]]
+
+
+def to_xyxy(boxes: np.ndarray, out: np.ndarray = None) -> np.ndarray:
+    boxes_arr = np.asarray(boxes)
+    if out is None:
+        out = np.empty_like(boxes_arr)
+    cx, cy, w, h = boxes_arr[..., 0], boxes_arr[..., 1], boxes_arr[..., 2], boxes_arr[..., 3]
+    hw, hh = w * 0.5, h * 0.5
+    out[..., 0] = cx - hw
+    out[..., 1] = cy - hh
+    out[..., 2] = cx + hw
+    out[..., 3] = cy + hh
+    return out
+
+
+def to_xywh(boxes: np.ndarray, out: np.ndarray = None) -> np.ndarray:
+    boxes_arr = np.asarray(boxes)
+    if out is None:
+        out = np.empty_like(boxes_arr)
+    x1, y1, x2, y2 = boxes_arr[..., 0], boxes_arr[..., 1], boxes_arr[..., 2], boxes_arr[..., 3]
+    w = np.abs(x2 - x1)
+    h = np.abs(y2 - y1)
+    x_min = np.minimum(x1, x2)
+    y_min = np.minimum(y1, y2)
+    out[..., 0] = x_min + w * 0.5
+    out[..., 1] = y_min + h * 0.5
+    out[..., 2] = w
+    out[..., 3] = h
+    return out
 
 
 class Box:
-    """
-    Represents an axis-aligned rectangle (or polygon’s bounding box).
-    Supports single-mode init (xywh, xyxy, xywhn, xyxyn, points, pointsn)
-    or dual-mode init: one origin (xy, xyn, x1y1, x1y1n) plus one size (wh, whn).
-    """
-
     def __init__(
             self,
-            size: Tuple[float, float],
-            *,
-            xywh: Optional[Coord4] = None,
-            xyxy: Optional[Coord4] = None,
+            size: Optional[Coord2] = None,
             xywhn: Optional[Coord4] = None,
+            xywh: Optional[Coord4] = None,
             xyxyn: Optional[Coord4] = None,
-            points: Optional[Sequence[Tuple[float, float]]] = None,
-            pointsn: Optional[Sequence[Tuple[float, float]]] = None,
-            xy: Optional[Tuple[float, float]] = None,
-            xyn: Optional[Tuple[float, float]] = None,
-            x1y1: Optional[Tuple[float, float]] = None,
-            x1y1n: Optional[Tuple[float, float]] = None,
-            wh: Optional[Tuple[float, float]] = None,
-            whn: Optional[Tuple[float, float]] = None,
-    ) -> None:
-        self.width, self.height = map(float, size)
-        self.points = None
+            xyxy: Optional[Coord4] = None,
+            points: Optional[PointSeq] = None,
+            pointsn: Optional[PointSeq] = None
+    ):
+        self._size = np.array(size, dtype=np.float32) if size else None
+        self.type = None
+        self._setup(xywhn, xywh, xyxyn, xyxy, points, pointsn)
 
-        # Track provided arguments
-        provided = {
-            'xywh': xywh, 'xyxy': xyxy,
-            'xywhn': xywhn, 'xyxyn': xyxyn,
-            'points': points, 'pointsn': pointsn,
-            'xy': xy, 'xyn': xyn,
-            'x1y1': x1y1, 'x1y1n': x1y1n,
-            'wh': wh, 'whn': whn,
-        }
-        keys = [k for k, v in provided.items() if v is not None]
-
-        # Single-mode
-        single_modes = {'xywh', 'xyxy', 'xywhn', 'xyxyn', 'points', 'pointsn'}
-        if len(keys) == 1 and keys[0] in single_modes:
-            scale4 = np.array([self.width, self.height, self.width, self.height], dtype=float)
-            if xywh is not None:
-                self._set_xywh(np.asarray(xywh, dtype=float))
-                self.type = "box"
-            elif xyxy is not None:
-                self._set_xyxy(np.asarray(xyxy, dtype=float))
-                self.type = "box"
-            elif xywhn is not None:
-                arr = np.asarray(xywhn, dtype=float) * scale4
-                self._set_xywh(arr)
-                self.type = "box"
-            elif xyxyn is not None:
-                arr = np.asarray(xyxyn, dtype=float) * scale4
-                self._set_xyxy(arr)
-                self.type = "box"
-            elif points is not None:
-                self.points = np.asarray(points, dtype=float)
-                self._set_from_points(self.points)
-                self.type = "polygon"
-            elif pointsn is not None:
-                self.points = np.asarray(pointsn, dtype=float) * [self.width, self.height]
-                self._set_from_points(self.points)
-                self.type = "polygon"
-
-        # Dual-mode (origin + size)
-        else:
-            origins = {'xy': xy, 'xyn': xyn, 'x1y1': x1y1, 'x1y1n': x1y1n}
-            sizes = {'wh': wh, 'whn': whn}
-            used_o = [k for k in origins if origins[k] is not None]
-            used_s = [k for k in sizes if sizes[k] is not None]
-
-            if len(used_o) != 1 or len(used_s) != 1 or len(keys) != 2:
-                raise ValueError(
-                    "Provide exactly one origin (xy,xyn,x1y1,x1y1n) "
-                    "and one size (wh,whn), or use one single-mode argument."
-                )
-            o_key, s_key = used_o[0], used_s[0]
-            o = np.asarray(origins[o_key], dtype=float)
-            s = np.asarray(sizes[s_key], dtype=float)
-
-            if o_key.endswith('n'):
-                o *= [self.width, self.height]
-            if s_key.endswith('n'):
-                s *= [self.width, self.height]
-
-            if o_key in ('xy', 'xyn'):
-                cx, cy = o
-                w, h = s
-            else:
-                x1, y1 = o
-                w, h = s
-                cx, cy = x1 + w / 2, y1 + h / 2
-
-            self._set_xywh(np.array([cx, cy, w, h], dtype=float))
+    def _setup(self, xywhn, xywh, xyxyn, xyxy, points, pointsn):
+        if xywhn is not None:
+            self._xywhn = np.array(xywhn)
+            self._xyxyn = to_xyxy(self._xywhn)
             self.type = "box"
+        elif xyxyn is not None:
+            self._xyxyn = np.array(xyxyn)
+            self._xywhn = to_xywh(self._xyxyn)
+            self.type = "box"
+        elif xywh is not None:
+            self._xywh = np.array(xywh)
+            self._xyxy = to_xyxy(self._xywh)
+            self.type = "box"
+        elif xyxy is not None:
+            self._xyxy = np.array(xyxy)
+            self._xywh = to_xywh(self._xyxy)
+            self.type = "box"
+        elif pointsn is not None:
+            self._pointsn = np.array(pointsn)
+            self._set_from_pointsn(self._pointsn)
+            self.type = "polygon"
+        elif points is not None:
+            self._points = np.array(points)
+            self._set_from_points(self._points)
+            self.type = "polygon"
 
-        self._update_all()
-
-    def _set_xywh(self, xywh: Array2) -> None:
-        if xywh.shape != (4,):
-            raise ValueError("xywh must be length 4: (cx,cy,w,h)")
-        self.xywh = xywh
-
-    def _set_xyxy(self, xyxy: Array2) -> None:
-        if xyxy.shape != (4,):
-            raise ValueError("xyxy must be length 4: (x1,y1,x2,y2)")
-        x1, y1, x2, y2 = xyxy
-        if x2 < x1 or y2 < y1:
-            raise ValueError("Invalid corners: x2<x1 or y2<y1")
-        w, h = x2 - x1, y2 - y1
-        cx, cy = x1 + w / 2, y1 + h / 2
-        self.xywh = np.array([cx, cy, w, h], dtype=float)
-
-    def _set_from_points(self, pts: Array2) -> None:
-        if pts.ndim != 2 or pts.shape[1] != 2:
-            raise ValueError("Points must be an (N, 2) array")
+    def _set_from_pointsn(self, pts: Array2) -> None:
         x1, y1 = pts.min(axis=0)
         x2, y2 = pts.max(axis=0)
         w, h = x2 - x1, y2 - y1
         cx, cy = x1 + w / 2, y1 + h / 2
-        self.xywh = np.array([cx, cy, w, h], dtype=float)
+        self._xywhn = np.array([cx, cy, w, h], dtype=float)
+        self._xyxyn = to_xyxy(self._xywhn)
 
-    def _update_all(self) -> None:
-        cx, cy, w, h = self.xywh
-        x1, y1 = cx - w / 2, cy - h / 2
-        x2, y2 = cx + w / 2, cy + h / 2
+    def _set_from_points(self, pts: Array2) -> None:
+        x1, y1 = pts.min(axis=0)
+        x2, y2 = pts.max(axis=0)
+        w, h = x2 - x1, y2 - y1
+        cx, cy = x1 + w / 2, y1 + h / 2
+        self._xywh = np.array([cx, cy, w, h], dtype=float)
+        self._xyxy = to_xyxy(self._xywh)
 
-        self.xyxy = np.array([x1, y1, x2, y2], dtype=float)
-        self.x1y1 = np.array([x1, y1], dtype=float)
-        self.x2y2 = np.array([x2, y2], dtype=float)
-        self.wh = np.array([w, h], dtype=float)
-        self.xy = np.array([cx, cy], dtype=float)
-
-        denom4 = np.array([self.width, self.height] * 2, dtype=float)
-        denom2 = np.array([self.width, self.height], dtype=float)
-
-        self.xyxyn = self.xyxy / denom4
-        self.xywhn = self.xywh / np.concatenate([denom2, denom2])
-        self.whn = self.wh / denom2
-        self.xyn = self.xy / denom2
-        self.x1y1n = self.x1y1 / denom2
-        self.x2y2n = self.x2y2 / denom2
+    def set_size(self, size):
+        self._size = size
 
     def move(self, dx: float, dy: float, normalized: bool = False) -> None:
+        delta = np.array([dx, dy])
         if normalized:
-            dx *= self.width
-            dy *= self.height
-        self.xywh[:2] += [dx, dy]
-        if self.points is not None:
-            self.points += [dx, dy]
-        self._update_all()
-
-    def scale(self, sx: float, sy: Optional[float] = None) -> None:
-        sy = sx if sy is None else sy
-        self.xywh[2:] *= [sx, sy]
-        self._update_all()
-
-    def clip_to_image(self) -> None:
-        x1, y1, x2, y2 = self.xyxy
-        x1 = np.clip(x1, 0, self.width)
-        y1 = np.clip(y1, 0, self.height)
-        x2 = np.clip(x2, 0, self.width)
-        y2 = np.clip(y2, 0, self.height)
-        self._set_xyxy(np.array([x1, y1, x2, y2], dtype=float))
-        self._update_all()
-
-    def __repr__(self) -> str:
-        cx, cy, w, h = self.xywh
-        return (
-            f"Box(type={self.type!r}, size=({self.width:.0f},{self.height:.0f}), "
-            f"xywh=({cx:.0f},{cy:.0f},{w:.0f},{h:.0f}))"
-        )
+            delta *= self.size
+        self.xywh[:2] += delta
+        if hasattr(self, '_points'):
+            self._points += delta
 
     def points_int32(self):
         return self.points.astype(np.int32)
 
+    @property
+    def size(self):
+        if self._size is None:
+            raise AttributeError("Unknown size")
+        return self._size
 
-# === Demo ===
-if __name__ == "__main__":
+    @property
+    def xywhn(self):
+        return self._xywhn if hasattr(self, '_xywhn') else self._xywh / np.tile(self.size, 2)
+
+    @property
+    def xywh(self):
+        return self._xywh if hasattr(self, '_xywh') else self._xywhn * np.tile(self.size, 2)
+
+    @property
+    def xyxyn(self):
+        return self._xyxyn if hasattr(self, '_xyxyn') else self._xyxy / np.tile(self.size, 2)
+
+    @property
+    def xyxy(self):
+        return self._xyxy if hasattr(self, '_xyxy') else self._xyxyn * np.tile(self.size, 2)
+
+    @property
+    def points(self):
+        return self._points if hasattr(self, '_points') else self._pointsn * self.size
+
+    @property
+    def pointsn(self):
+        return self._pointsn if hasattr(self, '_pointsn') else self._points / self.size
+
+    @property
+    def x1y1n(self):
+        return self.xyxyn[0:2]
+
+    @property
+    def x1y2n(self):
+        return self.xyxyn[[0, 3]]
+
+    @property
+    def x2y1n(self):
+        return self.xyxyn[[2, 1]]
+
+    @property
+    def x2y2n(self):
+        return self.xyxyn[2:4]
+
+    @property
+    def x1y1(self):
+        return self.xyxy[0:2]
+
+    @property
+    def x1y2(self):
+        return self.xyxy[[0, 3]]
+
+    @property
+    def x2y1(self):
+        return self.xyxy[[2, 1]]
+
+    @property
+    def x2y2(self):
+        return self.xyxy[2:4]
+
+    @property
+    def xyn(self):
+        return self.xywhn[0:2]
+
+    @property
+    def xy(self):
+        return self.xywh[0:2]
+
+    def __repr__(self):
+        return f"<Box type={self.type}>"
+
+
+def test_1():
+    def show(box):
+        try:
+            print('xywhn  ', box.xywhn)
+        except AttributeError as e:
+            print('xywhn  ', e)
+        try:
+            print('xywh   ', box.xywh)
+        except AttributeError as e:
+            print('xywh   ', e)
+        try:
+            print('xyxyn  ', box.xyxyn)
+        except AttributeError as e:
+            print('xyxyn  ', e)
+        try:
+            print('xyxy   ', box.xyxy)
+        except AttributeError as e:
+            print('xyxy   ', e)
+        try:
+            print('pointsn', box.pointsn)
+        except AttributeError as e:
+            print('pointsn', e)
+        try:
+            print('points ', box.points)
+        except AttributeError as e:
+            print('points ', e)
+
+    def show2(box):
+        try:
+            print('x1y1n  ', box.x1y1n)
+        except AttributeError as e:
+            print('x1y1n  ', e)
+        try:
+            print('x1y1   ', box.x1y1)
+        except AttributeError as e:
+            print('x1y1   ', e)
+        try:
+            print('x1y2n  ', box.x1y2n)
+        except AttributeError as e:
+            print('x1y2n  ', e)
+        try:
+            print('x1y2   ', box.x1y2)
+        except AttributeError as e:
+            print('x1y2   ', e)
+        try:
+            print('x2y1n  ', box.x2y1n)
+        except AttributeError as e:
+            print('x2y1n  ', e)
+        try:
+            print('x2y1   ', box.x2y1)
+        except AttributeError as e:
+            print('x2y1   ', e)
+        try:
+            print('x2y2n  ', box.x2y2n)
+        except AttributeError as e:
+            print('x2y2n  ', e)
+        try:
+            print('x2y2   ', box.x2y2)
+        except AttributeError as e:
+            print('x2y2   ', e)
+        try:
+            print('xyn    ', box.xyn)
+        except AttributeError as e:
+            print('xyn    ', e)
+        try:
+            print('xy     ', box.xy)
+        except AttributeError as e:
+            print('xy     ', e)
+
+    print('\nbox1 set xywhn and size')
+    box1 = Box(xywhn=[0.3, 0.3, 0.2, 0.2], size=(100, 100))
+    show(box1)
+
+    print('\nbox2 set xywhn')
+    box2 = Box(xywhn=[0.3, 0.3, 0.2, 0.2])
+    show(box2)
+
+    print('\nbox3 set xywh')
+    box3 = Box(xywh=[3, 3, 2, 2])
+    show(box3)
+
+    print('\nbox4 set pointsn')
+    box4 = Box(pointsn=[(0.1, 0.1), (0.5, 0.05), (0.3, 0.1), (0.1, 0.2)])
+    show(box4)
+
+    print('\nbox5 set points')
+    box5 = Box(points=[(50, 50), (100, 20), (150, 100), (100, 200)])
+    show(box5)
+
+    print('\nbox6 set pointsn')
+    box6 = Box(pointsn=[(0.1, 0.1), (0.5, 0.05), (0.3, 0.1), (0.1, 0.2)])
+    box6.set_size((100, 100))
+    show(box6)
+    show2(box6)
+
+
+def test_2():
     import cv2
 
     W, H = 500, 500
     img = np.zeros((H, W, 3), dtype=np.uint8)
 
     examples = [
-        ("abs center + abs size", dict(xy=(50, 50), wh=(50, 50))),
-        ("norm center + abs size", dict(xyn=(0.3, 0.1), wh=(50, 50))),
-        ("abs center + norm size", dict(xy=(200, 300), whn=(0.2, 0.1))),
-        ("norm center + norm size", dict(xyn=(0.4, 0.6), whn=(0.2, 0.1))),
-        ("abs TL + abs size", dict(x1y1=(150, 275), wh=(100, 50))),
-        ("norm TL + abs size", dict(x1y1n=(0.3, 0.55), wh=(100, 50))),
-        ("abs TL + norm size", dict(x1y1=(150, 275), whn=(0.2, 0.1))),
-        ("norm TL + norm size", dict(x1y1n=(0.3, 0.55), whn=(0.2, 0.1))),
         ("xywh", dict(xywh=(300, 300, 100, 100))),
         ("xyxy", dict(xyxy=(200, 50, 400, 150))),
         ("xywhn", dict(xywhn=(0.7, 0.9, 0.1, 0.1))),
@@ -209,8 +294,7 @@ if __name__ == "__main__":
 
     for desc, kw in examples:
         box = Box((W, H), **kw)
-        box.move(20, 20)
-        print(f"{desc:30} → {box}")
+        print(f"{desc:10} → {box}")
         color = tuple(int(c) for c in np.random.randint(50, 256, 3))
 
         if box.type == 'polygon':
@@ -222,3 +306,12 @@ if __name__ == "__main__":
     cv2.imshow("All Modes", img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    print('=== test 1 ===')
+    test_1()
+
+    print()
+    print('=== test 2 ===')
+    test_2()

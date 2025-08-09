@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>File Explorer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        #toolbar {
+            margin-bottom: 10px;
+        }
+
+        button {
+            margin-right: 5px;
+        }
+
+        #items {
+            margin-top: 20px;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            border-bottom: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        .item img {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+
+        .dir {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>File Explorer</h1>
+</header>
+<div>
+    <div id="toolbar">
+        <button id="up-btn">⬆ Up</button>
+    </div>
+    <input type="text" id="path-input" placeholder="Enter path (e.g., C:/)" style="width:300px">
+    <div id="items"></div>
+</div>
+
+<script>
+    const pathInput = document.getElementById('path-input');
+    const itemsDiv = document.getElementById('items');
+    const upBtn = document.getElementById('up-btn');
+    let iconMap = {};
+
+    async function loadIconMap() {
+        try {
+            const res = await fetch('/static/icon/icon.json');
+            if (res.ok) {
+                const json = await res.json();
+                iconMap = {...json};
+            }
+        } catch (e) {
+            console.warn('Failed to load icon map, using defaults.', e);
+        }
+    }
+
+    function getIconPath(item) {
+        if (item.type === 'dir') return `static/icon/${iconMap.folder}`;
+        const suffix = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')).toLowerCase() : '';
+        if (iconMap[suffix]) return `static/icon/${iconMap[suffix]}`;
+        return `static/icon/${iconMap.file}`;
+    }
+
+    function renderItems(children) {
+        itemsDiv.innerHTML = '';
+        if (!Array.isArray(children) || children.length === 0) {
+            itemsDiv.innerHTML = '<div style="color:red">Error: No items found.</div>';
+            return;
+        }
+        children.forEach(item => {
+            const div = document.createElement('div');
+            div.className = `item ${item.type}`;
+            const icon = document.createElement('img');
+            icon.src = getIconPath(item);
+            icon.onerror = () => {
+                icon.src = `static/icon/${iconMap.file}`;
+            };
+            const label = document.createElement('span');
+            label.textContent = item.name;
+            div.appendChild(icon);
+            div.appendChild(label);
+            if (item.type === 'dir') {
+                div.addEventListener('click', () => loadPath(item.path));
+            }
+            itemsDiv.appendChild(div);
+        });
+    }
+
+    async function loadPath(path) {
+        pathInput.value = path;
+        try {
+            const response = await fetch(`/api/iterdir?p=${encodeURIComponent(path)}`);
+            const data = await response.json();
+            if (data.success) {
+                renderItems(data.children);
+            } else {
+                itemsDiv.innerHTML = '<div style="color:red">Error: No items found.</div>';
+            }
+        } catch (err) {
+            itemsDiv.innerHTML = `<div style="color:red">Error: ${err}</div>`;
+        }
+    }
+
+    pathInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') loadPath(pathInput.value.trim());
+    });
+
+    upBtn.addEventListener('click', () => {
+        const currentPath = pathInput.value.trim();
+        let upPath = currentPath.replace(/\\$/, '').replace(/\/?[^\\/]+$/, '');
+        if (!upPath) upPath = '/';
+        loadPath(upPath);
+    });
+
+    window.addEventListener('load', async () => {
+        await loadIconMap();
+        loadPath('');
+    });
+</script>
+</body>
+</html>

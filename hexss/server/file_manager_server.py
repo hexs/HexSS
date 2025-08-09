@@ -5,7 +5,8 @@ import zipfile
 import io
 from pathlib import Path
 
-from hexss import check_packages, json_load, secure_filename
+from hexss import check_packages
+from hexss.path import iterdir, list_drives, last_component
 
 check_packages('Flask', auto_install=True, venv_only=False)
 
@@ -52,6 +53,45 @@ def listdir():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/iterdir')
+def api_path():
+    """
+    /api/iterdir?p=//it   # UNC host root
+    /api/iterdir?p=//it/s # UNC share root
+    /api/iterdir?p=C:/    # Local drive
+    """
+    p = request.args.get('p', default='', type=str).strip()
+    response = {
+        'success': True,
+        'children': []
+    }
+    if p == '':
+        response['children'] = [
+            {
+                'path': entry['path'],
+                'name': f"{last_component(Path(entry['path']))} <{entry['type']}>",
+                'type': 'dir'
+            } for entry in list_drives()
+        ]
+        return jsonify(response)
+
+    p = Path(p)
+    try:
+        children = [
+            {
+                'path': child.as_posix(),
+                'name': last_component(child),
+                'type': 'file' if child.is_file() else 'dir',
+            } for child in iterdir(p)
+        ]
+        response['children'] = children
+    except Exception as e:
+        response['success'] = False
+        response['error'] = str(e)
+
+    return jsonify(response)
 
 
 @app.route('/path/')

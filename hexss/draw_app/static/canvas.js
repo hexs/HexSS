@@ -1,11 +1,5 @@
 import {
-    rectangles,
-    setRectangles,
-    setCurrentFrameName,
-    updateRectanglesList,
-    updatePanels,
-    saveRectangles,
-    frameSlider,
+    rectangles, setRectangles, setCurrentFrameName, updateRectanglesList, updatePanels, saveRectangles, frameSlider,
 } from "/static/script.js";
 
 const rectangleBtn = document.getElementById("rectangleBtn");
@@ -50,8 +44,7 @@ let isDraggingRect = false;
 let isResizingRect = false;
 let offsetXRect, offsetYRect;
 let tempDrawing = {
-    crosshair: null,
-    tempRect: null,
+    crosshair: null, tempRect: null,
 };
 let canDrawingRect = false;
 let selectedCorner = null;
@@ -61,17 +54,11 @@ function getColorByGroup(group) {
 }
 
 function screenToImageCoordinates(screenX, screenY) {
-    return [
-        (screenX - canvas.width / 2) / scale + img.width / 2 - offsetX / scale,
-        (screenY - canvas.height / 2) / scale + img.height / 2 - offsetY / scale,
-    ];
+    return [(screenX - canvas.width / 2) / scale + img.width / 2 - offsetX / scale, (screenY - canvas.height / 2) / scale + img.height / 2 - offsetY / scale,];
 }
 
 function imageToScreenCoordinates(imgX, imgY) {
-    return [
-        (imgX - img.width / 2 + offsetX / scale) * scale + canvas.width / 2,
-        (imgY - img.height / 2 + offsetY / scale) * scale + canvas.height / 2,
-    ];
+    return [(imgX - img.width / 2 + offsetX / scale) * scale + canvas.width / 2, (imgY - img.height / 2 + offsetY / scale) * scale + canvas.height / 2,];
 }
 
 function handleZoom(e) {
@@ -91,18 +78,18 @@ function handleZoom(e) {
 
 function getClickedCorner(mouseX, mouseY, rect) {
     const [rectX, rectY, rectW, rectH] = rect.xywh;
-    const corners = [
-        {name: 'top-left', coords: [rectX - rectW / 2, rectY - rectH / 2]},
-        {name: 'top-right', coords: [rectX + rectW / 2, rectY - rectH / 2]},
-        {name: 'bottom-left', coords: [rectX - rectW / 2, rectY + rectH / 2]},
-        {name: 'bottom-right', coords: [rectX + rectW / 2, rectY + rectH / 2]},
-    ];
+    const corners = [{name: 'top-left', coords: [rectX - rectW / 2, rectY - rectH / 2]}, {
+        name: 'top-right',
+        coords: [rectX + rectW / 2, rectY - rectH / 2]
+    }, {name: 'bottom-left', coords: [rectX - rectW / 2, rectY + rectH / 2]}, {
+        name: 'bottom-right',
+        coords: [rectX + rectW / 2, rectY + rectH / 2]
+    },];
 
     const screenCorners = corners.map(corner => {
         const [cx, cy] = corner.coords;
         return {
-            name: corner.name,
-            screenCoords: imageToScreenCoordinates(cx * img.width, cy * img.height),
+            name: corner.name, screenCoords: imageToScreenCoordinates(cx * img.width, cy * img.height),
         };
     });
 
@@ -155,8 +142,7 @@ function stopDrawRect() {
         const group = getSelectedGroup();
         const name = Date.now().toString();
         rectangles[name] = {
-            xywh: [rect.x, rect.y, rect.w, rect.h],
-            group: group
+            xywh: [rect.x, rect.y, rect.w, rect.h], group: group
         };
     }
 }
@@ -239,12 +225,7 @@ function draw() {
         Object.entries(rectangles).forEach(([name, rect]) => {
             const [x, y, w, h] = rect.xywh;
             ctx.strokeStyle = selectedRect && selectedRect.name === name ? 'yellow' : getColorByGroup(rect.group);
-            ctx.strokeRect(
-                x * img.width - w * img.width / 2,
-                y * img.height - h * img.height / 2,
-                w * img.width,
-                h * img.height
-            );
+            ctx.strokeRect(x * img.width - w * img.width / 2, y * img.height - h * img.height / 2, w * img.width, h * img.height);
         });
         ctx.restore();
     } else {
@@ -257,8 +238,26 @@ function draw() {
     }
 }
 
+let frameCount = 0;
+let fps = 0;
+let lastFpsUpdate = performance.now();
+
 function animate() {
     draw();
+    // FPS Calculation
+    const now = performance.now();
+    frameCount++;
+
+    if (now - lastFpsUpdate >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastFpsUpdate = now;
+
+        const fpsPanel = document.getElementById("fps");
+        fpsPanel.textContent = `FPS: ${fps}`;
+    }
+
+
     if (tempDrawing.crosshair) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -284,10 +283,7 @@ function animate() {
         const [screenStartX, screenStartY] = imageToScreenCoordinates(startX, startY);
         const [screenEndX, screenEndY] = imageToScreenCoordinates(endX, endY);
 
-        ctx.strokeRect(
-            Math.min(screenStartX, screenEndX), Math.min(screenStartY, screenEndY),
-            Math.abs(screenEndX - screenStartX), Math.abs(screenEndY - screenStartY)
-        );
+        ctx.strokeRect(Math.min(screenStartX, screenEndX), Math.min(screenStartY, screenEndY), Math.abs(screenEndX - screenStartX), Math.abs(screenEndY - screenStartY));
         ctx.restore();
     }
     requestAnimationFrame(animate);

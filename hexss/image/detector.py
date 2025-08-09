@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Union, Optional, List, Dict
 import hexss
 from hexss.image import Image
@@ -51,7 +52,7 @@ class Detection:
 class Detector:
     def __init__(
             self,
-            model_path: Optional[str] = None,
+            model_path: str | Path | None = None,
             device: str = "cpu",
             conf_thresh: float = 0.25,
             iou_thresh: float = 0.45
@@ -63,7 +64,8 @@ class Detector:
             conf_thresh: Minimum confidence for detections
             iou_thresh: IoU threshold for NMS
         """
-        self.model = YOLO(model_path) if model_path else YOLO()
+        self.model_path = Path(model_path)
+        self.model = YOLO(self.model_path) if self.model_path else YOLO()
         self.model.conf = conf_thresh
         self.model.iou = iou_thresh
         self.model.to(device)

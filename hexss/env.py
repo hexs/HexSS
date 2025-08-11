@@ -1,7 +1,10 @@
 import os
 import hexss
-import winreg
 import ctypes
+import platform
+
+if platform.system() == 'Windows':
+    import winreg
 
 
 def set_persistent_env_var(name: str, value: str, scope: str = "user") -> None:
@@ -68,8 +71,9 @@ def set(var: str, value: str, persistent: bool = False, scope: str = "user") -> 
     :param scope: Scope for persistent env var ("user" or "machine")
     """
     os.environ[var] = value
-    if persistent:
-        set_persistent_env_var(var, value, scope=scope)
+    if platform.system() == 'Windows':
+        if persistent:
+            set_persistent_env_var(var, value, scope=scope)
 
 
 def unset(var: str, persistent: bool = False, scope: str = "user") -> None:
@@ -81,9 +85,9 @@ def unset(var: str, persistent: bool = False, scope: str = "user") -> None:
     :param scope: Scope for persistent env var ("user" or "machine")
     """
     os.environ.pop(var, None)
-    if persistent:
-        unset_persistent_env_var(var, scope=scope)
-
+    if platform.system() == 'Windows':
+        if persistent:
+            unset_persistent_env_var(var, scope=scope)
 
 def set_proxy(persistent: bool = False, scope: str = "user") -> None:
     """

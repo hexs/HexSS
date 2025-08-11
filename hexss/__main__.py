@@ -201,8 +201,10 @@ def main():
     env.set_defaults(func=lambda args: print_env())
 
     # set_proxy_env
-    wp = subparsers.add_parser('set_proxy_env', help='print commands to set proxy env vars')
-    wp.set_defaults(func=lambda args: importlib.import_module('hexss.env').generate_proxy_env_commands())
+    sp_env = subparsers.add_parser('set_proxy_env', help='print commands to set proxy env vars')
+    sp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').set_proxy(persistent=True))
+    unsp_env = subparsers.add_parser('unset_proxy_env', help='print commands to set proxy env vars')
+    unsp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').unset_proxy(persistent=True))
 
     # hostname
     hn = subparsers.add_parser('hostname', help='get hostname')
@@ -262,6 +264,7 @@ def show_menu():
         'upgrade',
         'config',
         'set_proxy_env',
+        'unset_proxy_env',
 
         'details'
     ]

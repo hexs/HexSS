@@ -1,4 +1,8 @@
 from typing import Union, List
+import hexss
+
+hexss.check_packages('numpy', auto_install=True)
+
 import numpy as np
 
 

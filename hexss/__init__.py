@@ -1,6 +1,5 @@
 import os
 import platform
-from typing import Optional, Dict
 from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
@@ -33,42 +32,9 @@ def get_config(file_name):
     return config
 
 
-def initialize_proxies() -> Optional[Dict[str, str]]:
-    """
-    Initializes proxy configurations.
-
-    This function loads proxy configuration data from a JSON file located in the
-    designated directory. It parses the configuration file containing details
-    about proxy settings and returns the dictionary containing the relevant
-    proxy information. If an error occurs during initialization or loading of
-    the configurations, it captures the exception and prints an error message.
-
-    :raises Exception: If there is an error reading or parsing the proxy
-        configuration file.
-
-    :return: A dictionary containing the proxy settings for HTTP and HTTPS protocols,
-        or None if the proxies configuration cannot be loaded.
-    :rtype: Optional[Dict[str, str]]
-    """
-    try:
-        proxies_config = json_load(hexss_dir / 'config' / 'proxies.json', {
-            "proxies": {},
-            "proxies_example": {
-                "http": "http://<user>:<pass>@150.61.8.70:10086",
-                "https": "http://<user>:<pass>@150.61.8.70:10086"
-            }
-        }, True)
-
-        return proxies_config['proxies']
-
-    except Exception as e:
-        print(f"Error initializing proxies: {str(e)}")
-        return {}
-
-
-__version__ = '0.23.3'
+__version__ = '0.23.4'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()
-proxies = initialize_proxies()
+proxies = get_config('proxies')
 system = platform.system()

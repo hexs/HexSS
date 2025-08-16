@@ -6,7 +6,7 @@ from hexss import check_packages
 from hexss.numpy import split_int32_to_uint16, int16, int32
 from hexss.num import unpack_16bit, pack_16bit
 
-check_packages('pandas', 'pymodbus', 'Flask', 'pyserial', auto_install=True)
+check_packages('pandas', 'pymodbus==3.8.6', 'Flask', 'pyserial', auto_install=True)
 
 from pymodbus.client import ModbusSerialClient
 from hexss.serial import get_comport

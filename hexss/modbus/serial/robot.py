@@ -863,11 +863,16 @@ class Robot:
             comport: str,
             baudrate: int = 38400,
             timeout: float = 0.05,
-            num_slaves: int = 1,
+            slaves: Optional[dict] = None,
     ) -> None:
         self.client = ModbusSerialClient(port=comport, baudrate=baudrate, timeout=timeout)
-        self.num_slaves = num_slaves
-        self.slaves: List[Slave] = [Slave(self.client, slave_id) for slave_id in range(num_slaves)]
+        self.slaves: Dict[int, Slave] = {}
+        if slaves is None:
+            slaves = {
+                "0": {"min_max_position": [0, 40000]},
+            }
+        for id, slave in slaves.items():
+            self.slaves[int(id)] = Slave(self.client, int(id))
 
     def close(self) -> None:
         if self.client:
@@ -884,7 +889,7 @@ class Robot:
             right_grouped = ' '.join([right[i:i + 4] for i in range(0, 16, 4)])
             return f"| {left_grouped} | {right_grouped} |"
 
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             if slave_id and slave_id != slave.id:
                 continue
             slave.update_registers()
@@ -903,7 +908,7 @@ class Robot:
     def to_json(self, slave_id: Optional[int] = None, just_vals: bool = False) -> str:
         # get all self.slaves if slave_id is None
         result: Dict[str, Any] = {}
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             if slave_id and slave_id != slave.id:
                 continue
             reg_dict = {}
@@ -933,23 +938,23 @@ class Robot:
         return json.dumps(result, indent=4)
 
     def alarm_reset(self) -> None:
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             slave.alarm_reset()
 
     def servo(self, on: bool = True) -> None:
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             slave.servo(on)
 
     def pause(self, pause: bool = True) -> None:
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             slave.pause(pause)
 
     def home(self, alarm_reset: bool = False, servo_on: bool = False, unpause: bool = False) -> None:
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             slave.home(alarm_reset, servo_on, unpause)
 
     def move_to(self, row: int):
-        for slave in self.slaves:
+        for id, slave in self.slaves.items():
             slave.move_to(row)
 
     def wait(
@@ -968,19 +973,19 @@ class Robot:
         return None
 
     def get_distance(self, row: Optional[int] = None):
-        return math.sqrt(sum((slave.get_distance(row)) ** 2 for slave in self.slaves))
+        return math.sqrt(sum((slave.get_distance(row)) ** 2 for slave in self.slaves.values()))
 
     def is_any_moving(self) -> bool:
-        return any(slave.is_moving() for slave in self.slaves)
+        return any(slave.is_moving() for slave in self.slaves.values())
 
     def is_any_paused(self) -> bool:
-        return any(slave.is_paused() for slave in self.slaves)
+        return any(slave.is_paused() for slave in self.slaves.values())
 
     def is_any_servo_off(self) -> bool:
-        return not all(slave.is_servo_on() for slave in self.slaves)
+        return not all(slave.is_servo_on() for slave in self.slaves.values())
 
     def is_any_emergency(self) -> bool:
-        return any(slave.is_emergency() for slave in self.slaves)
+        return any(slave.is_emergency() for slave in self.slaves.values())
 
 
 if __name__ == "__main__":
@@ -991,7 +996,7 @@ if __name__ == "__main__":
         'USB Serial Port'
     )
     print(f"Using COM port: {comport}\n")
-    robot = Robot(comport=comport, baudrate=38400, num_slaves=1)
+    robot = Robot(comport=comport, baudrate=38400, )
 
     robot.client.connect()
 

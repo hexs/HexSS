@@ -42,13 +42,13 @@ class Image:
             self.image = source.image.copy()
         elif isinstance(source, np.ndarray):
             self.image = self._from_numpy_array(source)
+        elif isinstance(source, str) and source.startswith(("http://", "https://")):
+            self.image = self._from_url(source)
         elif isinstance(source, (Path, str)):
             if Path(source).is_file():
                 self.image = self._from_file(source)
             else:
                 raise FileNotFoundError(f"File does not exist: {source}")
-        elif isinstance(source, str) and source.startswith(("http://", "https://")):
-            self.image = self._from_url(source)
         elif isinstance(source, bytes):
             self.image = self._from_bytes(source)
         else:

@@ -11,8 +11,8 @@
 <div class="container py-4">
     <h1 class="mb-4">Slave Control Panel</h1>
     {% for slave in range(num_slaves) %}
-    {% set min_pos = min_max_position.get(slave, (0, 4000))[0] %}
-    {% set max_pos = min_max_position.get(slave, (0, 4000))[1] %}
+    {% set min_pos = min_max_position.get(slave, (0, 40000))[0] %}
+    {% set max_pos = min_max_position.get(slave, (0, 40000))[1] %}
     <div class="card mb-4" id="slave-card-{{ slave }}">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Slave {{ slave }}</strong>
@@ -68,7 +68,7 @@
 <script>
     const minMaxPosition = {{ min_max_position | tojson }};
     function getMinMax(slave) {
-        return minMaxPosition[String(slave)] || [0, 4000];
+        return minMaxPosition[String(slave)] || [0, 40000];
     }
 
     const numSlaves = {{ num_slaves }};
@@ -76,7 +76,7 @@
         btn.addEventListener('click', () => {
             const slave = parseInt(btn.getAttribute('data-slave'));
             const action = btn.getAttribute('data-action');
-            const payload = { slave };
+            const payload = {slave};
             const valueAttr = btn.getAttribute('data-value');
 
             if (action === 'move') return;
@@ -88,7 +88,7 @@
 
             fetch(`/api/${action}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
             })
             .then(res => res.json())
@@ -120,8 +120,8 @@
             const value = parseInt(this.value);
             fetch(`/api/move`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slave: slave, value: value })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({slave: slave, value: value})
             })
             .then(res => res.json())
             .then(json => {
@@ -140,13 +140,13 @@
             const slider = document.getElementById(`move-slider-${slave}`);
             const posInput = document.getElementById(`current-position-value-${slave}-slider`);
             let value = parseInt(slider.value) || minPos;
-            value = Math.max(value - 1, minPos);
+            value = Math.max(value - 100, minPos);
             slider.value = value;
             posInput.value = value;
             fetch(`/api/move`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slave: slave, value: value })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({slave: slave, value: value})
             });
         });
     });
@@ -157,13 +157,13 @@
             const slider = document.getElementById(`move-slider-${slave}`);
             const posInput = document.getElementById(`current-position-value-${slave}-slider`);
             let value = parseInt(slider.value) || minPos;
-            value = Math.min(value + 1, maxPos);
+            value = Math.min(value + 100, maxPos);
             slider.value = value;
             posInput.value = value;
             fetch(`/api/move`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slave: slave, value: value })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({slave: slave, value: value})
             });
         });
     });
@@ -188,8 +188,8 @@
                 document.getElementById(`move-slider-${slave}`).value = value;
                 fetch(`/api/move`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ slave: slave, value: value })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({slave: slave, value: value})
                 });
             }
         });

@@ -3,6 +3,7 @@ import traceback
 from functools import wraps
 
 import hexss
+from hexss.config import load_config
 
 hexss.check_packages('pandas', 'Flask', auto_install=True)
 
@@ -155,7 +156,7 @@ def index():
     return render_template(
         'index.html',
         num_slaves=app.config.get('num_slaves', 1),
-        min_max_position=app.config.get('min_max_position', {0: (0, 4000)}),
+        min_max_position=app.config.get('min_max_position', {0: (0, 40000)}),
     )
 
 
@@ -167,13 +168,13 @@ def register():
 def run(data, robot):
     app.config['data'] = data
     app.config['robot'] = robot
-    app.config['num_slaves'] = 4
-    app.config['min_max_position'] = {
-        0: (0, 40000),
-        1: (0, 20000),
-        2: (0, 15000),
-        3: (-5000, 5000)
-    }
+    config = load_config('control_robot_server')
+
+    min_max_position = {}
+    for id, slave in config['slaves'].items():
+        min_max_position[int(id)] = tuple(slave.get('min_max_position', [0, 40000]))
+    app.config['num_slaves'] = len(config['slaves'])
+    app.config['min_max_position'] = min_max_position
 
     ipv4 = data['config']['ipv4']
     port = data['config']['port']

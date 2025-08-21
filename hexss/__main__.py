@@ -150,7 +150,7 @@ def main():
     parser.add_argument(
         '-v', '-V', '--version',
         action='version',
-        version=f'%(prog)s {hexss.__version__}, python {hexss.python_version}({(hexss.path.get_main_python_path())})',
+        version=f'%(prog)s {hexss.__version__}, {(hexss.path.get_main_python_path())} {hexss.python_version}',
     )
     parser.add_argument(
         '-u', '-U', '--upgrade',

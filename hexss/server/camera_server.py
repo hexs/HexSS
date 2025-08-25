@@ -52,6 +52,11 @@ def video_capture(data: Dict[str, Any], camera_id: int) -> None:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         settings['width_height_from_cap'] = [int(cap.get(3)), int(cap.get(4))]
+        if settings.get('CAP_PROP_AUTO_EXPOSURE'):
+            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, settings.get('CAP_PROP_AUTO_EXPOSURE'))
+        if settings.get('CAP_PROP_EXPOSURE'):
+            cap.set(cv2.CAP_PROP_EXPOSURE, settings.get('CAP_PROP_EXPOSURE'))
+
         return cap
 
     cap = setup()
@@ -104,7 +109,10 @@ def get_data(data: Dict[str, Any], source: str, camera_id: int, quality: int = 1
     ret, buffer = cv2.imencode('.jpg', frame, encode_param)
     return buffer
 
-crosshairs=[{"type": "circle", "center": [500, 500], "radius": 100, "color": [255, 0, 0], "thickness": 2}]
+
+crosshairs = [{"type": "circle", "center": [500, 500], "radius": 100, "color": [255, 0, 0], "thickness": 2}]
+
+
 @app.route('/')
 def index():
     data = current_app.config['data']

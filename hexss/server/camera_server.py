@@ -82,8 +82,15 @@ def video_capture(data: Dict[str, Any], camera_id: int) -> None:
     cap.release()
 
 
-def get_data(data: Dict[str, Any], source: str, camera_id: int, quality: int = 100,
-             crosshairs: list = []) -> np.ndarray:
+def get_data(
+        data: Dict[str, Any],
+        source: str,
+        camera_id: int,
+        quality: int = 100,
+        crosshairs: list | None = None
+) -> np.ndarray:
+    if crosshairs is None:
+        crosshairs = []  # [{"type": "circle", "center": [500, 500], "radius": 100, "color": [255, 0, 0], "thickness": 2}]
     if source == 'video_capture':
         settings = data['config']['camera'][camera_id]
         frame = settings.get('img')
@@ -108,9 +115,6 @@ def get_data(data: Dict[str, Any], source: str, camera_id: int, quality: int = 1
     encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
     ret, buffer = cv2.imencode('.jpg', frame, encode_param)
     return buffer
-
-
-crosshairs = [{"type": "circle", "center": [500, 500], "radius": 100, "color": [255, 0, 0], "thickness": 2}]
 
 
 @app.route('/')
@@ -165,7 +169,6 @@ def get_video():
     try:
         crosshairs = json.loads(crosshairs)
     except:
-        logger.error(f"Invalid crosshairs JSON: {crosshairs}")
         crosshairs = []
 
     def generate():

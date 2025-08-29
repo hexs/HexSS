@@ -1,55 +1,47 @@
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Mapping
+
+
+def _ensure_json_object(obj: Any, where: str) -> Dict[str, Any]:
+    if not isinstance(obj, dict):
+        raise ValueError(f"JSON content in {where} is not a JSON object (expected dict).")
+    return obj
 
 
 def json_load(
         file_path: Union[str, Path],
-        default: Optional[Dict[str, Any]] = None,
+        default: Optional[Mapping[str, Any]] = None,
         dump: bool = False
 ) -> Dict[str, Any]:
     """
-    Load JSON data from a file. If the file does not exist or contains invalid JSON,
-    return a default value.
-
-    Args:
-        file_path (Union[str, Path]): Path to the JSON file.
-        default (Optional[Dict[str, Any]]): Default data to use if the file doesn't exist.
-        dump (bool): Whether to write the default data to the file if it doesn't exist.
-
-    Returns:
-        Dict[str, Any]: The loaded JSON data.
-
-    Raises:
-        ValueError: If the file does not have a .json extension or the JSON content is not a dict.
+    Load JSON data from a file. If the file does not exist or contains invalid/empty JSON,
+    return a copy of `default` (or {}) and optionally write it to disk when `dump=True`.
     """
     path = Path(file_path)
     if path.suffix.lower() != '.json':
         raise ValueError("File extension must be .json")
 
-    # Make a shallow copy of the default (if provided) to avoid modifying the original.
-    data: Dict[str, Any] = default.copy() if default is not None else {}
+    if default is not None and not isinstance(default, Mapping):
+        raise ValueError("`default` must be a mapping (dict-like) if provided.")
+
+    data: Dict[str, Any] = dict(default or {})
 
     if path.exists():
         try:
-            with path.open('r', encoding='utf-8') as f:
-                loaded = json.load(f)
-            if not isinstance(loaded, dict):
-                raise ValueError(
-                    f"JSON content in {file_path} is not a JSON object (expected dict)."
-                )
+            with path.open("r", encoding="utf-8") as f:
+                content = f.read()
+                if content.strip() == "":
+                    loaded = {}
+                else:
+                    loaded = json.loads(content)
+            _ensure_json_object(loaded, str(file_path))
             data.update(loaded)
         except json.JSONDecodeError as e:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            if content == '':
-                pass
-            else:
-                raise json.JSONDecodeError(
-                    f"Invalid JSON in {file_path}: {e.msg}", e.doc, e.pos
-                ) from e
+            raise json.JSONDecodeError(
+                f"Invalid JSON in {file_path}: {e.msg}", e.doc, e.pos
+            ) from e
 
-    # Dump default data to file if specified
     if dump:
         json_dump(path, data)
 
@@ -58,170 +50,152 @@ def json_load(
 
 def json_dump(
         file_path: Union[str, Path],
-        data: Dict[str, Any],
+        data: Mapping[str, Any],
         indent: int = 4
 ) -> Dict[str, Any]:
     """
-    Write JSON data to a file.
-
-    Args:
-        file_path (Union[str, Path]): Path to the JSON file.
-        data (Dict[str, Any]): The data to write to the file.
-        indent (int): The number of spaces for indentation in the JSON file.
-
-    Raises:
-        ValueError: If the file does not have a .json extension.
-        OSError: If there is an issue writing to the file.
+    Write JSON data to a file (atomically).
     """
     path = Path(file_path)
-    if path.suffix.lower() != '.json':
+    if path.suffix.lower() != ".json":
         raise ValueError("File extension must be .json")
 
-    # Create parent directories if they don't exist.
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    tmp = path.with_suffix(path.suffix + ".tmp")
     try:
-        with path.open('w', encoding='utf-8') as f:
+        with tmp.open("w", encoding="utf-8", newline="\n") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
+            f.flush()
+        tmp.replace(path)  # atomic on POSIX/NTFS
     except OSError as e:
+        # Best effort cleanup
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
         raise OSError(f"Error writing to {file_path}: {e.strerror}") from e
-    return data
+
+    # Return a plain dict (not just Mapping)
+    return dict(data)
+
+
+def _deep_update_path(d: Dict[str, Any], keys: list, value: Any) -> None:
+    cur = d
+    for key in keys[:-1]:
+        if key not in cur or not isinstance(cur[key], dict):
+            cur[key] = {}
+        cur = cur[key]
+    cur[keys[-1]] = value
 
 
 def json_update(
         file_path: Union[str, Path],
-        new_data: Dict[str, Any],
-        deep: bool = False,
+        new_data: Mapping[str, Any],
+        deep: Union[bool, str, None] = False,
+        *,
+        sep: str = ".",
         indent: int = 4
 ) -> Dict[str, Any]:
     """
-    Update an existing JSON file with new data, supporting dot notation for nested keys.
+    Update an existing JSON file with new data.
 
-    Args:
-        file_path (Union[str, Path]): Path to the JSON file.
-        new_data (Dict[str, Any]): Data to update in the JSON file.
-        deep (bool): If True, allows deep updates using dot notation.
-        indent (int): The number of spaces for indentation in the JSON file.
+    Deep update options:
+      - deep=False (default): shallow `dict.update`
+      - deep=True: treat string keys containing `sep` (default ".") as paths (e.g. "a.b.c")
+      - deep='<custom separator>': use that separator (e.g. "/" -> "a/b/c")
 
-    Returns:
-        Dict[str, Any]: The updated data.
-
-    Raises:
-        ValueError: If the file does not have a .json extension or contains non-dict JSON.
-        json.JSONDecodeError: If the existing file contains invalid JSON.
-        OSError: If there is an issue writing to the file.
+    Notes:
+      - For deep updates, keys without the separator are assigned directly (no merge).
+      - If the existing file contains non-dict JSON, this raises.
     """
-
-    def deep_update(d: Dict[str, Any], keys: list, value: Any):
-        for key in keys[:-1]:
-            if key not in d or not isinstance(d[key], dict):
-                d[key] = {}
-            d = d[key]
-        d[keys[-1]] = value
-
     path = Path(file_path)
-    if path.suffix.lower() != '.json':
+    if path.suffix.lower() != ".json":
         raise ValueError("File extension must be .json")
 
-    # Load the existing data or initialize with an empty dict.
-    try:
-        data = json_load(path, default={})
-    except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(
-            f"Invalid JSON in {file_path}: {e.msg}", e.doc, e.pos
-        ) from e
+    # Load current data ({} if not present/empty)
+    data = json_load(path, default={})
 
-    # Update the existing data with new values.
-    if deep:
-        for k, v in new_data.items():
-            if '.' in k:
-                keys = k.split('.')
-                deep_update(data, keys, v)
-            else:
-                # Direct key assignment (replace, do NOT merge dicts)
-                data[k] = v
+    # Validate existing json is a dict (json_load already guarantees)
+    _ensure_json_object(data, str(file_path))
+
+    # Decide separator behavior
+    if isinstance(deep, str):
+        active_sep = deep
+        use_deep = True
+    elif deep is True:
+        active_sep = sep
+        use_deep = True
     else:
-        data.update(new_data)
+        active_sep = None
+        use_deep = False
 
-    # Write the updated data back to the file.
-    try:
-        json_dump(path, data, indent)
-    except OSError as e:
-        raise OSError(f"Error updating {file_path}: {e.strerror}") from e
+    # Apply updates
+    if use_deep:
+        for k, v in new_data.items():
+            if isinstance(k, str) and active_sep and active_sep in k:
+                keys = [p for p in k.split(active_sep) if p != ""]
+                if not keys:
+                    continue  # ignore empty path like "" or leading/trailing separators only
+                _deep_update_path(data, keys, v)
+            else:
+                data[k] = v  # replace; do not attempt dict-merge
+    else:
+        data.update(dict(new_data))
 
+    json_dump(path, data, indent=indent)
     return data
 
 
 if __name__ == '__main__':
-    # Example usage:
     from pprint import pprint
-    from hexss import json_update
+    from hexss.constants import *
 
-    d1 = json_dump('config.json', {
-        "device": "Laptop",
-        "model_name": "-",
-        "version": "1.1"
-    })
-    print('d1')
-    pprint(d1)
-    # {
-    #     "device": "Laptop",
-    #     "model_name": "-",
-    #     "version": "1.1"
-    # }
+    # Example usage:
+    from pathlib import Path
+    from hexss import json_dump, json_update
 
-    d2 = json_update('config.json', {'data': {'a1': 1, 'a2': 2, 'a3': 3}})
-    print('d2')
-    pprint(d2)
-    # {
-    #     "device": "Laptop",
-    #     "model_name": "-",
-    #     "version": "1.1",
-    #     "data": {
-    #         "a1": 1,
-    #         "a2": 2,
-    #         "a3": 3
-    #     }
-    # }
+    # Example file
+    file = Path("config.json")
+    json_dump(file, {})  # reset
 
-    d3 = json_update('config.json', {'data': {'a4': 2}})
-    print('d3')
-    pprint(d3)
-    # {
-    #     "device": "Laptop",
-    #     "model_name": "-",
-    #     "version": "1.1",
-    #     "data": {
-    #         "a4": 2
-    #     }
-    # }
-    #
+    # 1. Load with default (file may not exist yet)
+    print(f"\n{CYAN}Loaded:{END}")
+    data = json_load(file, default={"theme": "light", "volume": 50}, dump=True)
+    pprint(data)
+    # {'theme': 'light', 'volume': 50}
 
-    d4 = json_update('config.json', {'data.a3': 4}, deep=True)
-    print('d4')
-    pprint(d4)
-    # {
-    #     "device": "Laptop",
-    #     "model_name": "-",
-    #     "version": "1.1",
-    #     "data": {
-    #         "a4": 2,
-    #         "a3": 4
-    #     }
-    # }
-    #
+    # 2. Update shallow (simple dict.update)
+    print(f"\n{CYAN}After shallow update:{END}")
+    json_update(file, {"volume": 75})
+    pprint(json_load(file))
+    # {'theme': 'light', 'volume': 75}
 
-    d5 = json_update('config.json', {'data.a3': {'b1': 3}}, deep=True)
-    print('d5')
-    pprint(d5)
-    # {
-    #     "device": "Laptop",
-    #     "model_name": "-",
-    #     "version": "1.1",
-    #     "data": {
-    #         "a4": 2,
-    #         "a3": {
-    #             "b1": 3
-    #         }
-    #     }
-    # }
+    # 3. Update deeply with dot-notation
+    print(f"\n{CYAN}After deep update:{END}")
+    json_update(file, {"ui.colors.background": "#000000"}, deep=True)
+    pprint(json_load(file))
+    # {'theme': 'light', 'ui': {'colors': {'background': '#000000'}}, 'volume': 75}
+
+    # 4. Update deeply with custom separator
+    print(f"\n{CYAN}After deep update with '/':{END}")
+    json_update(file, {"network/wifi/ssid": "MyWiFi"}, deep="/")
+    pprint(json_load(file))
+    # {'network': {'wifi': {'ssid': 'MyWiFi'}},
+    #  'theme': 'light',
+    #  'ui': {'colors': {'background': '#000000'}},
+    #  'volume': 75}
+
+    # 5. Use a Mapping instead of dict (works because input type is Mapping)
+    print(f"\n{CYAN}After mapping update:{END}")
+    from types import MappingProxyType
+
+    extra = MappingProxyType({"readonly": True, "network/ethernet/enabled": False})
+    json_update(file, extra, deep='/')
+    pprint(json_load(file))
+    # {'network': {'ethernet': {'enabled': False}, 'wifi': {'ssid': 'MyWiFi'}},
+    #  'readonly': True,
+    #  'theme': 'light',
+    #  'ui': {'colors': {'background': '#000000'}},
+    #  'volume': 75}

@@ -53,8 +53,10 @@ def video_capture(data: Dict[str, Any], camera_id: int) -> None:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         settings['width_height_from_cap'] = [int(cap.get(3)), int(cap.get(4))]
         if settings.get('CAP_PROP_AUTO_EXPOSURE'):
+            print('set CAP_PROP_AUTO_EXPOSURE', settings.get('CAP_PROP_AUTO_EXPOSURE'))
             cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, settings.get('CAP_PROP_AUTO_EXPOSURE'))
         if settings.get('CAP_PROP_EXPOSURE'):
+            print('set CAP_PROP_EXPOSURE', settings.get('CAP_PROP_EXPOSURE'))
             cap.set(cv2.CAP_PROP_EXPOSURE, settings.get('CAP_PROP_EXPOSURE'))
 
         return cap
@@ -97,6 +99,8 @@ def get_data(
         status = settings.get('status')
         if not status or frame is None:
             w, h = settings.get('width_height', [640, 480])
+            if w == 0 or h == 0:
+                w, h = 640, 480
             frame = np.full((int(h), int(w), 3), (50, 50, 50), dtype=np.uint8)
             cv2.putText(frame, f'Failed to capture image', (100, 150), 1, 2, (0, 0, 255), 2)
             cv2.putText(frame, f'from camera {camera_id}', (100, 190), 1, 2, (0, 0, 255), 2)

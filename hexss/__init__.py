@@ -7,6 +7,7 @@ from .string import secure_filename, random_str
 from .python import check_packages, install, install_upgrade
 from .path import get_hexss_dir
 from . import env
+from .pyconfig import Config
 
 
 def get_hostname() -> str:
@@ -32,7 +33,7 @@ def get_config(file_name):
     return config
 
 
-__version__ = '0.23.6'
+__version__ = '0.24.0'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

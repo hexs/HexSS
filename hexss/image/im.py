@@ -389,6 +389,187 @@ class Image:
         self.image = enhancer.enhance(factor)
         return self
 
+    def best_match_location(
+            self,
+            template_im: "Image",
+            *,
+            # --- ROI selectors (choose at most one) ---
+            xyxy: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywh: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xyxyn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            xywhn: Optional[Union[Tuple[float, float, float, float], List[float], np.ndarray]] = None,
+            # --- options ---
+            gray: bool = False,
+            canny: bool = False,
+            blur_ksize: int = 3,
+            method: int = cv2.TM_CCOEFF_NORMED,
+    ) -> Tuple[Optional[np.ndarray], Optional[float]]:
+
+        # Source array (BGR)
+        src_bgr = self.numpy()
+
+        # Determine ROI (absolute integers, clipped to image)
+        h_s, w_s = src_bgr.shape[:2]
+        if any(v is not None for v in (xyxy, xywh, xyxyn, xywhn)):
+            x1, y1, x2, y2 = self.to_xyxy(xyxy=xyxy, xywh=xywh, xyxyn=xyxyn, xywhn=xywhn)
+            x1 = max(0, min(int(round(x1)), w_s - 1))
+            y1 = max(0, min(int(round(y1)), h_s - 1))
+            x2 = max(x1 + 1, min(int(round(x2)), w_s))
+            y2 = max(y1 + 1, min(int(round(y2)), h_s))
+            roi_x, roi_y, roi_w, roi_h = x1, y1, x2 - x1, y2 - y1
+            src_roi = src_bgr[y1:y2, x1:x2]
+        else:
+            roi_x, roi_y, roi_w, roi_h = 0, 0, w_s, h_s
+            src_roi = src_bgr
+
+        # Template array (BGR)
+        tpl_bgr = template_im.numpy()
+
+        # Convert to working images
+        if gray:
+            g_s = cv2.cvtColor(src_roi, cv2.COLOR_BGR2GRAY)
+            g_t = cv2.cvtColor(tpl_bgr, cv2.COLOR_BGR2GRAY)
+        else:
+            g_s = src_roi
+            g_t = tpl_bgr
+
+        # Optional blur
+        if blur_ksize:
+            g_s = cv2.GaussianBlur(g_s, (blur_ksize, blur_ksize), 0)
+            g_t = cv2.GaussianBlur(g_t, (blur_ksize, blur_ksize), 0)
+
+        # Optional edges
+        if canny:
+            e_s = cv2.Canny(g_s, 50, 150)
+            e_t = cv2.Canny(g_t, 50, 150)
+            kernel = np.ones((3, 3), np.uint8)
+            e_s = cv2.dilate(e_s, kernel, iterations=1)
+            e_t = cv2.dilate(e_t, kernel, iterations=1)
+            work_s, work_t = e_s, e_t
+        else:
+            work_s, work_t = g_s, g_t
+
+        h_t, w_t = work_t.shape[:2]
+        h_r, w_r = work_s.shape[:2]
+
+        # sanity checks
+        if h_t < 5 or w_t < 5 or h_t >= h_r or w_t >= w_r:
+            return (None, None), None
+
+        # Template matching within ROI
+        res = cv2.matchTemplate(work_s, work_t, method)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+        # Choose best (for TM_CCOEFF_NORMED higher is better)
+        if method in (cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED):
+            tl = min_loc
+            score = 1.0 - float(min_val)  # convert to "higher is better"
+        else:
+            tl = max_loc
+            score = float(max_val)
+
+        # Convert top-left + center back to full-image coords
+        tl_abs = (tl[0] + roi_x, tl[1] + roi_y)
+        center = (tl_abs[0] + w_t / 2.0, tl_abs[1] + h_t / 2.0)
+        return np.array(center, dtype=np.float32), score
+
+    def align_image(
+            self,
+            pts_src: np.ndarray, pts_dst: np.ndarray,
+
+    ) -> Dict[str, Any]:
+        """
+        Align `image` (source) to match `pts_dst` using corresponding points (pts_src -> pts_dst).
+
+        Notes:
+            - If 2 points: uses Similarity (rotation + uniform scale + translation)
+            - If 3 points: uses exact Affine transform
+            - If >=4 points: uses Homography with RANSAC
+        """
+
+        def _triangle_area(p0, p1, p2) -> float:
+            p0 = np.asarray(p0, dtype=np.float64)
+            p1 = np.asarray(p1, dtype=np.float64)
+            p2 = np.asarray(p2, dtype=np.float64)
+            return abs(0.5 * np.cross(p1 - p0, p2 - p0))
+
+        def _rmse_points(p_pred: np.ndarray, p_true: np.ndarray) -> float:
+            p_pred = np.asarray(p_pred, dtype=np.float64)
+            p_true = np.asarray(p_true, dtype=np.float64)
+            return float(np.sqrt(np.mean((p_pred - p_true) ** 2)))
+
+        pts_src = np.asarray(pts_src, dtype=np.float32)
+        pts_dst = np.asarray(pts_dst, dtype=np.float32)
+        assert pts_src.shape == pts_dst.shape, "Source and destination points must have same shape"
+        assert pts_src.ndim == 2 and pts_src.shape[1] == 2, "Points must have shape (N, 2)"
+        N = pts_src.shape[0]
+        assert N >= 2, "Need at least 2 points"
+
+        w, h = self.size
+        out_w, out_h = w, h
+
+        method = None
+        M = None
+        inliers = None
+
+        if N == 2:
+            # Similarity (rotation + uniform scale + translation)
+            method = "estimateAffinePartial2D (Similarity)"
+            M, inliers = cv2.estimateAffinePartial2D(pts_src, pts_dst)  # 2x3
+            if M is None:
+                raise RuntimeError("Failed to compute estimateAffinePartial2D, check point order/accuracy")
+            self.image = Image(cv2.warpAffine(self.numpy(), M, (out_w, out_h), flags=cv2.INTER_LINEAR))
+
+            pts_src_h = np.hstack([pts_src, np.ones((N, 1), dtype=np.float32)])  # (N,3)
+            pts_src_warp = (M @ pts_src_h.T).T  # (N,2)
+            rmse = _rmse_points(pts_src_warp, pts_dst)
+
+        elif N == 3:
+            # Exact Affine
+            area_src = _triangle_area(pts_src[0], pts_src[1], pts_src[2])
+            area_dst = _triangle_area(pts_dst[0], pts_dst[1], pts_dst[2])
+            if area_src < 1e-6 or area_dst < 1e-6:
+                raise ValueError("3 points (src/dst) are collinear, cannot compute stable affine")
+
+            method = "getAffineTransform (Affine exact)"
+            M = cv2.getAffineTransform(pts_src, pts_dst)  # 2x3
+            self.image = Image(cv2.warpAffine(self.numpy(), M, (out_w, out_h), flags=cv2.INTER_LINEAR))
+
+            pts_src_h = np.hstack([pts_src, np.ones((N, 1), dtype=np.float32)])
+            pts_src_warp = (M @ pts_src_h.T).T
+            rmse = _rmse_points(pts_src_warp, pts_dst)
+
+        else:  # N >= 4
+            # Homography + RANSAC
+            method = "findHomography (Perspective, RANSAC)"
+            H, mask = cv2.findHomography(
+                pts_src, pts_dst,
+                method=cv2.RANSAC,
+                ransacReprojThreshold=3.0,
+                maxIters=2000,
+                confidence=0.995
+            )
+            if H is None:
+                raise RuntimeError("Failed to compute findHomography, check points or quality")
+            M = H
+            self.image = Image(cv2.warpPerspective(self.numpy(), H, (out_w, out_h), flags=cv2.INTER_LINEAR))
+            inliers = mask
+
+            pts_src_h = np.hstack([pts_src, np.ones((N, 1), dtype=np.float32)])  # (N,3)
+            warp_h = (H @ pts_src_h.T).T  # (N,3)
+            pts_src_warp = warp_h[:, :2] / warp_h[:, 2:3]
+            rmse = _rmse_points(pts_src_warp, pts_dst)
+
+        info = {
+            "method": method,
+            "matrix": M,
+            "rmse": rmse,
+            "inliers": inliers,
+            "used_points": N,
+            "output_size": (out_w, out_h),
+        }
+        return info
+
     def resize(
             self,
             size: Union[Tuple[int, int], str],
@@ -438,19 +619,33 @@ class Image:
     def draw(self, origin: Union[str, Tuple[float, float]] = 'topleft') -> "ImageDraw":
         return ImageDraw(self, origin)
 
-    def draw_box(self, box: Box) -> None:
-        if box.size is None:
-            box.set_size(self.size)
-        draw = self.draw()
+    def circle(
+            self,
+            xy: Sequence[float],
+            radius: float,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+    ) -> Self:
+        self.draw().circle(xy, radius=radius, fill=fill, outline=outline, width=width)
+        return self
 
-        if box.type == 'polygon':
-            draw.polygon(box, outline=box.color, width=box.width)
-            draw.text(xy=box.points[0], text=box.name, font=box.font,
-                      fill=box.text_color, stroke_width=box.width, stroke_fill=box.text_stroke_color)
-        elif box.type == 'box':
-            draw.rectangle(box, outline=box.color, width=box.width)
-            draw.text(xyn=box.x1y1n, text=box.name, font=box.font,
-                      fill=box.text_color, stroke_width=box.width, stroke_fill=box.text_stroke_color)
+    def rectangle(
+            self,
+            xy: Union[Coords, Box] = None,
+            fill: _Ink = None,
+            outline: _Ink = None,
+            width: int = 1,
+            xyxy=None,
+            xywh=None,
+            xyxyn=None,
+            xywhn=None
+    ) -> Self:
+        self.draw().rectangle(
+            xy=xy, fill=fill, outline=outline, width=width,
+            xyxy=xyxy, xywhn=xywhn, xyxyn=xyxyn, xywh=xywh
+        )
+        return self
 
 
 class ImageDraw:
@@ -591,39 +786,35 @@ class ImageDraw:
         return self
 
 
-class Boxes:
-    def __init__(
-            self,
-            size: Optional[Tuple[float, float]] = None,
-            image: Image = None,
-            boxes: Optional[Dict[str, Box]] = None
-    ) -> None:
-        if size is not None:
-            self.width, self.height = map(float, size)
-            self.image = None
-        if image is not None:
-            self.width, self.height = image.size
-            self.image = image
-        self.boxes = boxes or {}
+if __name__ == '__main__':
+    img = Image(r"C:\PythonProjects\auto_inspection_data__QM7-3474\img_full\250828 123928 - Copy.png")
+    img2 = Image(r"C:\PythonProjects\auto_inspection_data__QM7-3474\img_full\250909 141810.png")
 
-    def add(
-            self,
-            name: str,
-            *,
-            xywh: Optional[Coord4] = None,
-            xyxy: Optional[Coord4] = None,
-            xywhn: Optional[Coord4] = None,
-            xyxyn: Optional[Coord4] = None,
-            points: Optional[Sequence[Tuple[float, float]]] = None,
-            pointsn: Optional[Sequence[Tuple[float, float]]] = None,
-            xy: Optional[Tuple[float, float]] = None,
-            xyn: Optional[Tuple[float, float]] = None,
-            x1y1: Optional[Tuple[float, float]] = None,
-            x1y1n: Optional[Tuple[float, float]] = None,
-            wh: Optional[Tuple[float, float]] = None,
-            whn: Optional[Tuple[float, float]] = None, ) -> None:
-        self.boxes[name] = Box(
-            (self.width, self.height),
-            xywh=xywh, xyxy=xyxy, xywhn=xywhn, xyxyn=xyxyn, points=points, pointsn=pointsn, xy=xy,
-            xyn=xyn, x1y1=x1y1, x1y1n=x1y1n, wh=wh, whn=whn
-        )
+    marks = {
+        'm1': {"xywhn": [0.057543, 0.048778, 0.016425, 0.024453], "k": 3},
+        'm2': {"xywhn": [0.340268, 0.063564, 0.016587, 0.026718], "k": 3},
+        'm3': {"xywhn": [0.047226, 0.778535, 0.017604, 0.025659], "k": 3},
+        'm4': {"xywhn": [0.340291, 0.778185, 0.020316, 0.028431], "k": 3},
+    }
+    for mark in marks.values():
+        box = Box(xywhn=mark['xywhn'])
+        box.set_size(img.size)
+        mark['im'] = img.crop(box)
+        scale_xywhn = box.scale(mark.get('k', 3)).xywhn
+        mark['scale_xywhn'] = scale_xywhn
+
+    pts_src = []
+    pts_dst = []
+    for mark in marks.values():
+        xywhn_mark_area = mark['scale_xywhn']
+        mark_im = mark['im']
+        xy, score = img2.best_match_location(mark_im, xywhn=xywhn_mark_area)
+        pts_dst.append(Box(size=img2.size, xywhn=mark['xywhn']).xy)
+        pts_src.append(xy)
+        print("location:", xy, "score:", score)
+        img2.rectangle(xywhn=xywhn_mark_area, outline=(255, 0, 0), width=5)
+        if xy is not None:
+            img2.rectangle(xywh=(*xy, *mark_im.size), outline=(255, 0, 0), width=5)
+
+    img2.align_image(pts_src, pts_dst)
+    img2.show()

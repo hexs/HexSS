@@ -22,7 +22,6 @@ def run(cmd: list[str]) -> subprocess.CompletedProcess:
 def start_wlan_service_if_needed(timeout_sec: int = 10) -> None:
     q = run(["sc", "query", "WlanSvc"])
     text = (q.stdout or "") + (q.stderr or "")
-    print(text)
     # Look for 'RUNNING' (english) or the numeric state 0x00000004
     if "RUNNING" in text or "STATE              : 4" in text or "STATE              : 0x4" in text:
         return

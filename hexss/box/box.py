@@ -521,14 +521,23 @@ def test_2():
 
 
 if __name__ == "__main__":
+    print('=== test 1 ===')
+    test_1()
+    print()
+
+    print('=== test 2 ===')
+    test_2()
+    print()
+
     b = Box(xywhn=(0.3, 0.8, 0.2, 0.1))
     print(b.xywhn)  # [0.3 0.8 0.2 0.1]
     b.scale(3)  # normalized scaling (default)
     print(b.xywhn)  # -> [0.3 0.8 0.6 0.3]
 
-    print('=== test 1 ===')
-    test_1()
+    b = Box(xywh=(30, 40, 10, 10))
+    print(b)
+    print(b.xywh)
+    b.move(10,20)
+    print(b.xywh)
 
-    print()
-    print('=== test 2 ===')
-    test_2()
+

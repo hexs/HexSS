@@ -7,8 +7,6 @@ import ctypes
 from pathlib import Path
 from typing import Optional, Union
 
-import hexss
-
 
 def get_venv_dir() -> Optional[Path]:
     """
@@ -92,6 +90,26 @@ def get_script_dir() -> Path:
         return Path(sys.argv[0]).resolve().parent
     except Exception as e:
         raise RuntimeError("Unable to determine the script directory.") from e
+
+
+def get_module_path() -> Path:
+    """
+    Get the absolute path of the current module file (__file__).
+
+    Returns:
+        Path: Path to the current module.
+    """
+    return Path(__file__).resolve()
+
+
+def get_module_dir() -> Path:
+    """
+    Get the directory containing the current module file (__file__).
+
+    Returns:
+        Path: Directory path of the current module.
+    """
+    return Path(__file__).resolve().parent
 
 
 def get_current_working_dir() -> Path:
@@ -354,4 +372,3 @@ if __name__ == "__main__":
                     print("    -> [Permission Denied]")
                 except OSError as e:
                     print(f"    -> [Error: {e}]")
-

@@ -9,6 +9,8 @@ from PIL import ImageGrab
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 
+from .pygame import numpy_to_pygame_surface, pygame_surface_to_numpy
+
 
 def get_image_from_cam(cap: cv2.VideoCapture) -> Optional[np.ndarray]:
     ret, frame = cap.read()
@@ -26,16 +28,6 @@ def get_image_from_url(url: str) -> Optional[np.ndarray]:
     except Exception as e:
         print(f"Error loading image from URL: {e}")
         return None
-
-
-def numpy_to_pygame_surface(arr: np.ndarray) -> pygame.Surface:
-    arr = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
-    return pygame.surfarray.make_surface(arr.swapaxes(0, 1))
-
-
-def pygame_surface_to_numpy(surface: pygame.Surface) -> np.ndarray:
-    array = pygame.surfarray.array3d(surface)
-    return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
 
 
 def get_image(source: Union[cv2.VideoCapture, str], output: Literal['numpy', 'pygame'] = 'numpy') -> Optional[

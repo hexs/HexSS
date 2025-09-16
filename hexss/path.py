@@ -1,9 +1,11 @@
+import inspect
 import os
 import re
 import subprocess
 import sys
 import platform
 import ctypes
+import types
 from pathlib import Path
 from typing import Optional, Union
 
@@ -78,7 +80,7 @@ def get_python_path() -> Path:
     return Path(sys.executable)
 
 
-def get_script_dir() -> Path:
+def get_script_dir(strict=False) -> Path | None:
     """
     Returns the directory where the current script is located.
 
@@ -89,30 +91,48 @@ def get_script_dir() -> Path:
         # Resolve the absolute path of the script and return its parent directory.
         return Path(sys.argv[0]).resolve().parent
     except Exception as e:
-        raise RuntimeError("Unable to determine the script directory.") from e
+        if strict:
+            raise RuntimeError("Unable to determine the script directory.") from e
 
 
-def get_module_path() -> Path:
-    """
-    Get the absolute path of the current module file (__file__).
-
-    Returns:
-        Path: Path to the current module.
-    """
-    return Path(__file__).resolve()
+def get_direct_caller():
+    # Path of the direct caller (importer)
+    frame = inspect.currentframe()
+    caller_frame = frame.f_back
+    caller_file = Path(caller_frame.f_code.co_filename).resolve()
+    return caller_file
 
 
-def get_module_dir() -> Path:
-    """
-    Get the directory containing the current module file (__file__).
+def get_source_file(obj, strict=False) -> Path | None:
+    """Return absolute path of the file where `obj` is defined."""
+    # Module
+    if isinstance(obj, types.ModuleType):
+        f = getattr(obj, "__file__", None)
+        if f is None:
+            if strict:
+                raise ValueError("Module has no file (built-in or namespace package).")
+        return Path(f).resolve()
 
-    Returns:
-        Path: Directory path of the current module.
-    """
-    return Path(__file__).resolve().parent
+    # Function / method
+    if inspect.isfunction(obj) or inspect.ismethod(obj):
+        return Path(obj.__code__.co_filename).resolve()
+
+    # Class
+    if inspect.isclass(obj):
+        return Path(inspect.getfile(obj)).resolve()
+
+    # Fallback: use the object's module if available
+    mod = inspect.getmodule(obj)
+    if mod and getattr(mod, "__file__", None):
+        return Path(mod.__file__).resolve()
+
+    if strict:
+        raise TypeError(f"Unsupported object type: {type(obj)!r}")
+
+    return None
 
 
-def get_current_working_dir() -> Path:
+def get_current_working_dir(strict=False) -> Path:
     """
     Returns the current working directory.
 
@@ -122,7 +142,8 @@ def get_current_working_dir() -> Path:
     try:
         return Path.cwd()
     except Exception as e:
-        raise RuntimeError("Unable to retrieve the current working directory.") from e
+        if strict:
+            raise RuntimeError("Unable to retrieve the current working directory.") from e
 
 
 def ascend_path(path: Path, levels: int = 1) -> Path:

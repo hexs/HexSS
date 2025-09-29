@@ -324,6 +324,18 @@ class Image:
         self.image = self.image.rotate(angle, resample, expand, center, translate, fillcolor)
         return self
 
+    def shift(self, dx: int, dy: int) -> Self:
+        """
+        Shift the image by (dx, dy) pixels.
+        Positive dx -> shift right
+        Positive dy -> shift down
+        """
+        # Affine transform matrix for translation
+        matrix = (1, 0, dx,  # x' = x + dx
+                  0, 1, dy)  # y' = y + dy
+        self.image = self.image.transform(self.image.size, PILImage.AFFINE, matrix)
+        return self
+
     def transpose(self, method: PILImage.Transpose) -> Self:
         self.image = self.image.transpose(method)
         return self
@@ -716,6 +728,8 @@ class ImageDraw:
             xywhn: tuple[float, float, float, float] | list[float] | np.ndarray | None = None,
     ) -> Self:
         if isinstance(xy, Box):
+            if not xy._size:
+                xy.set_size(self.im.size)
             xy = xy.xyxy.tolist()
         if xy is None:
             xy = self.im.to_xyxy(xyxy, xywh, xyxyn, xywhn)

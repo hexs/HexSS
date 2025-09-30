@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Tuple, Union, Optional, overload
 import numpy as np
 import cv2
+from hexss.frame_publisher import FramePublisher
 
 ArrayLike = np.ndarray
 PathLike = Union[str, Path]
@@ -40,6 +41,7 @@ class Image:
             self.img = loaded.img
         else:
             raise TypeError(f"Unsupported source type: {type(source)}")
+        self.publisher = None
 
     @classmethod
     def from_file(cls, path: PathLike, flags: int = cv2.IMREAD_COLOR) -> "Image":
@@ -91,11 +93,10 @@ class Image:
             raise IOError(f"Failed to write image to: {path}")
         return self
 
-    def show(self, winname: str = "window", wait_ms: int = 0, destroy: bool = False) -> "Image":
-        cv2.imshow(winname, self.img)
-        cv2.waitKey(wait_ms)
-        if destroy:
-            cv2.destroyWindow(winname)
+    def show(self, winname: str = "window") -> "Image":
+        if self.publisher is None:
+            self.publisher = FramePublisher()
+        self.publisher.imshow(winname, self.img)
         return self
 
     def __repr__(self) -> str:
@@ -109,8 +110,8 @@ class Image:
 
 if __name__ == "__main__":
     # Example usage
-    img = Image(r"C:\Users\c026730\Desktop\Camera mount\img1.png")
+    img = Image(r"C:\Users\c026730\Downloads\Rc3O-2025-09-29T02-20-33-914Z.png")
     print(img)  # <Image np.ndarray WxHxC dtype=uint8>
     img2 = img.copy()
-    img2.show(wait_ms=1000).save("test_copy.jpg")
+    img2.show().save("test_copy.jpg")
     print(img2.channels)

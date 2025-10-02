@@ -1,3 +1,4 @@
+import json
 import re
 import ast
 from pathlib import Path
@@ -103,13 +104,18 @@ def _wrap_mutables(obj: Any, touch_cb) -> Any:
 
 
 class Config:
-    def __init__(self, config_file: Union[Path, str] = "config.py") -> None:
+    def __init__(self, config_file: Union[Path, str] = "cfg.pycfg", default: str = "") -> None:
         self._file = Path(config_file)
         self._data: Dict[str, Any] = {}
         if self._file.exists():
             self._load()
         else:
+            self._file.parent.mkdir(exist_ok=True)
+            self._file.write_text(default)
             self._save()
+
+    def __repr__(self) -> str:
+        return json.dumps(self._data, indent=4)
 
     def _load(self) -> None:
         code = self._file.read_text(encoding="utf-8") if self._file.exists() else ""
@@ -589,7 +595,7 @@ if __name__ == '__main__':
     from hexss.pyconfig import Config
 
     # 1) Point Config to your target file
-    cfg_path = Path("classification_model_example/config.py")
+    cfg_path = Path("classification_model_example/config.pycfg")
     cfg = Config(cfg_path)  # creates/saves if missing
 
     # 2) Make sure imports you’ll need exist (idempotent; merges nicely)

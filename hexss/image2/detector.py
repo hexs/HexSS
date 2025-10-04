@@ -49,8 +49,11 @@ class Detector:
             conf_thresh: Minimum confidence for detections
             iou_thresh: IoU threshold for NMS
         """
-        self.model_path = Path(model_path)
-        self.model = YOLO(self.model_path) if self.model_path else YOLO()
+        if model_path is None:
+            self.model = YOLO()
+        else:
+            self.model_path = Path(model_path)
+            self.model = YOLO(self.model_path)
         self.model.conf = conf_thresh
         self.model.iou = iou_thresh
         self.model.to(device)
@@ -58,7 +61,7 @@ class Detector:
 
     def detect(self, image: Image) -> List[Detection]:
         detections = []
-        result = self.model(source=image.img, verbose=False)[0]
+        result = self.model(source=image.im, verbose=False)[0]
         boxes = result.boxes
         for cls, conf, xywhn, xywh, xyxyn, xyxy in zip(
                 boxes.cls, boxes.conf, boxes.xywhn, boxes.xywh, boxes.xyxyn, boxes.xyxy

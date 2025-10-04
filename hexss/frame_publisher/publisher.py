@@ -96,6 +96,9 @@ class FramePublisher:
             print(e)
             return False
 
+    def publish(self, name: str, source: SourceType, *, timeout: float = 1.0) -> bool:
+        return self.show(name, source, timeout=timeout)
+
     def _is_up(self) -> bool:
         try:
             with urlreq.urlopen(self.base_url + "/api/health", timeout=0.5):

@@ -145,32 +145,21 @@ class WindowCapture:
 
 if __name__ == "__main__":
     from datetime import datetime
+    import cv2
 
-    frame = 0
-    t0 = datetime.now()
-    cap = WindowCapture(WindowCapture.list_windows()[0][0])
-    while True:
-        img = cap.capture()
-        img.show("Capture", 1)
-        frame += 1
-        now = datetime.now()
-        ms = (now - t0).total_seconds()
-        print(end=f"\r{ms:.0f}ms, Frame:{frame}, FPS:{frame / ms:.1f}")
-        if ms > 30:
-            print(f'frame = {frame}')
-            break
-    print()
-
-    frame = 0
-    t0 = datetime.now()
-    cap = DisplayCapture(0)
-    while True:
-        img = cap.capture()
-        img.show("Capture1", 1)
-        frame += 1
-        now = datetime.now()
-        ms = (now - t0).total_seconds()
-        print(end=f"\r{ms:.0f}ms, Frame:{frame}, FPS:{frame / ms:.1f}")
-        if ms > 30:
-            print(f'frame = {frame}')
-            break
+    for cap in [WindowCapture(WindowCapture.list_windows()[0][0]), DisplayCapture(0)]:
+        frame = 0
+        t0 = datetime.now()
+        while True:
+            img = cap.capture()
+            # img.publish()
+            # cv2.imshow("window", cv2.resize(img.im, None, fx=0.7, fy=0.7))
+            # cv2.waitKey(1)
+            frame += 1
+            now = datetime.now()
+            ms = (now - t0).total_seconds()
+            print(end=f"\r{ms:.0f}ms, Frame:{frame}, FPS:{frame / ms:.1f}")
+            if ms > 30:
+                print()
+                break
+        print()

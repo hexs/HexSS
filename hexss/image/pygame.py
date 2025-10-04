@@ -7,7 +7,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 
 
-def numpy_to_pygame_surface(arr: np.ndarray) -> pygame.Surface:
+def numpy_to_pygame_surface(arr: "np.ndarray") -> "pygame.Surface":
     if arr.ndim == 3 and arr.shape[2] == 4:
         rgba = cv2.cvtColor(arr, cv2.COLOR_BGRA2RGBA)
         h, w = rgba.shape[:2]
@@ -17,7 +17,7 @@ def numpy_to_pygame_surface(arr: np.ndarray) -> pygame.Surface:
         return pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
 
 
-def pygame_surface_to_numpy(surface: pygame.Surface) -> np.ndarray:
+def pygame_surface_to_numpy(surface: "pygame.Surface") -> "np.ndarray":
     has_alpha = surface.get_masks()[3] != 0
     rgb_wh3 = pygame.surfarray.array3d(surface)
     rgb_hw3 = np.swapaxes(rgb_wh3, 0, 1)

@@ -31,7 +31,7 @@ def get_image_from_url(url: str) -> Optional[np.ndarray]:
 
 
 def get_image(source: Union[cv2.VideoCapture, str], output: Literal['numpy', 'pygame'] = 'numpy') -> Optional[
-    Union[np.ndarray, pygame.Surface]]:
+    Union[np.ndarray, "pygame.Surface"]]:
     if isinstance(source, str):
         img = get_image_from_url(source)
     elif isinstance(source, cv2.VideoCapture):

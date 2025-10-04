@@ -20,7 +20,7 @@ def update1():
     xy1[1] = max(0, min(H, xy1[1] + randint(-10, 10)))
     img = np.full((H, W, 3), 200, np.uint8)
     cv2.circle(img, tuple(xy1), 10, (255, 0, 0), -1)
-    f.show("Image1", img)
+    f.publish("Image1", img)
 
 
 def update2():
@@ -28,7 +28,7 @@ def update2():
     xy2[1] = max(0, min(H, xy2[1] + randint(-10, 10)))
     img = np.full((H, W, 3), 200, np.uint8)
     cv2.circle(img, tuple(xy2), 10, (0, 255, 0), -1)
-    f.show("Image2", img)
+    f.publish("Image2", img)
 
 
 def update3():
@@ -36,7 +36,7 @@ def update3():
     xy3[1] = max(0, min(H, xy3[1] + randint(-10, 10)))
     img = np.full((H, W, 3), 200, np.uint8)
     cv2.circle(img, tuple(xy3), 10, (0, 0, 255), -1)
-    f.show("Image3", img)
+    f.publish("Image3", img)
 
 
 while True:
@@ -47,4 +47,3 @@ while True:
     if (datetime.now() - last3).total_seconds() > 5:
         last3 = datetime.now()
         update3()
-    time.sleep(1 / 30)

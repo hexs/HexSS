@@ -14,5 +14,4 @@ while True:
     if y < 10 or y > H - 10: vy = -vy
     img = np.full((H, W, 3), 30, np.uint8)
     cv2.circle(img, (int(x), int(y)), 12, (0, 255, 0), -1)
-    f.show("Demo", img)
-    cv2.waitKey(1)
+    f.publish("Demo", img)

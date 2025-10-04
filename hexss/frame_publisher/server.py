@@ -7,6 +7,10 @@ from time import time
 import threading
 from typing import Dict, Optional, Set
 
+import hexss
+
+hexss.check_packages('fastapi', 'uvicorn', 'aiortc', 'av', 'opencv-python', 'numpy', auto_install=True)
+
 import numpy as np
 import cv2
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
@@ -45,7 +49,7 @@ class _FrameStore:
         with self._lock:
             return self._store.get(name)
 
-    def names(self):
+    def names(self) -> list[str]:
         with self._lock:
             return list(self._store.keys())
 
@@ -65,10 +69,10 @@ class _NamedTrack(VideoStreamTrack):
         entry = self.store.latest(self.name)
         if entry is None:
             h, w = 480, 640
-            img = np.zeros((h, w, 3), np.uint8)
-            cv2.putText(img, f"Waiting for '{self.name}' ...",
-                        (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2, cv2.LINE_AA)
-            rgb = img
+            rgb = np.zeros((h, w, 3), np.uint8)
+            cv2.putText(rgb, f"Waiting for '{self.name}' ...",
+                        (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2,
+                        (255, 255, 255), 2, cv2.LINE_AA)
         else:
             rgb = entry.rgb
         vf = VideoFrame.from_ndarray(rgb, format="rgb24")
@@ -99,19 +103,12 @@ def build_app(fps: float = 30.0) -> FastAPI:
         return JSONResponse(out)
 
     @app.get("/api/meta")
-    async def api_meta(name: str = Query(..., description="Stream name")):
+    async def api_meta(name: str = Query(...)):
         e = store.latest(name)
         if not e:
             return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
         now = time()
-        return JSONResponse({
-            "ok": True,
-            "name": name,
-            "w": e.w,
-            "h": e.h,
-            "ts": e.ts,
-            "age": now - e.ts
-        })
+        return JSONResponse({"ok": True, "name": name, "w": e.w, "h": e.h, "ts": e.ts, "age": now - e.ts})
 
     @app.get("/api/sockets/names")
     async def api_sockets_names(
@@ -141,15 +138,11 @@ def build_app(fps: float = 30.0) -> FastAPI:
 
                 await asyncio.sleep(max(0.05, float(poll)))
 
-        headers = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
+        headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no", }
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
     @app.post("/push")
-    async def push(req: Request, name: str = Query(..., description="Stream name")):
+    async def push(req: Request, name: str = Query(...)):
         body = await req.body()
         if not body:
             return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
@@ -162,7 +155,7 @@ def build_app(fps: float = 30.0) -> FastAPI:
         return JSONResponse({"ok": True, "w": w, "h": h})
 
     @app.post("/offer")
-    async def offer(req: Request, name: str = Query(..., description="Stream name")):
+    async def offer(req: Request, name: str = Query(...)):
         data = await req.json()
         offer = RTCSessionDescription(sdp=data["sdp"], type=data["type"])
         pc = RTCPeerConnection()
@@ -191,14 +184,14 @@ def build_app(fps: float = 30.0) -> FastAPI:
   <title>Viewer — {safe}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
-    body{{margin:0;background:#000;color:#fff;font-family:system-ui,Segoe UI,Arial}}
-    header{{padding:10px 14px;background:#111;display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
+    html, body {{background:#000;color:#fff;font-family:system-ui,Segoe UI,Arial;margin: 0;padding: 0;height: 100%;display: flex;flex-direction: column}}
+    header {{flex: 0 0 auto;padding:10px 14px;background:#151515;display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
     .title{{font-weight:600}}
     .size{{opacity:.7}}
-    .btn{{cursor:pointer;border:1px solid #444;border-radius:8px;padding:.3rem .6rem;background:#1b1b1b}}
-    .btn:hover{{background:#2a2a2a}}
-    main{{display:grid;place-items:center;height:calc(100dvh - 52px);}}
-    video{{max-width:100vw;max-height:100%;background:#000}}
+    .btn{{cursor:pointer;background:#222;color:#eee;border:1px solid #444;border-radius:8px;padding:.3rem .6rem}}
+    .btn:hover{{background:#333}}
+    main {{flex: 1 1 auto;display: flex;justify-content: center;align-items: center;overflow: hidden}}
+    video {{width: 100%;height: 100%;object-fit: contain}}
   </style>
 </head>
 <body>
@@ -268,7 +261,7 @@ pullMeta();
 """)
 
     @app.get("/")
-    async def index(names: str = Query("", description="Comma-separated names e.g. Image1,Image2")):
+    async def index(names: str = Query("", description="Comma-separated names")):
         initial = ",".join([n for n in [s.strip() for s in names.split(",")] if n]) if names else ""
         return HTMLResponse(f"""
 <!doctype html>
@@ -282,12 +275,12 @@ pullMeta();
     #bar{{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}}
     .tag{{padding:.25rem .5rem;border:1px solid #999;border-radius:.5rem;cursor:pointer;user-select:none}}
     .tag.active{{background:#222;color:#fff;border-color:#222}}
-    #grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}}
+    #grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:12px}}
     .tile{{background:#111;border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px}}
     .head{{display:flex;align-items:center;gap:8px}}
     .title{{color:#ddd;margin:0 0 0 4px;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-    .btn{{cursor:pointer;font-size:12px;border:1px solid #444;background:#1b1b1b;color:#eee;border-radius:8px;padding:.2rem .45rem}}
-    .btn:hover{{background:#2a2a2a}}
+    .btn{{cursor:pointer;background:#222;color:#eee;border:1px solid #444;border-radius:8px;padding:.2rem .45rem;font-size:12px}}
+    .btn:hover{{background:#333}}
     video{{width:100%;aspect-ratio:16/9;background:#000;border-radius:8px}}
   </style>
 </head>

@@ -54,6 +54,8 @@ class Image:
         else:
             raise TypeError(f"Unsupported source type: {type(source)}")
 
+        self._publisher = None
+
         self.boxes = [],
         '''
         self.boxes = [
@@ -156,6 +158,9 @@ class Image:
         elif mode == 'BGR':
             return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
         raise ValueError("Mode must be 'RGB' or 'BGR'")
+
+    def pil(self):
+        return self.image
 
     def to_xyxy(
             self,
@@ -355,14 +360,14 @@ class Image:
             if not isinstance(box, Box):
                 return Image(self.image.crop(box))
         else:
-            box = Box(self.size, xyxy=xyxy, xywh=xywh, xyxyn=xyxyn, xywhn=xywhn, points=points, pointsn=pointsn)
+            box = Box(size=self.size, xyxy=xyxy, xywh=xywh, xyxyn=xyxyn, xywhn=xywhn, points=points, pointsn=pointsn)
         box.move(*shift, normalized=False)
         if box.type == 'polygon':
             img = self.numpy()
             mask = np.zeros(img.shape[:2], dtype=np.uint8)
-            cv2.fillPoly(mask, [box.points_int32()], 255)
+            cv2.fillPoly(mask, [box.points.astype(np.int32)], 255)
             masked = cv2.bitwise_and(img, img, mask=mask)
-            x, y, w, h = cv2.boundingRect(box.points_int32())
+            x, y, w, h = cv2.boundingRect(box.points.astype(np.int32))
             cropped = masked[y:y + h, x:x + w]
             return Image(cropped)
         elif box.type == 'box':
@@ -615,6 +620,13 @@ class Image:
     def show(self, title: Optional[str] = None) -> Self:
         self.image.show(title=title)
         return self
+
+    def publish(self, winname: str = "window", **kwargs):
+        if self._publisher is None:
+            from hexss.frame_publisher import FramePublisher
+            self._publisher: FramePublisher = FramePublisher(open_browser=True, jpeg_quality=100, **kwargs)
+
+        self._publisher.show(winname, self.pil())
 
     def detect(self, model):
         self.detections = model.detect(self)

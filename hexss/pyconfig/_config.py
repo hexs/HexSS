@@ -104,14 +104,14 @@ def _wrap_mutables(obj: Any, touch_cb) -> Any:
 
 
 class Config:
-    def __init__(self, config_file: Union[Path, str] = "cfg.pycfg", default: str = "") -> None:
+    def __init__(self, config_file: Union[Path, str] = "cfg.pycfg", default_text: str = "") -> None:
         self._file = Path(config_file)
         self._data: Dict[str, Any] = {}
         if self._file.exists():
             self._load()
         else:
             self._file.parent.mkdir(exist_ok=True)
-            self._file.write_text(default)
+            self._file.write_text(default_text)
             self._save()
 
     def __repr__(self) -> str:
@@ -345,12 +345,14 @@ class Config:
         try:
             return self._get_assigned_object(key)
         except KeyError:
-            raise AttributeError(f"No config key '{key}'")
+            return None
 
     def __setattr__(self, key: str, value: Any) -> None:
         if key in {"_file", "_data"}:
             super().__setattr__(key, value)
         else:
+            if key[0] == '_':
+                print(f"{YELLOW}Warning: {key}, You shouldn't start with '_'{END}")
             self._data[key] = _wrap_mutables(value, self._save)
             self._save()
 
@@ -364,8 +366,8 @@ class Config:
         self._save()
 
     def _pprint(self, head=None) -> None:
-        if head: print(f"{CYAN}{head}{END}")
-        print(end=f"{YELLOW}")
+        if head: print(f"{BLUE}{head}{END}")
+        print(end=f"{CYAN}")
         pprint(self._data)
         print(f"{END}")
 

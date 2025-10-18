@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Union, Optional, List, Dict
 import hexss
+from hexss.box import Box
 from hexss.image import Image
 from PIL import Image as PILImage, ImageFont
 import numpy as np
@@ -13,26 +14,28 @@ except ImportError:
 
 
 class Detection:
-    def __init__(self, class_index: int, class_name: str, confidence: float,
-                 xywhn: np.ndarray, xywh: np.ndarray, xyxyn: np.ndarray, xyxy: np.ndarray):
+    def __init__(self, idx: int, name: str, conf: float,
+                 xywhn: np.ndarray, xywh: np.ndarray, xyxyn: np.ndarray, xyxy: np.ndarray, box: Box):
         """
         Args:
-            class_index (int): Index of the detected class.
-            class_name (str): Name of the detected class.
-            confidence (float): Confidence score of the detection.
+            idx (int): Index of the detected class.
+            name (str): Name of the detected class.
+            conf (float): Confidence score of the detection.
             xywhn (np.ndarray): Bounding box in normalized (x, y, width, height) format.
             xywh (np.ndarray): Bounding box in pixel (x, y, width, height) format.
             xyxyn (np.ndarray): Bounding box in normalized (x1, y1, x2, y2) format.
             xyxy (np.ndarray): Bounding box in pixel (x1, y1, x2, y2) format.
+            box (Box): Box object representing the bounding box.
         """
-        self.class_index = class_index
-        self.class_name = class_name
-        self.confidence = confidence
+        self.idx = idx
+        self.name = name
+        self.conf = conf
         self.xywhn = xywhn
         self.xywh = xywh
         self.xyxyn = xyxyn
         self.xyxy = xyxy
         self.image: Optional[Image] = None
+        self.box = box
 
     def set_image(self, image: Union[PILImage.Image, np.ndarray], xyxy: np.ndarray) -> None:
         """
@@ -64,13 +67,16 @@ class Detector:
             conf_thresh: Minimum confidence for detections
             iou_thresh: IoU threshold for NMS
         """
-        self.model_path = Path(model_path)
-        self.model = YOLO(self.model_path) if self.model_path else YOLO()
+        if model_path is None:
+            self.model = YOLO()
+        else:
+            self.model_path = Path(model_path)
+            self.model = YOLO(self.model_path)
         self.model.conf = conf_thresh
         self.model.iou = iou_thresh
         self.model.to(device)
         self.class_names: List[str] = list(self.model.names.values())  # {0: 'person', 1: 'bicycle', 2: 'car', ...}
-        self.class_counts: Dict[int, int] = {}
+        self.counts: Dict[int, int] = {}
         self.detections: List[Detection] = []
 
     def detect(self, image: Union[Image, PILImage.Image, np.ndarray]) -> List[Detection]:
@@ -87,27 +93,27 @@ class Detector:
         result = self.model(source=image, verbose=False)[0]
 
         self.detections.clear()
-        class_counts: Dict[int, int] = {}
-
+        counts: Dict[int, int] = {}
         boxes = result.boxes
         for cls, conf, xywhn, xywh, xyxyn, xyxy in zip(
                 boxes.cls, boxes.conf, boxes.xywhn, boxes.xywh, boxes.xyxyn, boxes.xyxy
         ):
             cls_int = int(cls)
-            class_counts[cls_int] = class_counts.get(cls_int, 0) + 1
+            counts[cls_int] = counts.get(cls_int, 0) + 1
             detection = Detection(
-                class_index=cls_int,
-                class_name=self.class_names[cls_int],
-                confidence=float(conf),
+                idx=cls_int,
+                name=self.class_names[cls_int],
+                conf=float(conf),
                 xywhn=xywhn.cpu().numpy(),
                 xywh=xywh.cpu().numpy(),
                 xyxyn=xyxyn.cpu().numpy(),
-                xyxy=xyxy.cpu().numpy()
+                xyxy=xyxy.cpu().numpy(),
+                box=Box(size=result.orig_shape[::-1], xywhn=xywhn.cpu().numpy())
             )
 
             detection.set_image(image, xyxy)
             self.detections.append(detection)
-            self.class_counts = class_counts  # {0: 40, 1: 30, 2: 10}
+            self.counts = counts  # {0: 40, 1: 30, 2: 10}
         return self.detections
 
     def draw_boxes(
@@ -121,11 +127,11 @@ class Detector:
         try:
             font = ImageFont.truetype("arial.ttf", font_size)
         except IOError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default(font_size)
 
         for det in self.detections:
             x1, y1, x2, y2 = map(int, det.xyxy)
-            label = f"{det.class_name} {det.confidence:.2f}"
+            label = f"{det.name} {det.conf:.2f}"
             draw.rectangle([x1, y1, x2, y2], outline="red", width=thickness)
             draw.text((x1, y1), label, fill="black", font=font, stroke_width=thickness, stroke_fill="white")
 

@@ -10,6 +10,7 @@ import hexss
 from hexss import json_load, json_dump, json_update
 from hexss.constants import *
 from hexss.path import shorten
+from hexss.pyconfig import Config
 from hexss.image import Image, ImageFont, PILImage
 import numpy as np
 import cv2
@@ -24,28 +25,6 @@ except ImportError:
     import tensorflow as tf
     import keras
     from keras.models import load_model  # type: ignore
-
-
-def default_layers(img_size: Tuple[int, int], num_classes: int) -> list[Any]:
-    """
-    Returns a default list of layers for model construction.
-    """
-    return [
-        keras.layers.RandomFlip('horizontal', input_shape=(*img_size, 3)),
-        keras.layers.RandomRotation(0.1),
-        keras.layers.RandomZoom(0.1),
-        keras.layers.Rescaling(1. / 255),
-        keras.layers.Conv2D(16, 3, padding='same', activation='relu'),
-        keras.layers.MaxPooling2D(),
-        keras.layers.Conv2D(32, 3, padding='same', activation='relu'),
-        keras.layers.MaxPooling2D(),
-        keras.layers.Conv2D(64, 3, padding='same', activation='relu'),
-        keras.layers.MaxPooling2D(),
-        keras.layers.Dropout(0.2),
-        keras.layers.Flatten(),
-        keras.layers.Dense(128, activation='relu'),
-        keras.layers.Dense(num_classes, name='outputs')
-    ]
 
 
 class Classification:
@@ -82,71 +61,79 @@ class Classification:
                     self.group = group_name
                     break
 
-    def expo_preds(self, base: float = np.e) -> np.ndarray:
-        """
-        Exponentiate predictions by `base` and normalize to sum=1.
-        """
-        exp_vals = np.power(base, self.predictions)
+    def softmax_preds(self, base: float = np.e) -> np.ndarray:
+        exp_vals = np.power(base, self.predictions - np.max(self.predictions))
         return exp_vals / exp_vals.sum()
 
-    def softmax_preds(self) -> np.ndarray:
-        """
-        Compute standard softmax probabilities.
-        """
-        z = self.predictions - np.max(self.predictions)
-        e = np.exp(z)
-        return e / e.sum()
+    def conf_softmax(self, base: float = np.e) -> np.ndarray:
+        return self.softmax_preds(base)[self.idx]
 
     def __repr__(self) -> str:
-        return (
-            f"<idx={self.idx} name={self.name!r} group={self.group!r}>"
-        )
+        return f"<idx={self.idx} name={self.name!r} group={self.group!r}>"
 
 
 class Classifier:
     """
     Wraps a Keras model for image classification.
     """
-    __slots__ = ('model_path', 'json_path', 'config', 'model', 'class_names', 'img_size', 'layers')
+    __slots__ = ('model_path', 'cfg', 'model')
 
     def __init__(
             self,
             model_path: Union[Path, str],
-            config: Optional[Dict[str, Any]] = None
+            **kwargs,
     ) -> None:
         '''
         :param model_path: `.keras` file path
-        :param config: data of `.keras` file
-                        example
-                        {
-                            "class_names": ["ng", "ok"],
-                            "img_size": [32, 32],
-                            ...
-                        }
+        :param kwargs: data of `.keras` file
+                  example
+                      class_names=["ng", "ok"],
+                      img_size=[32, 32],
         '''
+
         self.model_path = Path(model_path)
-        self.json_path = self.model_path.with_suffix('.json')
-        self.config = config or json_load(self.json_path, {'img_size': [180, 180], 'class_names': []})
-        ############################ for support old data ############################
-        if 'model_class_names' in self.config:
-            self.config['class_names'] = self.config.pop('model_class_names')
-        ###############################################################################
-        self.class_names: List[str] = self.config.get('class_names', [])
-        self.img_size: Tuple[int, int] = tuple(self.config.get('img_size'))
-        self.layers: Optional[List[Any]] = None
+        self.cfg = Config(self.model_path.with_suffix('.pycfg'))
+        for k, v in kwargs.items():
+            if self.cfg.__getattr__(k) is None: self.cfg.__setattr__(k, v)
+        self.set_default_cfg()
         self.model: Optional[keras.Model] = None
         self.load_model()
 
     def load_model(self) -> Self:
         if not self.model_path.exists():
-            if self.model_path.with_suffix('.h5').exists():
-                self.model = keras.models.load_model(self.model_path.with_suffix('.h5'))
-                return self
             print(f"Warning: Model file {self.model_path} not found. Train with .train()")
             return self
 
         self.model = keras.models.load_model(self.model_path)
         return self
+
+    def set_default_cfg(self):
+        if self.cfg.epochs is None: self.cfg.epochs = 50
+        if self.cfg.img_size is None: self.cfg.img_size = [180, 180]
+        if self.cfg.class_names is None: self.cfg.class_names = []
+        if self.cfg.batch_size is None: self.cfg.batch_size = 64
+        if self.cfg.validation_split is None: self.cfg.validation_split = 0.2
+        if self.cfg.seed is None: self.cfg.seed = 123
+        if self.cfg.layers is None:
+            self.cfg._ensure_import("keras")
+            self.cfg._update_block("layers", """
+                    [
+                        keras.layers.RandomFlip('horizontal', input_shape=(*img_size, 3)),
+                        keras.layers.RandomRotation(0.1),
+                        keras.layers.RandomZoom(0.1),
+                        keras.layers.Rescaling(1. / 255),
+                        keras.layers.Conv2D(16, 3, padding='same', activation='relu'),
+                        keras.layers.MaxPooling2D(),
+                        keras.layers.Conv2D(32, 3, padding='same', activation='relu'),
+                        keras.layers.MaxPooling2D(),
+                        keras.layers.Conv2D(64, 3, padding='same', activation='relu'),
+                        keras.layers.MaxPooling2D(),
+                        keras.layers.Dropout(0.2),
+                        keras.layers.Flatten(),
+                        keras.layers.Dense(128, activation='relu'),
+                        keras.layers.Dense(len(class_names), name='outputs')
+                    ]
+                """)
 
     def _prepare_image(
             self,
@@ -167,7 +154,7 @@ class Classifier:
         else:
             raise TypeError(f"Unsupported image type: {type(im)}")
 
-        arr = cv2.resize(arr, self.img_size)
+        arr = cv2.resize(arr, self.cfg.img_size)
         if arr.shape[2] == 4:
             arr = arr[..., :3]
 
@@ -188,8 +175,8 @@ class Classifier:
         preds = self.model.predict(batch, verbose=0)[0]
         return Classification(
             predictions=preds,
-            class_names=self.class_names,
-            mapping=mapping,
+            class_names=self.cfg.class_names,
+            mapping=mapping or self.cfg.result_mapping,
             xywhn=xywhn
         )
 
@@ -198,44 +185,32 @@ class Classifier:
 
     def train(
             self,
-            data_dir: Union[Path, str],
-            epochs: int = 50,
-            img_size: Tuple[int, int] = (180, 180),
-            batch_size: int = 64,
-            validation_split: float = 0.2,
-            seed: int = 123,
-            layers: Optional[List[Any]] = None
+            data_dir: Union[Path, str] = 'datasets',
+            **kwargs
     ) -> None:
 
         data_dir = Path(data_dir)
-        self.img_size = img_size
+        for k, v in kwargs.items():
+            self.cfg.__setattr__(k, v)
+
         train_ds, val_ds = keras.utils.image_dataset_from_directory(
             data_dir,
-            validation_split=validation_split,
+            validation_split=self.cfg.validation_split,
             subset='both',
-            seed=seed,
-            image_size=self.img_size,
-            batch_size=batch_size
+            seed=self.cfg.seed,
+            image_size=self.cfg.img_size,
+            batch_size=self.cfg.batch_size
         )
-        self.class_names = train_ds.class_names
+        self.cfg.class_names = train_ds.class_names
         start_time = datetime.now()
-        # Build config
-        self.config = json_dump(self.json_path, {
-            'class_names': self.class_names,
-            'img_size': list(self.img_size),
-            'epochs': epochs,
-            'batch_size': batch_size,
-            'validation_split': validation_split,
-            'seed': seed,
-            'start_time': start_time.strftime("%Y-%m-%d %H:%M:%S"),
-        })
+        self.cfg.start_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
 
         # Build model
-        self.layers = layers or default_layers(self.img_size, len(self.class_names))
+
         AUTOTUNE = tf.data.AUTOTUNE
         train_ds = train_ds.cache().shuffle(1000).prefetch(AUTOTUNE)
         val_ds = val_ds.cache().prefetch(AUTOTUNE)
-        self.model = keras.Sequential(self.layers)
+        self.model = keras.Sequential(self.cfg.layers)
         self.model.compile(
             optimizer='adam',
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -255,7 +230,7 @@ class Classifier:
         history = self.model.fit(
             train_ds,
             validation_data=val_ds,
-            epochs=epochs,
+            epochs=self.cfg.epochs,
             callbacks=[checkpoint_callback]
         )
 
@@ -263,12 +238,10 @@ class Classifier:
         self.model.save(self.model_path)
         print(f"{GREEN}Model saved to {GREEN.UNDERLINED}{self.model_path}{END}")
         end_time = datetime.now()
-        self.config.update({
-            'end_time': end_time.strftime("%Y-%m-%d %H:%M:%S"),
-            'time_spent_training': (end_time - start_time).total_seconds(),
-            'history': history.history
-        })
-        json_update(self.json_path, self.config)
+
+        self.cfg.end_time = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        self.cfg.time_spent_training = (end_time - start_time).total_seconds()
+        self.cfg.history = history.history
 
         # Plot training history
         acc = history.history.get('accuracy', [])
@@ -305,25 +278,25 @@ class Classifier:
         total = 0
         results = []
 
-        def _test_one(class_name: str, img_path: Path, i: int, total: int) -> str:
+        def _test_one(name: str, img_path: Path, i: int, total: int) -> str:
             im = Image.open(img_path)
             clf = self.classify(im)
-            prob = clf.expo_preds(1.2)[clf.idx]
-            is_match = (clf.name == class_name)
+            prob = clf.conf_softmax(1.2)
+            is_match = (clf.name == name)
             is_confident = is_match and prob >= threshold
             short = shorten(img_path, 2, 3)
             if is_confident:
-                print(end=f'\r{class_name}({i}/{total}) {GREEN}{clf.name},{prob:.2f}{END} {short}')
+                print(end=f'\r{name}({i}/{total}) {GREEN}{clf.name},{prob:.2f}{END} {short}')
                 return 'correct'
             elif is_match:
-                print(end=f'\r{class_name}({i}/{total}) {YELLOW}{clf.name},{prob:.2f}{END} {short}\n')
+                print(end=f'\r{name}({i}/{total}) {YELLOW}{clf.name},{prob:.2f}{END} {short}\n')
                 return 'uncertain'
             else:
-                print(end=f'\r{class_name}({i}/{total}) {RED}{clf.name},{prob:.2f}{END} {short}\n')
+                print(end=f'\r{name}({i}/{total}) {RED}{clf.name},{prob:.2f}{END} {short}\n')
                 return 'wrong'
 
-        for class_name in self.class_names:
-            folder = data_dir / class_name
+        for name in self.cfg.class_names:
+            folder = data_dir / name
             if not folder.exists():
                 continue
             images = [f for f in folder.iterdir() if f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.bmp', '.gif'}]
@@ -334,13 +307,13 @@ class Classifier:
             if multiprocessing:
                 with concurrent.futures.ThreadPoolExecutor() as ex:
                     futures = [
-                        ex.submit(_test_one, class_name, img_path, i + 1, total)
+                        ex.submit(_test_one, name, img_path, i + 1, total)
                         for i, img_path in enumerate(images)
                     ]
                     results = [f.result() for f in futures]
             else:
                 for i, img_path in enumerate(images):
-                    results.append(_test_one(class_name, img_path, i + 1, len(images)))
+                    results.append(_test_one(name, img_path, i + 1, len(images)))
         print("\r")
 
         correct = results.count('correct')
@@ -351,17 +324,17 @@ class Classifier:
     def __repr__(self) -> str:
         return (
             f"<Classifier path={self.model_path} loaded={'yes' if self.model else 'no'}"
-            f" classes={self.class_names}>"
+            f" classes={self.cfg.class_names}>"
         )
 
-
+# Not yet fixed for MultiClassifier
 class MultiClassifier:
     """
     Manages multiple named classifiers applied to subregions (frames) of full images.
 
     Attributes:
         base_path: Directory containing 'frames pos.json', 'img_full', 'img_frame', 'img_frame_log', and 'model'.
-        frames: Mapping of frame keys to frame metadata (xywhn, model, resultMapping).
+        frames: Mapping of frame keys to frame metadata (xywhn, model, result_mapping).
         models: Loaded Classifier instances keyed by model name.
     """
 
@@ -392,7 +365,7 @@ class MultiClassifier:
     @staticmethod
     def _normalize(frames: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
-        Normalize legacy keys: 'xywh' → 'xywhn', 'model_used' → 'model', 'res_show' → 'resultMapping'.
+        Normalize legacy keys: 'xywh' → 'xywhn', 'model_used' → 'model', 'res_show' → 'result_mapping'.
         """
         normalized = {}
         for key, frame in frames.items():
@@ -402,7 +375,7 @@ class MultiClassifier:
             if 'model_used' in f:
                 f['model'] = f.pop('model_used')
             if 'res_show' in f:
-                f['resultMapping'] = f.pop('res_show')
+                f['result_mapping'] = f.pop('res_show')
             normalized[key] = f
         return normalized
 
@@ -418,7 +391,7 @@ class MultiClassifier:
                 continue
 
             xywhn = frame['xywhn']
-            mapping = frame['resultMapping']
+            mapping = frame['result_mapping']
             crop_im = im.crop(xywhn=xywhn)
             self.classifications[key] = self.models[model_name].classify(crop_im, mapping=mapping, xywhn=xywhn)
         return self.classifications
@@ -488,8 +461,10 @@ class MultiClassifier:
             shutil.rmtree(self.img_frame_log_dir / model_name, ignore_errors=True)
 
             # crop image
-            img_files = sorted({f.stem for f in self.img_full_dir.glob("*") if f.suffix in ['.png', '.json']},
-                               reverse=True)
+            img_files = sorted(
+                {f.stem for f in self.img_full_dir.glob("*") if f.suffix in ['.png', '.json']},
+                reverse=True
+            )
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = [
@@ -562,7 +537,7 @@ class MultiClassifier:
                 if ans is None:
                     continue
                 clf = clfs[frame_name]
-                prob = clf.expo_preds(1.2)[clf.idx]
+                prob = clf.conf_softmax(1.2)
                 is_match = clf.name == ans
                 is_confident = is_match and prob >= threshold
                 if is_confident:

@@ -45,7 +45,7 @@ function updateRectanglesList() {
             li.innerHTML = `
                 <span>Group: ${rect.group}</span>
                 <span>Name: ${name}</span>
-                <span>XYWH: ${rect.xywh.map(v => v.toFixed(4)).join(', ')}</span>
+                <span>xywhn: ${rect.xywhn.map(v => v.toFixed(4)).join(', ')}</span>
                 <button class="deleteRect" data-name="${name}">Delete</button>
             `;
             rectList.appendChild(li);

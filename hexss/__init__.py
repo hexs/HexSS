@@ -33,7 +33,7 @@ def get_config(file_name):
     return config
 
 
-__version__ = '0.25.1'
+__version__ = '0.26.0'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

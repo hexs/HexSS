@@ -77,7 +77,7 @@ function handleZoom(e) {
 }
 
 function getClickedCorner(mouseX, mouseY, rect) {
-    const [rectX, rectY, rectW, rectH] = rect.xywh;
+    const [rectX, rectY, rectW, rectH] = rect.xywhn;
     const corners = [{name: 'top-left', coords: [rectX - rectW / 2, rectY - rectH / 2]}, {
         name: 'top-right',
         coords: [rectX + rectW / 2, rectY - rectH / 2]
@@ -142,7 +142,7 @@ function stopDrawRect() {
         const group = getSelectedGroup();
         const name = Date.now().toString();
         rectangles[name] = {
-            xywh: [rect.x, rect.y, rect.w, rect.h], group: group
+            xywhn: [rect.x, rect.y, rect.w, rect.h], group: group
         };
     }
 }
@@ -166,7 +166,7 @@ function getSelectedGroup() {
 
 function getClickedRectangle(x, y) {
     for (const [name, rect] of Object.entries(rectangles)) {
-        const [rectX, rectY, rectW, rectH] = rect.xywh;
+        const [rectX, rectY, rectW, rectH] = rect.xywhn;
         const screenX = rectX * img.width - rectW * img.width / 2;
         const screenY = rectY * img.height - rectH * img.height / 2;
         const screenW = rectW * img.width;
@@ -179,7 +179,7 @@ function getClickedRectangle(x, y) {
 }
 
 function adjustRectangleSize(rect, mouseX, mouseY, corner) {
-    const [rectX, rectY, rectW, rectH] = rect.xywh;
+    const [rectX, rectY, rectW, rectH] = rect.xywhn;
 
     const halfWidth = rectW / 2;
     const halfHeight = rectH / 2;
@@ -206,10 +206,10 @@ function adjustRectangleSize(rect, mouseX, mouseY, corner) {
         newBottom = mouseY / img.height;
     }
 
-    rect.xywh[0] = (newLeft + newRight) / 2;
-    rect.xywh[1] = (newTop + newBottom) / 2;
-    rect.xywh[2] = Math.abs(newRight - newLeft);
-    rect.xywh[3] = Math.abs(newBottom - newTop);
+    rect.xywhn[0] = (newLeft + newRight) / 2;
+    rect.xywhn[1] = (newTop + newBottom) / 2;
+    rect.xywhn[2] = Math.abs(newRight - newLeft);
+    rect.xywhn[3] = Math.abs(newBottom - newTop);
 }
 
 function draw() {
@@ -223,7 +223,7 @@ function draw() {
 
         ctx.lineWidth = 2 / scale;
         Object.entries(rectangles).forEach(([name, rect]) => {
-            const [x, y, w, h] = rect.xywh;
+            const [x, y, w, h] = rect.xywhn;
             ctx.strokeStyle = selectedRect && selectedRect.name === name ? 'yellow' : getColorByGroup(rect.group);
             ctx.strokeRect(x * img.width - w * img.width / 2, y * img.height - h * img.height / 2, w * img.width, h * img.height);
         });
@@ -320,8 +320,8 @@ canvas.addEventListener('mousedown', (e) => {
                 return;
             }
             isDraggingRect = true;
-            offsetXRect = imgX - (clicked.rect.xywh[0] * img.width);
-            offsetYRect = imgY - (clicked.rect.xywh[1] * img.height);
+            offsetXRect = imgX - (clicked.rect.xywhn[0] * img.width);
+            offsetYRect = imgY - (clicked.rect.xywhn[1] * img.height);
         }
         updateRectanglesList()
     }
@@ -348,8 +348,8 @@ canvas.addEventListener('mousemove', (e) => {
             const [imgX, imgY] = screenToImageCoordinates(e.offsetX, e.offsetY);
 
             if (isDraggingRect) {
-                selectedRect.rect.xywh[0] = (imgX - offsetXRect) / img.width;
-                selectedRect.rect.xywh[1] = (imgY - offsetYRect) / img.height;
+                selectedRect.rect.xywhn[0] = (imgX - offsetXRect) / img.width;
+                selectedRect.rect.xywhn[1] = (imgY - offsetYRect) / img.height;
             } else if (isResizingRect) {
                 adjustRectangleSize(selectedRect.rect, imgX, imgY, selectedCorner);
             }

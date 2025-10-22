@@ -136,108 +136,24 @@ def run_config(args):
         update_config(file_name, keys, new_val)
 
 
+def run_install(args):
+    """Handler for 'install' command: install one or more packages."""
+    mod = importlib.import_module('hexss.python')
+    names = args.name or ['hexss']
+    mod.install(*names)
+
+
+def run_upgrade(args):
+    """Handler for 'upgrade' command: upgrade one or more packages."""
+    mod = importlib.import_module('hexss.python')
+    names = args.name or ['hexss']
+    mod.upgrade(*names)
+
+
 def print_env():
     """Print all environment variables."""
     for k, v in os.environ.items():
         print(f'{k:25}: {v}')
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        prog='hexss',
-        usage='hexss [-h] [-v] [-u]'
-    )
-    parser.add_argument(
-        '-v', '-V', '--version',
-        action='version',
-        version=f'%(prog)s {hexss.__version__}, {(hexss.path.get_main_python_path())} {hexss.python_version}',
-    )
-    parser.add_argument(
-        '-u', '-U', '--upgrade',
-        action='store_true',
-        help='upgrade hexss'
-    )
-
-    subparsers = parser.add_subparsers(
-        title='positional arguments',
-        dest='action',
-        required=False,
-        metavar=''  # hide the choice list placeholder in help
-    )
-
-    # config
-    cfg = subparsers.add_parser('config', help='set or show configuration')
-    cfg.add_argument('key', nargs='?', help="Config key, e.g. 'proxies' or 'proxies.http'")
-    cfg.add_argument('value', nargs='?', help='New value for the key')
-    cfg.add_argument('-T', '--text', action='store_true', help='Interpret value as text')
-    cfg.set_defaults(func=run_config)
-
-    # camera_server
-    cs = subparsers.add_parser(
-        'camera_server',
-        aliases=['camera-server'],
-        help='run the camera server'
-    )
-    cs.set_defaults(func=lambda args: importlib.import_module('hexss.server.camera_server').run())
-
-    # file_manager_server
-    fm = subparsers.add_parser(
-        'file_manager_server',
-        aliases=['file-manager-server'],
-        help='run the file manager server'
-    )
-    fm.set_defaults(func=lambda args: importlib.import_module('hexss.server.file_manager_server').run())
-
-    # install
-    inst = subparsers.add_parser('install', help='install hexss')
-    inst.set_defaults(func=lambda args: importlib.import_module('hexss.python').install('hexss'))
-
-    # upgrade
-    upg = subparsers.add_parser('upgrade', help='upgrade hexss')
-    upg.set_defaults(func=lambda args: importlib.import_module('hexss.python').install_upgrade('hexss'))
-
-    # environ
-    env = subparsers.add_parser('environ', aliases=['env'], help='show environment variables')
-    env.set_defaults(func=lambda args: print_env())
-
-    # set_proxy_env
-    sp_env = subparsers.add_parser('set_proxy_env', help='print commands to set proxy env vars')
-    sp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').set_proxy(persistent=True))
-    unsp_env = subparsers.add_parser('unset_proxy_env', help='print commands to set proxy env vars')
-    unsp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').unset_proxy(persistent=True))
-
-    # hostname
-    hn = subparsers.add_parser('hostname', help='get hostname')
-    hn.set_defaults(func=lambda args: print(hexss.hostname))
-
-    # username
-    un = subparsers.add_parser('username', help='get username')
-    un.set_defaults(func=lambda args: print(hexss.username))
-
-    # proxy
-    pr = subparsers.add_parser('proxy', help='get proxy settings')
-    pr.set_defaults(func=lambda args: print(hexss.proxies))
-
-    # system
-    sy = subparsers.add_parser('system', help='get system')
-    sy.set_defaults(func=lambda args: print(hexss.system))
-
-    # details
-    gc = subparsers.add_parser('details', help='print hexss details')
-    gc.set_defaults(func=lambda args: get_details())
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    if args.upgrade:
-        importlib.import_module('hexss.python').install_upgrade('hexss')
-        return
-
-    # If no arguments are provided, display a menu
-    if args.action is None:
-        show_menu()
-    else:
-        args.func(args)
 
 
 def get_details():
@@ -290,6 +206,107 @@ def show_menu():
             print("Invalid choice. Exiting.")
     except:
         pass
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='hexss',
+        usage='hexss [-h] [-v] [-u]'
+    )
+    parser.add_argument(
+        '-v', '-V', '--version',
+        action='version',
+        version=f'%(prog)s {hexss.__version__}, {(hexss.path.get_main_python_path())} {hexss.python_version}',
+    )
+    parser.add_argument(
+        '-u', '-U', '--upgrade',
+        action='store_true',
+        help='upgrade hexss (same as: hexss upgrade)'
+    )
+
+    subparsers = parser.add_subparsers(
+        title='positional arguments',
+        dest='action',
+        required=False,
+        metavar=''  # hide the choice list placeholder in help
+    )
+
+    # config
+    cfg = subparsers.add_parser('config', help='set or show configuration')
+    cfg.add_argument('key', nargs='?', help="Config key, e.g. 'proxies' or 'proxies.http'")
+    cfg.add_argument('value', nargs='?', help='New value for the key')
+    cfg.add_argument('-T', '--text', action='store_true', help='Interpret value as text')
+    cfg.set_defaults(func=run_config)
+
+    # camera_server
+    cs = subparsers.add_parser(
+        'camera_server',
+        aliases=['camera-server'],
+        help='run the camera server'
+    )
+    cs.set_defaults(func=lambda args: importlib.import_module('hexss.server.camera_server').run())
+
+    # file_manager_server
+    fm = subparsers.add_parser(
+        'file_manager_server',
+        aliases=['file-manager-server'],
+        help='run the file manager server'
+    )
+    fm.set_defaults(func=lambda args: importlib.import_module('hexss.server.file_manager_server').run())
+
+    # install
+    inst = subparsers.add_parser('install', help='install one or more packages')
+    inst.add_argument('name', nargs='*', help='package name(s) to install, e.g. numpy')
+    inst.set_defaults(func=run_install)
+
+    # upgrade
+    upg = subparsers.add_parser('upgrade', help='upgrade one or more packages')
+    upg.add_argument('name', nargs='*', help='package name(s) to upgrade, e.g. numpy')
+    upg.set_defaults(func=run_upgrade)
+
+    # environ
+    env = subparsers.add_parser('environ', aliases=['env'], help='show environment variables')
+    env.set_defaults(func=lambda args: print_env())
+
+    # set_proxy_env
+    sp_env = subparsers.add_parser('set_proxy_env', help='print commands to set proxy env vars')
+    sp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').set_proxy(persistent=True))
+    unsp_env = subparsers.add_parser('unset_proxy_env', help='print commands to unset proxy env vars')
+    unsp_env.set_defaults(func=lambda args: importlib.import_module('hexss.env').unset_proxy(persistent=True))
+
+    # hostname
+    hn = subparsers.add_parser('hostname', help='get hostname')
+    hn.set_defaults(func=lambda args: print(hexss.hostname))
+
+    # username
+    un = subparsers.add_parser('username', help='get username')
+    un.set_defaults(func=lambda args: print(hexss.username))
+
+    # proxy
+    pr = subparsers.add_parser('proxy', help='get proxy settings')
+    pr.set_defaults(func=lambda args: print(hexss.proxies))
+
+    # system
+    sy = subparsers.add_parser('system', help='get system')
+    sy.set_defaults(func=lambda args: print(hexss.system))
+
+    # details
+    gc = subparsers.add_parser('details', help='print hexss details')
+    gc.set_defaults(func=lambda args: get_details())
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # global -u / --upgrade flag (upgrade hexss)
+    if args.upgrade and (args.action is None):
+        importlib.import_module('hexss.python').upgrade('hexss')
+        return
+
+    # If no arguments are provided, display a menu
+    if args.action is None:
+        show_menu()
+    else:
+        args.func(args)
 
 
 if __name__ == '__main__':

@@ -132,29 +132,24 @@ def install(*packages: str, verbose: bool = True) -> None:
     """
     missing = missing_packages(*packages)
     if not missing:
-        if verbose: print(f"{GREEN}All specified packages are already installed.{END}")
+        if verbose:
+            print(f"{GREEN.BOLD}{', '.join(packages)}{END} "
+                  f"{GREEN}{'is' if len(packages) == 1 else 'are'} already installed.{END}")
         return
     if verbose: print(f"{YELLOW}Installing: {BOLD}{', '.join(missing)}{END}")
     command = generate_install_command(missing)
-    if run_command(command, verbose=verbose) == 0:
-        if verbose: print(f"{GREEN.BOLD}{', '.join(packages)}{END} {GREEN}installation complete.{END}")
-    else:
+    if run_command(command, verbose=verbose) != 0:
         print(f"{RED}Failed to install {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
 
 
-def install_upgrade(*packages: str, verbose: bool = True) -> None:
+def upgrade(*packages: str, verbose: bool = True) -> None:
     """
-    Installs or upgrades the specified packages.
+    upgrades the specified packages.
     """
-    # if verbose: print(f"{PINK}Upgrading pip...{END}")
-    # pip_command = generate_install_command(["pip"], upgrade=True)
-    # run_command(pip_command, verbose=verbose)
-    if verbose: print(f"{YELLOW}Installing or upgrading: {BOLD}{' '.join(packages)}{END}")
+    if verbose: print(f"{YELLOW}Upgrading: {BOLD}{', '.join(packages)}{END}")
     command = generate_install_command(packages, upgrade=True)
-    if run_command(command, verbose=verbose) == 0:
-        if verbose: print(f"{GREEN.BOLD}{', '.join(packages)}{END} {GREEN}installation/upgrade complete.{END}")
-    else:
-        print(f"{RED}Failed to install/upgrade {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
+    if run_command(command, verbose=verbose) != 0:
+        print(f"{RED}Failed to upgrade {BOLD}{', '.join(packages)}{END}. {RED}Check errors.{END}")
 
 
 def check_packages(*packages: str, auto_install: bool = False, venv_only: bool = True, verbose: bool = True) -> None:

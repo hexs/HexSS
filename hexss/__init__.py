@@ -4,7 +4,7 @@ from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
 from .string import secure_filename, random_str
-from .python import check_packages, install, install_upgrade
+from .python import check_packages, install, upgrade
 from .path import get_hexss_dir
 from . import env
 from .pyconfig import Config
@@ -33,7 +33,7 @@ def get_config(file_name):
     return config
 
 
-__version__ = '0.26.0'
+__version__ = '0.26.1'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()

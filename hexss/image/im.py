@@ -16,8 +16,8 @@ from PIL import Image as PILImage
 from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont, ImageEnhance
 from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize, SupportsArrayInterface
-from PIL.ImageDraw import _Ink
 
+_Ink = Union[float, Tuple[int, ...], str]
 Array2 = np.ndarray
 Coord4 = Union[Tuple[float, float, float, float], Sequence[float]]
 

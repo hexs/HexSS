@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional, Union, List
 import os
 import time
@@ -12,7 +13,7 @@ import requests
 from git import Repo, GitCommandError, InvalidGitRepositoryError
 
 
-def clone(path: str, url: str, branch: str = "main", timeout: Optional[int] = None) -> Repo:
+def clone(path: Union[Path, str], url: str, branch: str = "main", timeout: Optional[int] = None) -> Repo:
     """
     Clone a Git repository to the given path.
 
@@ -33,9 +34,9 @@ def clone(path: str, url: str, branch: str = "main", timeout: Optional[int] = No
         raise ValueError("A repository URL must be provided for cloning.")
 
     try:
-        print(f"Cloning '{url}' into '{path}'...")
+        print(end=f"Cloning '{url}' into '{path}'...\n")
         repo = Repo.clone_from(url, path, branch=branch, single_branch=True, depth=1, timeout=timeout)
-        print(f"✅ {GREEN}Successfully cloned{END} '{url}' to '{repo.working_dir}'.")
+        print(end=f"✅ {GREEN}Successfully cloned{END} '{url}' to '{repo.working_dir}'.\n")
         return repo
     except GitCommandError as e:
         raise RuntimeError(f"{RED}Git clone failed{END}: {e.stderr.strip()}") from e
@@ -43,7 +44,7 @@ def clone(path: str, url: str, branch: str = "main", timeout: Optional[int] = No
         raise RuntimeError(f"{RED}Unexpected error during clone{END}: {e}") from e
 
 
-def pull(path: str, branch: str = "main") -> str:
+def pull(path: Union[Path, str], branch: str = "main") -> str:
     """
     Pull latest changes from origin for the given repository path and branch.
 
@@ -63,9 +64,9 @@ def pull(path: str, branch: str = "main") -> str:
         raise RuntimeError(f"'{path}' is not a valid Git repository.")
 
     try:
-        print(f"Pulling latest changes in '{path}' (branch '{branch}')...")
+        print(end=f"Pulling latest changes in '{path}' (branch '{branch}')...\n")
         output = repo.git.pull("origin", branch)
-        print(f"✅ {GREEN}Pull result{END}: {output}")
+        print(end=f"✅ {GREEN}Pull result{END}: {output}\n")
         return output
     except GitCommandError as e:
         raise RuntimeError(f"{RED}Git pull failed{END}: {e.stderr.strip()}") from e
@@ -73,7 +74,7 @@ def pull(path: str, branch: str = "main") -> str:
         raise RuntimeError(f"{RED}Unexpected error during pull{END}: {e}") from e
 
 
-def clone_or_pull(path: str, url: Optional[str] = None, branch: str = "main") -> Union[Repo, str]:
+def clone_or_pull(path: Union[Path, str], url: Optional[str] = None, branch: str = "main") -> Union[Repo, str]:
     """
     Clone the repository if not already present, otherwise pull latest changes.
 
@@ -93,7 +94,7 @@ def clone_or_pull(path: str, url: Optional[str] = None, branch: str = "main") ->
     return pull(path, branch)
 
 
-def auto_pull(path: str, interval: int = 600, branch: str = "main") -> None:
+def auto_pull(path: Union[Path, str], interval: int = 600, branch: str = "main") -> None:
     """
     Continuously pull latest changes at given time intervals.
 
@@ -106,11 +107,11 @@ def auto_pull(path: str, interval: int = 600, branch: str = "main") -> None:
         try:
             pull(path, branch)
         except Exception as e:
-            print(f"{RED}Auto-pull error{END}: {e}")
+            print(end=f"{RED}Auto-pull error{END}: {e}\n")
         time.sleep(interval)
 
 
-def status(path: str, file_patterns: Optional[List[str]] = None, filter_codes: str = 'MADRCU') -> str:
+def status(path: Union[Path, str], file_patterns: Optional[List[str]] = None, filter_codes: str = 'MADRCU') -> str:
     """
     Get the working tree status of the repository.
 
@@ -148,7 +149,7 @@ def status(path: str, file_patterns: Optional[List[str]] = None, filter_codes: s
     return ", ".join(details)
 
 
-def add(path: str, file_patterns: Optional[List[str]] = None) -> None:
+def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> None:
     repo = Repo(path)
     git_root = repo.working_tree_dir
 
@@ -161,15 +162,15 @@ def add(path: str, file_patterns: Optional[List[str]] = None) -> None:
                     matched_files.append(rel_path)
         if matched_files:
             repo.index.add(matched_files)
-            print(f"✅ Staged files: {', '.join(matched_files)}")
+            print(end=f"✅ Staged files: {', '.join(matched_files)}\n")
         else:
-            print("⚠️ No files matched the given patterns.")
+            print(end="⚠️ No files matched the given patterns.\n")
     else:
         repo.git.add(A=True)
-        print("✅ Staged all changes.")
+        print(end="✅ Staged all changes.\n")
 
 
-def push_if_dirty(path: str, file_patterns: Optional[List[str]] = None, branch: str = "main",
+def push_if_dirty(path: Union[Path, str], file_patterns: Optional[List[str]] = None, branch: str = "main",
                   commit_message: Optional[str] = None) -> None:
     try:
         repo = Repo(path)
@@ -177,23 +178,23 @@ def push_if_dirty(path: str, file_patterns: Optional[List[str]] = None, branch: 
         raise RuntimeError(f"'{path}' is not a valid Git repository.")
 
     if not repo.is_dirty(untracked_files=True):
-        print(f"{GREEN}Working tree clean; no changes to push.{END}")
+        print(end=f"{GREEN}Working tree clean; no changes to push.{END}\n")
         return
 
     add(path, file_patterns)
     msg = commit_message or f"Auto-update: {status(path, file_patterns)}"
     repo.index.commit(msg)
-    print(f"{PINK}Committed changes{END}: {msg}")
+    print(end=f"{PINK}Committed changes{END}: {msg}\n")
 
     origin = repo.remote(name="origin")
     push_info = origin.push(branch)
     for info in push_info:
         if info.flags & info.ERROR:
             raise RuntimeError(f"Push failed: {info.summary}")
-    print(f"✅ {GREEN}Pushed to origin/{branch} successfully.{END}")
+    print(end=f"✅ {GREEN}Pushed to origin/{branch} successfully.{END}\n")
 
 
-def fetch_repositories(username: str) -> Optional[List[dict]]:
+def fetch_repositories(username: str) -> List[dict]:
     if not username:
         raise ValueError("GitHub username must be provided.")
 
@@ -203,11 +204,17 @@ def fetch_repositories(username: str) -> Optional[List[dict]]:
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"{RED}Failed to fetch repos for '{username}'{END}: {e}")
-        return None
+        print(end=f"{RED}Failed to fetch repos for '{username}'{END}: {e}\n")
+        return []
 
 
 if __name__ == '__main__':
-    path = r'C:\Users\c026730\Desktop\func'
-    clone_or_pull(path, 'https://github.com/hexs/func.git')
+    from pprint import pprint
+
+    pprint(list(r['name'] for r in fetch_repositories('hexs')))
+
+    path = Path(r'Project/func')
+    url = 'https://github.com/hexs/func.git'
+    # url = 'git@github.com/hexs/func.git' # SSH
+    clone_or_pull(path, url)
     push_if_dirty(path, ['img/*', '*.txt'])

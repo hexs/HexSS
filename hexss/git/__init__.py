@@ -12,6 +12,12 @@ hexss.check_packages('requests', 'GitPython', auto_install=True)
 import requests
 from git import Repo, GitCommandError, InvalidGitRepositoryError, RemoteProgress
 
+import glob
+
+
+def _has_wildcards(pat: str) -> bool:
+    return any(ch in pat for ch in "*?[")
+
 
 def _ensure_repo(path: Union[Path, str]) -> Repo:
     try:
@@ -111,7 +117,10 @@ def status(path: Union[Path, str], file_patterns: Optional[List[str]] = None, fi
 
 def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> None:
     """
-    Prefer Git's pathspec handling (robust wildcards/dirs).
+    Stage files with robust handling:
+    - Normalizes Windows paths to Git-style.
+    - Allows directories (adds their contents if any).
+    - Skips patterns that don't match anything to avoid fatal 'pathspec' errors.
     """
     repo = _ensure_repo(path)
     root = repo.working_tree_dir
@@ -121,17 +130,33 @@ def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> No
         print(end="✅ Staged all changes.\n")
         return
 
-    # Normalize: if it's a dir, make sure it ends with '/'
     normalized: List[str] = []
     for pat in file_patterns:
+        pat = str(pat).replace("\\", "/")
         full = _git_safe(root, pat)
+
         if os.path.isdir(full):
-            d = str(pat).replace("\\", "/")
-            if not d.endswith("/"):
-                d += "/"
-            normalized.append(d)
+            if not pat.endswith("/"):
+                pat = pat + "/"
+            normalized.append(pat)
+            continue
+
+        if _has_wildcards(pat):
+            matches = glob.glob(full, recursive=True)
+            if matches:
+                normalized.append(pat)
+            else:
+                print(end=f"⚠️ Skipping unmatched pattern (no files): {pat}\n")
+            continue
+
+        if os.path.exists(full):
+            normalized.append(pat)
         else:
-            normalized.append(str(pat).replace("\\", "/"))
+            print(end=f"⚠️ Skipping missing file: {pat}\n")
+
+    if not normalized:
+        print(end="⚠️ No matching files found to stage.\n")
+        return
 
     try:
         repo.git.add('--', *normalized)
@@ -144,7 +169,7 @@ def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> No
         for f in staged:
             print("   ", f)
     else:
-        print(end="⚠️ No matching files found to stage.\n")
+        print(end="⚠️ No changes were staged (files may be unchanged or ignored).\n")
 
 
 def commit(path: Union[Path, str], message: Optional[str] = None) -> Optional[str]:
@@ -243,7 +268,7 @@ if __name__ == '__main__':
     clone_or_pull(path, url)
     push_if_dirty(path, ['img/*', '*.txt'])
 
-    repo_path = r'C:\PythonProjects\auto_inspection_data__QC7-2413'
+    repo_path = r'C:\PythonProjects\auto_inspection_data__4A3-5526'
     pats = [
         'img_full/',
         'img_frame_log/',

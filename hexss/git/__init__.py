@@ -10,29 +10,23 @@ from hexss.constants import *
 hexss.check_packages('requests', 'GitPython', auto_install=True)
 
 import requests
-from git import Repo, GitCommandError, InvalidGitRepositoryError
+from git import Repo, GitCommandError, InvalidGitRepositoryError, RemoteProgress
 
 
+def _ensure_repo(path: Union[Path, str]) -> Repo:
+    try:
+        return Repo(path)
+    except InvalidGitRepositoryError:
+        raise RuntimeError(f"'{path}' is not a valid Git repository.")
+
+
+def _git_safe(*segments: str) -> str:
+    # Normalize path for Git/Windows
+    return os.path.join(*segments).replace("\\", "/")
+
+
+# ---------- Core ops ----------
 def clone(path: Union[Path, str], url: str, branch: str = "main", timeout: Optional[int] = None) -> Repo:
-    """
-    Clone a Git repository to the given path.
-
-    Args:
-        path (str): Destination directory path.
-        url (str): Repository URL.
-        branch (str): Branch to check out after cloning.
-        timeout (Optional[int]): Timeout for the clone operation in seconds.
-
-    Returns:
-        Repo: GitPython Repo object for the cloned repository.
-
-    Raises:
-        ValueError: If url is empty or invalid.
-        RuntimeError: If Git command fails.
-    """
-    if url is None:
-        raise ValueError("A repository URL must be provided for cloning.")
-
     try:
         print(end=f"Cloning '{url}' into '{path}'...\n")
         repo = Repo.clone_from(url, path, branch=branch, single_branch=True, depth=1, timeout=timeout)
@@ -45,26 +39,9 @@ def clone(path: Union[Path, str], url: str, branch: str = "main", timeout: Optio
 
 
 def pull(path: Union[Path, str], branch: str = "main") -> str:
-    """
-    Pull latest changes from origin for the given repository path and branch.
-
-    Args:
-        path (str): Path to existing Git repository.
-        branch (str): Branch to pull from origin.
-
-    Returns:
-        str: Output from the Git pull command.
-
-    Raises:
-        RuntimeError: If directory is not a Git repo or Git command fails.
-    """
+    repo = _ensure_repo(path)
     try:
-        repo = Repo(path)
-    except InvalidGitRepositoryError:
-        raise RuntimeError(f"'{path}' is not a valid Git repository.")
-
-    try:
-        print(end=f"Pulling latest changes in '{path}' (branch '{branch}')...\n")
+        print(end=f"Pulling latest changes in '{repo.working_tree_dir}' (branch '{branch}')...\n")
         output = repo.git.pull("origin", branch)
         print(end=f"✅ {GREEN}Pull result{END}: {output}\n")
         return output
@@ -75,17 +52,6 @@ def pull(path: Union[Path, str], branch: str = "main") -> str:
 
 
 def clone_or_pull(path: Union[Path, str], url: Optional[str] = None, branch: str = "main") -> Union[Repo, str]:
-    """
-    Clone the repository if not already present, otherwise pull latest changes.
-
-    Args:
-        path (str): Local path for repository.
-        url (Optional[str]): Repository URL. Required if cloning.
-        branch (str): Branch name for both clone and pull.
-
-    Returns:
-        Union[Repo, str]: Repo object if cloned, or pull output if pulled.
-    """
     git_dir = os.path.join(path, ".git")
     if not os.path.isdir(git_dir):
         if not url:
@@ -95,14 +61,6 @@ def clone_or_pull(path: Union[Path, str], url: Optional[str] = None, branch: str
 
 
 def auto_pull(path: Union[Path, str], interval: int = 600, branch: str = "main") -> None:
-    """
-    Continuously pull latest changes at given time intervals.
-
-    Args:
-        path (str): Path to Git repository.
-        interval (int): Polling interval in seconds.
-        branch (str): Branch to pull.
-    """
     while True:
         try:
             pull(path, branch)
@@ -112,18 +70,7 @@ def auto_pull(path: Union[Path, str], interval: int = 600, branch: str = "main")
 
 
 def status(path: Union[Path, str], file_patterns: Optional[List[str]] = None, filter_codes: str = 'MADRCU') -> str:
-    """
-    Get the working tree status of the repository.
-
-    Args:
-        path (str): Path to Git repository.
-        file_patterns (List[str]): List of filename patterns to include (e.g., ['*.py', 'docs/*']).
-        status_codes (str): Status types to include (e.g., 'MADRCU?' for modified, added, etc.).
-
-    Returns:
-        str: Comma-separated status summary.
-    """
-    repo = Repo(path)
+    repo = _ensure_repo(path)
     status_lines = repo.git.status('--porcelain').splitlines()
 
     status_map = {
@@ -138,66 +85,143 @@ def status(path: Union[Path, str], file_patterns: Optional[List[str]] = None, fi
 
     details = []
     for line in status_lines:
-        code = line[:2].strip()
-        file_path = line[3:].strip()
-        if code and code[0] in filter_codes:
-            if file_patterns:
-                if not any(fnmatch.fnmatch(file_path, pattern) for pattern in file_patterns):
-                    continue
-            status_key = status_map.get(code[0], code)
-            details.append(f"{status_key} {file_path}")
+        if not line.strip():
+            continue
+
+        code = line[:2].strip()  # e.g. "M", "A", "??"
+        file_path = line[3:].strip()  # after two status chars + space
+
+        if not code:
+            continue
+        if code[0] not in filter_codes:
+            continue
+
+        if file_patterns:
+            # Accept either wildcard match or directory prefix match
+            if not any(
+                    fnmatch.fnmatch(file_path, pat) or file_path.startswith(pat.rstrip("/") + "/")
+                    for pat in file_patterns
+            ):
+                continue
+
+        details.append(f"{status_map.get(code[0], code)} {file_path}")
+
     return ", ".join(details)
 
 
 def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> None:
-    repo = Repo(path)
-    git_root = repo.working_tree_dir
+    """
+    Prefer Git's pathspec handling (robust wildcards/dirs).
+    """
+    repo = _ensure_repo(path)
+    root = repo.working_tree_dir
 
-    if file_patterns:
-        matched_files = []
-        for root, dirs, files in os.walk(git_root):
-            for file in files:
-                rel_path = os.path.relpath(os.path.join(root, file), git_root).replace("\\", "/")
-                if any(fnmatch.fnmatch(rel_path, pattern) for pattern in file_patterns):
-                    matched_files.append(rel_path)
-        if matched_files:
-            repo.index.add(matched_files)
-            print(end=f"✅ Staged files: {', '.join(matched_files)}\n")
-        else:
-            print(end="⚠️ No files matched the given patterns.\n")
-    else:
+    if not file_patterns:
         repo.git.add(A=True)
         print(end="✅ Staged all changes.\n")
-
-
-def push_if_dirty(path: Union[Path, str], file_patterns: Optional[List[str]] = None, branch: str = "main",
-                  commit_message: Optional[str] = None) -> None:
-    try:
-        repo = Repo(path)
-    except InvalidGitRepositoryError:
-        raise RuntimeError(f"'{path}' is not a valid Git repository.")
-
-    if not repo.is_dirty(untracked_files=True):
-        print(end=f"{GREEN}Working tree clean; no changes to push.{END}\n")
         return
 
-    add(path, file_patterns)
-    msg = commit_message or f"Auto-update: {status(path, file_patterns)}"
-    repo.index.commit(msg)
-    print(end=f"{PINK}Committed changes{END}: {msg}\n")
+    # Normalize: if it's a dir, make sure it ends with '/'
+    normalized: List[str] = []
+    for pat in file_patterns:
+        full = _git_safe(root, pat)
+        if os.path.isdir(full):
+            d = pat.replace("\\", "/")
+            if not d.endswith("/"):
+                d += "/"
+            normalized.append(d)
+        else:
+            normalized.append(pat)
 
-    origin = repo.remote(name="origin")
-    push_info = origin.push(branch)
-    for info in push_info:
-        if info.flags & info.ERROR:
-            raise RuntimeError(f"Push failed: {info.summary}")
+    try:
+        repo.git.add('--', *normalized)
+    except GitCommandError as e:
+        raise RuntimeError(f"{RED}git add failed{END}: {e.stderr.strip()}") from e
+
+    staged = repo.git.diff('--cached', '--name-only').splitlines()
+    if staged:
+        print(end=f"✅ Staged files ({len(staged)}):\n")
+        for f in staged:
+            print("   ", f)
+    else:
+        print(end="⚠️ No matching files found to stage.\n")
+
+
+def commit(path: Union[Path, str], message: Optional[str] = None) -> Optional[str]:
+    """
+    Commit staged changes if any. Returns commit hexsha or None if nothing staged.
+    """
+    repo = _ensure_repo(path)
+
+    staged = repo.git.diff('--cached', '--name-only').splitlines()
+    if not staged:
+        print(end=f"{YELLOW}No staged changes to commit.{END}\n")
+        return None
+
+    msg = message or "Auto-commit"
+    try:
+        commit_obj = repo.index.commit(msg)
+        print(end=f"📝 {PINK}Committed{END}: {msg}\n")
+        print(end=f"🔗 {commit_obj.hexsha}\n")
+        return commit_obj.hexsha
+    except GitCommandError as e:
+        raise RuntimeError(f"{RED}Git commit failed{END}: {e.stderr.strip()}") from e
+
+
+def push(path: Union[Path, str], branch: str = "main", commit_message: Optional[str] = None) -> None:
+    """
+    Push current HEAD to origin/<branch>.
+    - If commit_message is provided and there are staged changes, a commit is made before push.
+    - If no upstream is set, set upstream to origin/<branch>.
+    """
+    repo = _ensure_repo(path)
+
+    if commit_message is not None:
+        _ = commit(path, commit_message)
+
+    try:
+        origin = repo.remote(name="origin")
+    except ValueError:
+        raise RuntimeError(f"{RED}No remote named 'origin'{END} is configured.")
+
+    # Ensure/checkout the target branch
+    try:
+        if repo.head.is_detached:
+            raise RuntimeError("HEAD is detached. Please attach HEAD to a branch before pushing.")
+
+        if repo.active_branch.name != branch:
+            if branch in repo.heads:
+                repo.git.checkout(branch)
+            else:
+                repo.git.checkout('-b', branch)
+    except Exception as e:
+        raise RuntimeError(f"{RED}Unable to checkout branch '{branch}'{END}: {e}")
+
+    # Push with upstream if needed
+    try:
+        if repo.active_branch.tracking_branch() is None:
+            print(end=f"🔧 Setting upstream to origin/{branch}...\n")
+            repo.git.push('--set-upstream', 'origin', branch)
+        else:
+            push_info = origin.push(branch)
+            for info in push_info:
+                if info.flags & info.ERROR:
+                    raise RuntimeError(f"Push failed: {info.summary}")
+    except GitCommandError as e:
+        raise RuntimeError(f"{RED}Git push failed{END}: {e.stderr.strip()}") from e
+
     print(end=f"✅ {GREEN}Pushed to origin/{branch} successfully.{END}\n")
+
+
+def push_if_dirty(path: Union[Path, str], file_patterns: Optional[List[str]] = None, branch: str = "main") -> None:
+    add(path, file_patterns)
+    s = status(path, file_patterns)
+    push(path, branch=branch, commit_message=s if s else None)
 
 
 def fetch_repositories(username: str) -> List[dict]:
     if not username:
         raise ValueError("GitHub username must be provided.")
-
     url = f"https://api.github.com/users/{username}/repos"
     try:
         response = requests.get(url, proxies=hexss.proxies)
@@ -218,3 +242,17 @@ if __name__ == '__main__':
     # url = 'git@github.com/hexs/func.git' # SSH
     clone_or_pull(path, url)
     push_if_dirty(path, ['img/*', '*.txt'])
+
+    repo_path = r'C:\PythonProjects\auto_inspection_data__QC7-2413'
+    pats = [
+        'img_full/',
+        'img_frame_log/',
+        'model/',
+        '*.json',
+        '.gitignore',
+    ]
+
+    add(repo_path, pats)
+    s = status(repo_path, pats)
+    print(s)
+    push(repo_path, branch='main', commit_message=s if s else None)

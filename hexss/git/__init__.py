@@ -126,12 +126,12 @@ def add(path: Union[Path, str], file_patterns: Optional[List[str]] = None) -> No
     for pat in file_patterns:
         full = _git_safe(root, pat)
         if os.path.isdir(full):
-            d = pat.replace("\\", "/")
+            d = str(pat).replace("\\", "/")
             if not d.endswith("/"):
                 d += "/"
             normalized.append(d)
         else:
-            normalized.append(pat)
+            normalized.append(str(pat).replace("\\", "/"))
 
     try:
         repo.git.add('--', *normalized)

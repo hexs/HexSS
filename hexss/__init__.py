@@ -1,5 +1,6 @@
 import os
 import platform
+import sys
 from .json import json_load, json_dump, json_update
 from .network import open_url, get_ipv4, is_port_available, close_port
 from .kill import kill
@@ -33,10 +34,17 @@ def get_config(file_name):
     return config
 
 
-__version__ = '0.26.5'
+__version__ = '0.26.6'
 hostname = get_hostname()
 username = get_username()
 hexss_dir = get_hexss_dir()
 proxies = get_config('proxies')
-system = platform.system()
+system = platform.system()  # Get the system name (e.g., 'Linux', 'Windows', 'Darwin' for macOS)
 python_version = platform.python_version()
+is_64bits = sys.maxsize > 2 ** 32
+machine = platform.machine()  # Get the machine type (e.g., 'x86_64', 'AMD64', 'arm64')
+processor = platform.processor()  # Get the processor information (e.g., 'x86_64', 'arm')
+architecture: tuple[str, str] = platform.architecture()  # (bits, linkage)
+# bits: This string indicates the bit architecture of the executable, such as '32bit' or '64bit'.
+# linkage: This string describes the linkage format used, for example, 'ELF' on Linux, 'WindowsPE' on Windows.
+# (e.g., ('64bit', 'WindowsPE'), ('64bit', 'ELF'))

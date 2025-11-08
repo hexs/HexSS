@@ -255,29 +255,3 @@ def fetch_repositories(username: str) -> List[dict]:
     except Exception as e:
         print(end=f"{RED}Failed to fetch repos for '{username}'{END}: {e}\n")
         return []
-
-
-if __name__ == '__main__':
-    from pprint import pprint
-
-    pprint(list(r['name'] for r in fetch_repositories('hexs')))
-
-    path = Path(r'Project/func')
-    url = 'https://github.com/hexs/func.git'
-    # url = 'git@github.com/hexs/func.git' # SSH
-    clone_or_pull(path, url)
-    push_if_dirty(path, ['img/*', '*.txt'])
-
-    repo_path = r'C:\PythonProjects\auto_inspection_data__4A3-5526'
-    pats = [
-        'img_full/',
-        'img_frame_log/',
-        'model/',
-        '*.json',
-        '.gitignore',
-    ]
-
-    add(repo_path, pats)
-    s = status(repo_path, pats)
-    print(s)
-    push(repo_path, branch='main', commit_message=s if s else None)

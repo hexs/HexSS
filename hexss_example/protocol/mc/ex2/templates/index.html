@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FX3U I/O Monitor</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #f4f4f4;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 320px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #fafafa;
+        }
+
+        .badge {
+            display: inline-block;
+            min-width: 40px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .badge-on {
+            background: #28a745;
+            color: #fff;
+        }
+
+        .badge-off {
+            background: #dc3545;
+            color: #fff;
+        }
+
+        .small {
+            font-size: 12px;
+            color: #555;
+        }
+
+        button.toggle-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        button.toggle-btn.on {
+            background: #28a745;
+            color: #fff;
+            border-color: #28a745;
+        }
+
+        button.toggle-btn.off {
+            background: #fff;
+            color: #333;
+        }
+
+        #status-bar {
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<h1>FX3U I/O Monitor</h1>
+
+<div id="status-bar">
+    Last update: <span id="last-update">-</span>
+</div>
+
+<div class="container">
+    <div class="card">
+        <h2>Inputs (X)</h2>
+        <table id="inputs-table">
+            <thead>
+            <tr>
+                <th>Register</th>
+                <th>Label</th>
+                <th>Value</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in inputs %}
+                <tr data-reg="{{ item.register }}">
+                    <td>{{ item.register }}</td>
+                    <td>{{ item.label }}</td>
+                    <td>
+                        {% if item.value %}
+                            <span class="badge badge-on">ON</span>
+                        {% else %}
+                            <span class="badge badge-off">OFF</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Outputs (Y)</h2>
+        <table id="outputs-table">
+            <thead>
+            <tr>
+                <th>Register</th>
+                <th>Label</th>
+                <th>Value</th>
+                <th>Control</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in outputs %}
+                <tr data-reg="{{ item.register }}">
+                    <td>{{ item.register }}</td>
+                    <td>{{ item.label }}</td>
+                    <td>
+                        {% if item.value %}
+                            <span class="badge badge-on">ON</span>
+                        {% else %}
+                            <span class="badge badge-off">OFF</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button
+                            class="toggle-btn {% if item.value %}on{% else %}off{% endif %}"
+                            data-reg="{{ item.register }}"
+                            data-value="{{ item.value|int }}"
+                        >
+                            Toggle
+                        </button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p class="small">* Clicking Toggle will update the corresponding Y output on the PLC.</p>
+    </div>
+</div>
+
+<script>
+    function formatTime(d) {
+        return d.toLocaleTimeString();
+    }
+
+    function updateLastUpdate() {
+        const el = document.getElementById("last-update");
+        if (el) {
+            el.textContent = formatTime(new Date());
+        }
+    }
+
+    function renderTableRows(tableId, items, isOutput = false) {
+        const tbody = document.querySelector(`#${tableId} tbody`);
+        if (!tbody) return;
+
+        tbody.innerHTML = "";
+
+        items.forEach(item => {
+            const tr = document.createElement("tr");
+            tr.dataset.reg = item.register;
+
+            const tdReg = document.createElement("td");
+            tdReg.textContent = item.register;
+
+            const tdLabel = document.createElement("td");
+            tdLabel.textContent = item.label;
+
+            const tdVal = document.createElement("td");
+            const span = document.createElement("span");
+            span.classList.add("badge");
+            if (parseInt(item.value)) {
+                span.classList.add("badge-on");
+                span.textContent = "ON";
+            } else {
+                span.classList.add("badge-off");
+                span.textContent = "OFF";
+            }
+            tdVal.appendChild(span);
+
+            tr.appendChild(tdReg);
+            tr.appendChild(tdLabel);
+            tr.appendChild(tdVal);
+
+            if (isOutput) {
+                const tdCtrl = document.createElement("td");
+                const btn = document.createElement("button");
+                btn.classList.add("toggle-btn");
+                if (parseInt(item.value)) {
+                    btn.classList.add("on");
+                } else {
+                    btn.classList.add("off");
+                }
+                btn.dataset.reg = item.register;
+                btn.dataset.value = String(parseInt(item.value) || 0);
+                btn.textContent = "Toggle";
+                tdCtrl.appendChild(btn);
+                tr.appendChild(tdCtrl);
+            }
+
+            tbody.appendChild(tr);
+        });
+
+        if (isOutput) {
+            attachToggleHandlers();
+        }
+    }
+
+    async function sendControl(reg, newVal) {
+        try {
+            const payload = {
+                outputs: {}
+            };
+            payload.outputs[reg] = newVal;
+
+            const res = await fetch("/api/control", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+                console.error("Control error:", data.error);
+                return;
+            }
+
+            // Update outputs from response so UI feels snappy
+            if (data.outputs) {
+                renderTableRows("outputs-table", data.outputs, true);
+                updateLastUpdate();
+            }
+        } catch (e) {
+            console.error("sendControl error:", e);
+        }
+    }
+
+    function attachToggleHandlers() {
+        const buttons = document.querySelectorAll("button.toggle-btn");
+        buttons.forEach(btn => {
+            btn.onclick = () => {
+                const reg = btn.dataset.reg;
+                const current = parseInt(btn.dataset.value) || 0;
+                const nextVal = current ? 0 : 1;
+
+                // Update local state (visual feedback) immediately
+                btn.dataset.value = String(nextVal);
+                btn.classList.toggle("on", !!nextVal);
+                btn.classList.toggle("off", !nextVal);
+
+                // Send to server
+                sendControl(reg, nextVal);
+            };
+        });
+    }
+
+    function startEventSource() {
+        if (!window.EventSource) {
+            console.error("EventSource not supported in this browser.");
+            return;
+        }
+
+        const source = new EventSource("/api/socket/status");
+
+        source.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                renderTableRows("inputs-table", data.inputs || [], false);
+                renderTableRows("outputs-table", data.outputs || [], true);
+                updateLastUpdate();
+            } catch (e) {
+                console.error("SSE parse error:", e);
+            }
+        };
+
+        source.onerror = (err) => {
+            console.error("SSE error:", err);
+            // EventSource will automatically retry
+        };
+    }
+
+    // Initial bind and timestamp
+    attachToggleHandlers();
+    updateLastUpdate();
+
+    // Start SSE stream
+    startEventSource();
+</script>
+
+</body>
+</html>

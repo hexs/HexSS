@@ -104,7 +104,7 @@ def _wrap_mutables(obj: Any, touch_cb) -> Any:
 
 
 class Config:
-    def __init__(self, config_file: Union[Path, str] = "cfg.pycfg", default_text: str = "") -> None:
+    def __init__(self, config_file: Union[Path, str] = "cfg.py", default_text: str = "") -> None:
         self._file = Path(config_file)
         self._data: Dict[str, Any] = {}
         if self._file.exists():
@@ -596,11 +596,31 @@ if __name__ == '__main__':
     from pathlib import Path
     from hexss.pyconfig import Config
 
-    # 1) Point Config to your target file
-    cfg_path = Path("classification_model_example/config.pycfg")
-    cfg = Config(cfg_path)  # creates/saves if missing
+    # Point Config to your target file
+    cfg = Config("my_project/config.py")
 
-    # 2) Make sure imports you’ll need exist (idempotent; merges nicely)
+    # (int, float, complex, str, bytes, bool)
+    cfg.x = 1
+    cfg.y = 2.06
+    cfg.z = 3 + 2j
+    cfg.a = 'abc'
+    cfg.b = b'abc'
+    cfg.c = True
+
+    # (Lists, Dicts, Sets)
+    # Initialize a list and a dict
+    cfg.users = ["alice", "bob"]
+    cfg.settings = {"theme": "dark", "retries": 3}
+
+    # Modify in-place (Triggers auto-save)
+    cfg.users.append("charlie")
+    cfg.settings["theme"] = "light"
+
+    # Even nested modifications work
+    cfg.nested = {"a": [1, 2]}
+    cfg.nested["a"].append(3)
+
+    # Make sure imports you’ll need exist (idempotent; merges nicely)
     cfg._ensure_import(
         "from keras import Sequential, layers",
         "from pathlib import Path",
@@ -609,7 +629,7 @@ if __name__ == '__main__':
         "from typing import Optional as Opt",  # merges into any existing typing line
     )
 
-    # 3) Set simple values (auto-saves on assignment)
+    # Set simple values (auto-saves on assignment)
     cfg.ipv4 = "0.0.0.0"
     cfg.port = 5000
     cfg.img_size = [100, 100]
@@ -618,13 +638,13 @@ if __name__ == '__main__':
     cfg.validation_split = 0.2
     cfg.seed = 456
 
-    # 4) Set derived paths and a computed list via _update_block (RHS or full assignment)
+    # Set derived paths and a computed list via _update_block (RHS or full assignment)
     cfg._update_block("datasets_path", "Path(__file__).parent / 'datasets'")
     cfg._update_block("model_path", "Path(__file__).parent / 'model'")
     cfg._update_block("class_names", "[p.name for p in datasets_path.iterdir() if p.is_dir()]")
     # If datasets/ doesn’t exist yet, it’ll be created on first execution (during load) and retried.
 
-    # 5) Add/update your Keras model using just the RHS (will wrap as `model = ...`)
+    # Add/update your Keras model using just the RHS (will wrap as `model = ...`)
     cfg._update_block("model", """
             Sequential([
                 layers.Rescaling(1./255, input_shape=(*img_size, 3)),
@@ -640,7 +660,7 @@ if __name__ == '__main__':
             ])
         """)
 
-    # 6) Read back values
+    # Read back values
     print("ipv4:", cfg.ipv4)  # from literals cache
     print("port:", cfg.port)
     print("img_size:", cfg.img_size)
@@ -651,17 +671,17 @@ if __name__ == '__main__':
     cfg.model.build(input_shape=(None, cfg.img_size[0], cfg.img_size[1], 3))
     cfg.model.summary()
 
-    # 7) In-place mutations auto-save (thanks to SaveList/SaveDict/SaveSet wrappers)
+    # In-place mutations auto-save (thanks to SaveList/SaveDict/SaveSet wrappers)
     cfg.model_names = ["m1", "m2"]
     cfg.model_names.append("m3")  # triggers auto-save without reassigning
     print("model_names:", cfg.model_names)
 
-    # 8) Nested updates that auto-create parents and save
+    # Nested updates that auto-create parents and save
     cfg._update(["rects", "r1", "x"], 15)
     cfg._update(["rects", "r1", "y"], 2)
     cfg._update(["rects", "r2", "x"], 20)
     cfg._update(["rects", "r2", "y"], 60)
     print("rects:", cfg.rects)
 
-    # 9) Pretty print the literal store (_data)
+    # Pretty print the literal store (_data)
     cfg._pprint("Current literal config (_data):")

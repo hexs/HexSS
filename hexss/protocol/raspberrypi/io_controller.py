@@ -33,7 +33,7 @@ class DigitalOutputDevice(gpiozero.DigitalOutputDevice):
     def __init__(self, pin=None, name=None, *, active_high=True, initial_value=False, pin_factory=None):
         super().__init__(pin, active_high=active_high, initial_value=initial_value, pin_factory=pin_factory)
         self.name = name or f'Pin{pin}'
-        self._state_change_callback = None  # Callback function for GPIO manager
+        self._state_change_callback = None
 
     def set_change_callback(self, callback: Callable[[Any, int], None]):
         self._state_change_callback = callback
@@ -68,7 +68,7 @@ class DigitalOutputDevice(gpiozero.DigitalOutputDevice):
 
 
 class Inputs:
-    def __init__(self, gpio_manager: 'GPIO'):
+    def __init__(self, gpio_manager: 'IOController'):
         self.inputs: List[DigitalInputDevice] = []
         self._gpio = gpio_manager
 
@@ -108,7 +108,7 @@ class Inputs:
 
 
 class Outputs:
-    def __init__(self, gpio_manager: 'GPIO'):
+    def __init__(self, gpio_manager: 'IOController'):
         self.outputs: List[DigitalOutputDevice] = []
         self._gpio = gpio_manager
 
@@ -173,8 +173,8 @@ class IOController:
                 "duration": duration,
                 "callback": callback,
                 "events": [],
-                "window_start": None,  # type: Optional[float]
-                "window_id": 0,  # type: int
+                "window_start": None,
+                "window_id": 0,
             }
             self._simul_groups.append(group)
 
@@ -235,6 +235,22 @@ class IOController:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def start_server(self, host="0.0.0.0", port=2003):
+        import hexss.protocol.raspberrypi.server
+
+        print(f"Starting server at http://{host}:{port}")
+        threading.Thread(
+            target=hexss.protocol.raspberrypi.server.run,
+            args=(
+                {
+                    "host": host,
+                    "port": port,
+                    'io': self
+                },
+            ),
+            daemon=True
+        ).start()
+
 
 if __name__ == "__main__":
     def universal_callback(device, value):
@@ -245,6 +261,7 @@ if __name__ == "__main__":
     def handle_simultaneous(events: List[Tuple[str, int]]):
         print(f"[SIMUL EVENT] Captured: {events}")
         if ('Switch L', 1) in events and ('Switch R', 1) in events:
+            print(">>> BOTH SWITCHES PRESSED! Triggering sequence...")
             io.get('Cylinder 1+').on()
             time.sleep(1)
             io.get('Cylinder 1+').off()
@@ -282,17 +299,19 @@ if __name__ == "__main__":
 
     io.on_change(universal_callback)
     io.simultaneous_events(handle_simultaneous, duration=0.2)
+    io.start_server()
 
+    print("System Running... Press Ctrl+C to exit.")
     try:
         while True:
-            if io.get("Area 1").value:
-                if not io.get("Buzzer").value:
-                    io.get("Buzzer").on()
-                    print("[LOOP] Area Breach! Buzzer ON")
-            else:
-                if io.get("Buzzer").value:
-                    io.get("Buzzer").off()
-                    print("[LOOP] Area Clear. Buzzer OFF")
+            # if io.get("Area 1").value:
+            #     if not io.get("Buzzer").value:
+            #         io.get("Buzzer").on()
+            #         print("[LOOP] Area Breach! Buzzer ON")
+            # else:
+            #     if io.get("Buzzer").value:
+            #         io.get("Buzzer").off()
+            #         print("[LOOP] Area Clear. Buzzer OFF")
 
             time.sleep(0.1)
 

@@ -75,7 +75,7 @@ class Inputs:
     def add(
             self,
             pin: int,
-            name: str,
+            name: Optional[str] = None,
             *,
             pull_up: bool = False,
             active_state: Optional[bool] = None,
@@ -112,7 +112,22 @@ class Outputs:
         self.outputs: List[DigitalOutputDevice] = []
         self._gpio = gpio_manager
 
-    def add(self, device: DigitalOutputDevice) -> DigitalOutputDevice:
+    def add(
+            self,
+            pin: int,
+            name: Optional[str] = None,
+            *,
+            active_high=True,
+            initial_value=False,
+            pin_factory=None
+    ) -> DigitalOutputDevice:
+        device = DigitalOutputDevice(
+            pin=pin,
+            name=name,
+            active_high=active_high,
+            initial_value=initial_value,
+            pin_factory=pin_factory
+        )
         self.outputs.append(device)
         self._gpio._attach_device_handler(device)
         return device
@@ -257,18 +272,23 @@ if __name__ == "__main__":
         type_name = "INPUT " if isinstance(device, DigitalInputDevice) else "OUTPUT"
         print(f"[LOG] {type_name}: {device.name} -> {value}")
 
+        if device.name == 'Cylinder 1+' and value == 1:
+            io.get('Cylinder 1-').off()
+        if device.name == 'Cylinder 1-' and value == 1:
+            io.get('Cylinder 1+').off()
+        if device.name == 'Cylinder 2+' and value == 1:
+            io.get('Cylinder 2-').off()
+        if device.name == 'Cylinder 2-' and value == 1:
+            io.get('Cylinder 2+').off()
+
 
     def handle_simultaneous(events: List[Tuple[str, int]]):
         print(f"[SIMUL EVENT] Captured: {events}")
         if ('Switch L', 1) in events and ('Switch R', 1) in events:
             print(">>> BOTH SWITCHES PRESSED! Triggering sequence...")
             io.get('Cylinder 1+').on()
-            time.sleep(1)
-            io.get('Cylinder 1+').off()
-            time.sleep(1)
+            time.sleep(0.1)
             io.get('Cylinder 1-').on()
-            time.sleep(1)
-            io.get('Cylinder 1-').off()
 
         if ('Cylinder 1+', 1) in events:
             io.get('Switch Lamp').on()
@@ -282,20 +302,20 @@ if __name__ == "__main__":
     io.input.add(5, "EM", bounce_time=0.02)
     io.input.add(12, "Switch L", pull_up=True, bounce_time=0.02)
     io.input.add(16, "Switch R", pull_up=True, bounce_time=0.02)
-    io.input.add(20, "Area 1", bounce_time=0.02)
-    io.input.add(6, "Proximity1", pull_up=True, bounce_time=0.02)
-    io.input.add(13, "Proximity2", pull_up=True, bounce_time=0.02)
+    io.input.add(20, "Area", bounce_time=0.02)
+    io.input.add(6, "Proximity 1", pull_up=True, bounce_time=0.02)
+    io.input.add(13, "Proximity 2", pull_up=True, bounce_time=0.02)
     io.input.add(19, "Cylinder 1 Reed Switch", pull_up=True, bounce_time=0.02)
     io.input.add(21, "Cylinder 2 Reed Switch", pull_up=True, bounce_time=0.02)
 
-    io.output.add(DigitalOutputDevice(4, 'Switch Lamp'))
-    io.output.add(DigitalOutputDevice(18, 'Buzzer'))
-    io.output.add(DigitalOutputDevice(22, 'Cylinder 1+'))
-    io.output.add(DigitalOutputDevice(24, 'Cylinder 1-'))
-    io.output.add(DigitalOutputDevice(17, 'Cylinder 2+'))
-    io.output.add(DigitalOutputDevice(27, 'Cylinder 2-'))
-    io.output.add(DigitalOutputDevice(23))
-    io.output.add(DigitalOutputDevice(25))
+    io.output.add(4, 'Switch Lamp')
+    io.output.add(18, 'Buzzer')
+    io.output.add(22, 'Cylinder 1+')
+    io.output.add(24, 'Cylinder 1-')
+    io.output.add(17, 'Cylinder 2+')
+    io.output.add(27, 'Cylinder 2-')
+    io.output.add(23)
+    io.output.add(25)
 
     io.on_change(universal_callback)
     io.simultaneous_events(handle_simultaneous, duration=0.2)

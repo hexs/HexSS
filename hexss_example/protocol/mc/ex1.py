@@ -1,41 +1,33 @@
-from datetime import datetime
 from hexss.protocol.mc import MCClient
 
-plc = MCClient("192.168.3.254", 1027)
-# อ่าน X0..X7
-x_vals = plc.read('X0', 8)
-print(datetime.now(), "X0..X7 =", x_vals)
+client = MCClient("192.168.3.254", 1027)
 
-# ปิด Y0..Y7 ทีละบิต
-for i in range(8):
-    plc.write(f'Y{i}', 0)
-    print(datetime.now(), f"Y{i} = 0")
+# 1. Read Inputs (X) - Octal addresses
+print("X000 - X007 Status: ", client.read("X0", 8))
 
-# อ่าน Y0..Y7
-y_vals = plc.read('Y0', 8)
-print(datetime.now(), "Y0..Y7 =", y_vals)
+# 2. Write and Read Outputs (Y) - Octal addresses
+client.write("Y0", [1, 0, 1, 0])
+print("Y000 - Y003 Status: ", client.read("Y0", 4))
 
-# เปิด Y0..Y7 ทีละบิต
-for i in range(8):
-    plc.write(f'Y{i}', 1)
-    print(datetime.now(), f"Y{i} = 1")
+# 3. Write and Read Relays (M) - Decimal
+client.write("M100", [1, 1, 0, 0, 1, 1])
+print("M100 - M105 Status: ", client.read("M100", 6))
 
-# อ่าน Y0..Y7 อีกครั้ง
-y_vals = plc.read('Y0', 8)
-print(datetime.now(), "Y0..Y7 =", y_vals)
+# 4. Write and Read States (S)
+client.write("S20", [0, 1, 0, 1])
+print("S020 - S023 Status: ", client.read("S20", 4))
 
-# อ่าน D0..D9
-d_vals = plc.read('D0', 10)
-print(datetime.now(), "D0..D9 =", d_vals)
+# 5. Write and Read Data Registers (D)
+client.write("D500", [1234, 5678, 99])
+print("D500 - D502 Values: ", client.read("D500", 3))
 
-# เขียน D5 = D5+1
-d_vals = plc.read('D0', 10)
-new_val = d_vals[5] + 1
-plc.write('D5', new_val)
-print(datetime.now(), "Wrote D5 =", new_val)
+# 6. Read Timer Contact (T) and Current Value (TN)
+# Note: Timers must be active in the PLC ladder to have values.
+print("Timer T1 Contact:   ", client.read("T1"))
+print("Timer T1 Current Val:", client.read("TN1"))
 
-# อ่าน D0..D9 อีกครั้ง
-d_vals = plc.read('D0', 10)
-print(datetime.now(), "D0..D9 =", d_vals)
+# 7. Read Counter Contact (C) and Current Value (CN)
+print("Counter C1 Contact:  ", client.read("C1"))
+print("Counter C1 Current Val:", client.read("CN1"))
 
-plc.close()
+client.close()

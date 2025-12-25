@@ -1,12 +1,9 @@
-# server.py
 import json
 import time
 import logging
 from flask import Flask, render_template_string, jsonify, request, Response
 
 app = Flask(__name__)
-
-# Suppress default Flask logging
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
@@ -312,6 +309,7 @@ def api_socket_status():
                 if payload != last_payload:
                     last_payload = payload
                     yield f"data: {payload}\n\n"
+
                 time.sleep(0.01)
         except GeneratorExit:
             pass
@@ -352,6 +350,6 @@ def set_value(name):
 
 def run(data):
     host = data.get('host', '0.0.0.0')
-    port = data.get('port', 2003)
+    port = data.get('port', 2006)
     app.config['data'] = data
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

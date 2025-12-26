@@ -49,7 +49,7 @@ def ping_host(ip: str) -> Union[str, None]:
         return None
 
 
-def scan_network(ip_iterator: Iterable[str], max_threads: int = 50):
+def scan_network(ip_iterator: Iterable[str], max_threads: int = 50) -> List[str]:
     """
     Scans a network using a thread pool.
     On Windows, keep max_threads <= 100 to avoid [WinError 6].
@@ -59,7 +59,7 @@ def scan_network(ip_iterator: Iterable[str], max_threads: int = 50):
 
     if total_ips == 0:
         print("[-] No IPs provided to scan.")
-        return
+        return []
 
     print(f"[*] Prepared to scan {total_ips} addresses.")
     active_hosts = []
@@ -87,7 +87,7 @@ def scan_network(ip_iterator: Iterable[str], max_threads: int = 50):
     print(end=f"\rTotal Active Hosts Found: {len(active_hosts)}\n")
 
     active_hosts.sort(key=lambda ip: int(ipaddress.IPv4Address(ip)))
-    print(active_hosts)
+    return active_hosts
 
 
 if __name__ == "__main__":

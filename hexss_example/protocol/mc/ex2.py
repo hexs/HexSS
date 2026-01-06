@@ -1,11 +1,28 @@
 import time
 from hexss.constants import *
 from hexss.protocol.mc import MCClient
-from hexss.protocol.mc.event import Match, Events
+from hexss.protocol.mc.event import Match, Events, Event
 
 if __name__ == "__main__":
-    def on_change(e):
+    def on_change(e: Event):
         print(f"{BLUE}[Change] {e.name} ({e.address}) changed to {e.value}{END}")
+        if e.name == 'X6' and e.value == 1:
+            print(f"[+] X6 is 1")
+        if e == ('X6', 1):
+            print(f"[+] X6 is 1")
+
+        if e in (['X6', 1], ['X7', 1], ['X8', 1]):
+            print(f"[+] X6, X7, or X8 is 1")
+        if e.matches(['X6', 'X7', 'X8'], 1):
+            print(f"[+] X6, X7, or X8 is 1")
+
+        if e.matches(['X6', 'X5'], [1, 0]):
+            print(f"[+] X6 is 1 or X5 is 0")
+
+        if e == ('X1', 1):
+            print(f"[+] Left Button is 1")
+        if e == {'X1': 1}:
+            print(f"[+] Left Button is 1")
 
 
     def simultaneous_events(events: Events):
@@ -44,7 +61,7 @@ if __name__ == "__main__":
             status = client.get('Left Button').value
             stamp = client.get('Left Button').last_change
             if status:
-                print(f"{GREEN}[+] {status} (last change: {time.time()-stamp}){END}")
+                print(f"{GREEN}[+] {status} (last change: {time.time() - stamp}){END}")
             time.sleep(0.05)
 
     except KeyboardInterrupt:

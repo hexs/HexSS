@@ -1,4 +1,4 @@
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Sequence
 
 
 class Event:
@@ -23,6 +23,38 @@ class Event:
         if self.address == self.name:
             return f"<{self.address}: {self.value}>"
         return f"<{self.address}({self.name}): {self.value}>"
+
+    def __eq__(self, other):
+        if isinstance(other, Event):
+            return self.address == other.address and self.name == other.name and self.value == other.value
+        if isinstance(other, Sequence) and len(other) == 2:
+            other_name, other_value = other
+            return (self.name == other_name or self.address == other_name) and self.value == other_value
+        if isinstance(other, dict):
+            for other_name, other_value in other.items():
+                if (self.name == other_name or self.address == other_name) and self.value == other_value:
+                    return True
+        return False
+
+    def matches(
+            self,
+            name: Union[str, Sequence[str]],
+            value: Union[int, float, Sequence[Union[int, float]]]
+    ) -> bool:
+
+        if isinstance(name, set) or isinstance(value, set):
+            raise TypeError("Set type is not supported for name or value")
+
+        names = [name] if isinstance(name, str) else list(name)
+        values = [value] * len(names) if isinstance(value, (int, float, str, bool)) else list(value)
+
+        if len(names) != len(values):
+            return False
+
+        return any(
+            (self.name == n or self.address == n) and self.value == v
+            for n, v in zip(names, values)
+        )
 
 
 class Events:

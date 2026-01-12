@@ -15,8 +15,13 @@ def json_load(
         dump: bool = False
 ) -> Dict[str, Any]:
     """
-    Load JSON data from a file. If the file does not exist or contains invalid/empty JSON,
-    return a copy of `default` (or {}) and optionally write it to disk when `dump=True`.
+    Load JSON data from a file.
+
+    :param file_path: Path to the .json file.
+    :param default: Default dictionary to use if file is missing or empty.
+                    File content overrides these defaults.
+    :param dump: If True, write the merged data (defaults + file content) back to disk.
+    :return: The loaded (and merged) dictionary.
     """
     path = Path(file_path)
     if path.suffix.lower() != '.json':
@@ -54,7 +59,12 @@ def json_dump(
         indent: int = 4
 ) -> Dict[str, Any]:
     """
-    Write JSON data to a file (atomically).
+    Write JSON data to a file atomically using a temporary file.
+
+    :param file_path: Destination path.
+    :param data: The dictionary data to write.
+    :param indent: JSON indentation level.
+    :return: A copy of the written data as a standard dict.
     """
     path = Path(file_path)
     if path.suffix.lower() != ".json":
@@ -67,9 +77,8 @@ def json_dump(
         with tmp.open("w", encoding="utf-8", newline="\n") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
             f.flush()
-        tmp.replace(path)  # atomic on POSIX/NTFS
+        tmp.replace(path)
     except OSError as e:
-        # Best effort cleanup
         try:
             if tmp.exists():
                 tmp.unlink()
@@ -77,7 +86,6 @@ def json_dump(
             pass
         raise OSError(f"Error writing to {file_path}: {e.strerror}") from e
 
-    # Return a plain dict (not just Mapping)
     return dict(data)
 
 
@@ -101,48 +109,94 @@ def json_update(
     """
     Update an existing JSON file with new data.
 
-    Deep update options:
-      - deep=False (default): shallow `dict.update`
-      - deep=True: treat string keys containing `sep` (default ".") as paths (e.g. "a.b.c")
-      - deep='<custom separator>': use that separator (e.g. "/" -> "a/b/c")
-
-    Notes:
-      - For deep updates, keys without the separator are assigned directly (no merge).
-      - If the existing file contains non-dict JSON, this raises.
+    :param file_path: Path to the .json file.
+    :param new_data: Dictionary of data to merge in.
+    :param deep: If True, split keys by `sep`. If str, use that string as separator.
+                 If False (default), perform shallow update.
+    :param sep: Default separator (default: ".") used if deep=True.
+    :param indent: Indentation for the output file.
+    :return: The updated dictionary.
     """
     path = Path(file_path)
     if path.suffix.lower() != ".json":
         raise ValueError("File extension must be .json")
 
-    # Load current data ({} if not present/empty)
+    # Load current data
     data = json_load(path, default={})
-
-    # Validate existing json is a dict (json_load already guarantees)
     _ensure_json_object(data, str(file_path))
 
-    # Decide separator behavior
-    if isinstance(deep, str):
-        active_sep = deep
-        use_deep = True
-    elif deep is True:
-        active_sep = sep
-        use_deep = True
-    else:
-        active_sep = None
-        use_deep = False
+    # Determine separator
+    active_sep = deep if isinstance(deep, str) else (sep if deep is True else None)
+    use_deep = active_sep is not None
 
-    # Apply updates
-    if use_deep:
+    if use_deep and active_sep:
         for k, v in new_data.items():
-            if isinstance(k, str) and active_sep and active_sep in k:
+            if isinstance(k, str) and active_sep in k:
                 keys = [p for p in k.split(active_sep) if p != ""]
                 if not keys:
-                    continue  # ignore empty path like "" or leading/trailing separators only
+                    continue
                 _deep_update_path(data, keys, v)
             else:
-                data[k] = v  # replace; do not attempt dict-merge
+                data[k] = v
     else:
         data.update(dict(new_data))
+
+    json_dump(path, data, indent=indent)
+    return data
+
+
+def json_remove(
+        file_path: Union[str, Path],
+        key: str,
+        deep: Union[bool, str, None] = False,
+        *,
+        sep: str = ".",
+        indent: int = 4
+) -> Dict[str, Any]:
+    """
+    Remove a key from a JSON file.
+
+    :param file_path: Path to the .json file.
+    :param key: The key to remove.
+    :param deep: If True, treat `key` as a path separated by `sep`.
+                 If str, use that string as separator.
+    :param sep: Default separator (default: ".") used if deep=True.
+    :return: The updated dictionary.
+    """
+    path = Path(file_path)
+    if path.suffix.lower() != ".json":
+        raise ValueError("File extension must be .json")
+
+    # Load current data
+    data = json_load(path, default={})
+    _ensure_json_object(data, str(file_path))
+
+    # Determine separator
+    active_sep = deep if isinstance(deep, str) else (sep if deep is True else None)
+    use_deep = active_sep is not None
+
+    if use_deep and active_sep and active_sep in key:
+        keys = [p for p in key.split(active_sep) if p != ""]
+        if keys:
+            target_key = keys[-1]
+            parent_keys = keys[:-1]
+
+            # Traverse to parent
+            current = data
+            path_exists = True
+            for k in parent_keys:
+                if isinstance(current, dict) and k in current:
+                    current = current[k]
+                else:
+                    path_exists = False
+                    break
+
+            # Remove if parent exists and is a dict
+            if path_exists and isinstance(current, dict):
+                current.pop(target_key, None)
+    else:
+        # Shallow remove
+        data.pop(key, None)
 
     json_dump(path, data, indent=indent)
     return data
@@ -151,51 +205,49 @@ def json_update(
 if __name__ == '__main__':
     from pprint import pprint
     from hexss.constants import *
-
-    # Example usage:
-    from pathlib import Path
-    from hexss import json_dump, json_update
+    from types import MappingProxyType
 
     # Example file
     file = Path("config.json")
-    json_dump(file, {})  # reset
+    json_dump(file, {})  # Reset file
 
-    # 1. Load with default (file may not exist yet)
-    print(f"\n{CYAN}Loaded:{END}")
+    # 1. Load with default (creates file because dump=True)
+    print(f"\n{CYAN}1. Loaded (defaults created):{END}")
     data = json_load(file, default={"theme": "light", "volume": 50}, dump=True)
     pprint(data)
-    # {'theme': 'light', 'volume': 50}
 
-    # 2. Update shallow (simple dict.update)
-    print(f"\n{CYAN}After shallow update:{END}")
+    # 2. Update shallow
+    print(f"\n{CYAN}2. After shallow update (volume -> 75):{END}")
     json_update(file, {"volume": 75})
     pprint(json_load(file))
-    # {'theme': 'light', 'volume': 75}
 
     # 3. Update deeply with dot-notation
-    print(f"\n{CYAN}After deep update:{END}")
+    print(f"\n{CYAN}3. After deep update (add ui.colors.background):{END}")
     json_update(file, {"ui.colors.background": "#000000"}, deep=True)
     pprint(json_load(file))
-    # {'theme': 'light', 'ui': {'colors': {'background': '#000000'}}, 'volume': 75}
 
     # 4. Update deeply with custom separator
-    print(f"\n{CYAN}After deep update with '/':{END}")
+    print(f"\n{CYAN}4. After deep update with '/' (add network/wifi/ssid):{END}")
     json_update(file, {"network/wifi/ssid": "MyWiFi"}, deep="/")
     pprint(json_load(file))
-    # {'network': {'wifi': {'ssid': 'MyWiFi'}},
-    #  'theme': 'light',
-    #  'ui': {'colors': {'background': '#000000'}},
-    #  'volume': 75}
 
-    # 5. Use a Mapping instead of dict (works because input type is Mapping)
-    print(f"\n{CYAN}After mapping update:{END}")
-    from types import MappingProxyType
-
+    # 5. Use a Mapping instead of dict
+    print(f"\n{CYAN}5. After mapping update (readonly, ethernet):{END}")
     extra = MappingProxyType({"readonly": True, "network/ethernet/enabled": False})
     json_update(file, extra, deep='/')
     pprint(json_load(file))
-    # {'network': {'ethernet': {'enabled': False}, 'wifi': {'ssid': 'MyWiFi'}},
-    #  'readonly': True,
-    #  'theme': 'light',
-    #  'ui': {'colors': {'background': '#000000'}},
-    #  'volume': 75}
+
+    # 6. Remove a simple key
+    print(f"\n{CYAN}6. After removing 'volume':{END}")
+    json_remove(file, "volume")
+    pprint(json_load(file))
+
+    # 7. Remove a nested key (dot notation)
+    print(f"\n{CYAN}7. After removing 'ui.colors.background':{END}")
+    json_remove(file, "ui.colors.background", deep=True)
+    pprint(json_load(file))
+
+    # 8. Remove a nested key (custom separator)
+    print(f"\n{CYAN}8. After removing 'network/wifi/ssid':{END}")
+    json_remove(file, "network/wifi/ssid", deep="/")
+    pprint(json_load(file))

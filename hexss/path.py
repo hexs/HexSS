@@ -347,6 +347,26 @@ def last_component(p: Path) -> str:
     print(last_component(Path(r'C:/')))  # C:\
     print(last_component(Path(r'C:/b')))  # b
 
+    def create_incremental_dir(path_prefix: Path | str):
+        target = Path(path_prefix)
+        parent = target.parent
+        prefix = target.name
+
+        existing_nums = []
+
+        if parent.exists():
+            for p in parent.glob(f'{prefix}*'):
+                suffix = p.name[len(prefix):]
+                if suffix.isdigit():
+                    existing_nums.append(int(suffix))
+
+        next_num = max(existing_nums, default=0) + 1
+
+        new_path = parent / f"{prefix}{next_num}"
+        new_path.mkdir(parents=True, exist_ok=True)
+
+        return new_path
+
 
 if __name__ == "__main__":
     main_python_path = get_main_python_path()

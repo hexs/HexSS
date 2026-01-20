@@ -202,6 +202,75 @@ def json_remove(
     return data
 
 
+def json_rename(
+        file_path: Union[str, Path],
+        old_key: str,
+        new_key: str,
+        deep: Union[bool, str, None] = False,
+        *,
+        sep: str = ".",
+        indent: int = 4
+) -> Dict[str, Any]:
+    """
+    Rename a key in a JSON file.
+
+    :param file_path: Path to the .json file.
+    :param old_key: The current key (or path) to rename.
+    :param new_key: The new key (or path) to assign the value to.
+    :param deep: If True, treat keys as paths separated by `sep`.
+                 If str, use that string as separator.
+    :param sep: Default separator (default: ".") used if deep=True.
+    :param indent: Indentation for the output file.
+    :return: The updated dictionary.
+    """
+    path = Path(file_path)
+    if path.suffix.lower() != ".json":
+        raise ValueError("File extension must be .json")
+
+    data = json_load(path, default={})
+    _ensure_json_object(data, str(file_path))
+
+    active_sep = deep if isinstance(deep, str) else (sep if deep is True else None)
+
+    val_found = False
+    val = None
+
+    if active_sep and active_sep in old_key:
+        keys = [p for p in old_key.split(active_sep) if p]
+        if keys:
+            parent = data
+            target_key = keys[-1]
+            # Traverse to parent
+            for k in keys[:-1]:
+                if isinstance(parent, dict) and k in parent:
+                    parent = parent[k]
+                else:
+                    parent = None
+                    break
+
+            # Pop value if exists
+            if parent is not None and isinstance(parent, dict) and target_key in parent:
+                val = parent.pop(target_key)
+                val_found = True
+    else:
+        # Shallow
+        if old_key in data:
+            val = data.pop(old_key)
+            val_found = True
+
+    if val_found:
+        if active_sep and active_sep in new_key:
+            keys = [p for p in new_key.split(active_sep) if p]
+            if keys:
+                _deep_update_path(data, keys, val)
+        else:
+            data[new_key] = val
+
+        json_dump(path, data, indent=indent)
+
+    return data
+
+
 if __name__ == '__main__':
     from pprint import pprint
     from hexss.constants import *
@@ -237,17 +306,37 @@ if __name__ == '__main__':
     json_update(file, extra, deep='/')
     pprint(json_load(file))
 
+    # 1. Rename shallow
+    print(f"\n{CYAN}6. Rename 'volume' -> 'audio_level':{END}")
+    json_rename(file, "volume", "audio_level")
+    pprint(json_load(file))
+
+    # 2. Rename deep (Key change only)
+    print(f"\n{CYAN}7. Rename 'network/wifi/ssid' -> 'network/wifi/SSID' (using '/'):{END}")
+    json_rename(file, "network/wifi/ssid", "network/wifi/SSID", deep="/")
+    pprint(json_load(file))
+    #
+    # 3. Rename deep (Move/Reparenting)
+    print(f"\n{CYAN}8. Move 'ui.colors.background' -> 'theme.bg' (using dot):{END}")
+    json_rename(file, "ui.colors.background", "theme.bg", deep=True)
+    pprint(json_load(file))
+
+    # 4. Rename with path normalization (Your requested usage)
+    print(f"\n{CYAN}9. Rename 'network/wifi' -> 'network/WiFi':{END}")
+    json_rename(file, 'network/wifi', 'network/WiFi', deep="/")
+    pprint(json_load(file))
+
     # 6. Remove a simple key
-    print(f"\n{CYAN}6. After removing 'volume':{END}")
-    json_remove(file, "volume")
+    print(f"\n{CYAN}10. After removing 'audio_level':{END}")
+    json_remove(file, "audio_level")
     pprint(json_load(file))
 
     # 7. Remove a nested key (dot notation)
-    print(f"\n{CYAN}7. After removing 'ui.colors.background':{END}")
-    json_remove(file, "ui.colors.background", deep=True)
+    print(f"\n{CYAN}11. After removing 'theme.bg':{END}")
+    json_remove(file, "theme.bg", deep=True)
     pprint(json_load(file))
 
     # 8. Remove a nested key (custom separator)
-    print(f"\n{CYAN}8. After removing 'network/wifi/ssid':{END}")
-    json_remove(file, "network/wifi/ssid", deep="/")
+    print(f"\n{CYAN}12. After removing 'network/wifi/ssid':{END}")
+    json_remove(file, "network/WiFi/SSID", deep="/")
     pprint(json_load(file))

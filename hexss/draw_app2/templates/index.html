@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labeler</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://unpkg.com/konva@9.2.0/konva.min.js"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div id="container"></div>
+
+<div class="controls">
+    <div>
+        <span class="panel-label">Media Source</span>
+        <select id="mediaSelect" disabled>
+            <option>Loading...</option>
+        </select>
+    </div>
+
+    <div>
+        <span class="panel-label">Detection Label</span>
+        <select id="detectLabel" disabled>
+            <option>Loading...</option>
+        </select>
+    </div>
+
+    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <span class="panel-label">Annotations</span>
+        <div id="infoDisplay" class="info-section">
+            <div class="waiting-text">No annotations</div>
+        </div>
+    </div>
+</div>
+
+<div class="tool-panel">
+    <button id="btn-move" class="tool-btn active" onclick="setTool('move')" title="Move/Select (M)">
+        <i class="fa-solid fa-arrow-pointer"></i>
+    </button>
+    <button id="btn-rect" class="tool-btn" onclick="setTool('rect')" title="Draw Rectangle (R)">
+        <i class="fa-regular fa-square"></i>
+    </button>
+</div>
+
+<div class="action-panel">
+
+    <div>
+        <span class="panel-label">DATASET EXPORT</span>
+        <div class="form-group" style="margin-bottom:8px;">
+            <input type="text" id="outputFolderName" placeholder="Folder Name (e.g. export_v1)" value="export_result">
+        </div>
+
+        <div class="btn-row">
+            <button id="btn-export-current" class="save-btn" style="flex:1; font-size: 0.8rem;">
+                <i class="fa-solid fa-file-export"></i> Current
+            </button>
+            <button id="btn-export-all" class="save-btn" style="flex:1; background-color: #d35400; font-size: 0.8rem;">
+                <i class="fa-solid fa-layer-group"></i> All
+            </button>
+        </div>
+
+        <div id="export-progress-container" class="progress-container" style="display:none;">
+            <div style="background:#444; height:8px; border-radius:4px; overflow:hidden; margin-bottom:5px;">
+                <div id="export-bar"
+                     style="width:0%; height:100%; background-color:#3498db; transition:width 0.3s;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#ccc; margin-bottom:5px;">
+                <span id="export-status-text">Idle</span>
+                <span id="export-percent">0%</span>
+            </div>
+            <button id="btn-export-stop" class="delete-btn-full" style="padding: 5px; font-size:0.8rem;">Stop Export
+            </button>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px; border-top: 1px solid #444; padding-top: 15px;">
+        <span class="panel-label">MODEL TRAINING</span>
+
+        <button id="btn-train" class="save-btn" style="width:100%; background-color: #8e44ad;">
+            <i class="fa-solid fa-brain"></i> Train YOLO Model
+        </button>
+
+        <div id="train-progress-container" class="progress-container" style="display:none; margin-top:10px;">
+            <div style="background:#444; height:8px; border-radius:4px; overflow:hidden; margin-bottom:5px;">
+                <div id="train-bar"
+                     style="width:0%; height:100%; background-color:#9b59b6; transition:width 0.3s;"></div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#ccc; margin-bottom:5px;">
+                <span id="train-status-text">Idle</span>
+                <span id="train-percent">0%</span>
+            </div>
+
+            <div class="btn-row">
+                <button id="btn-view-logs" class="tool-btn"
+                        style="width:100%; font-size:0.8rem; height:30px; border-radius:4px;">
+                    <i class="fa-solid fa-terminal"></i> Logs
+                </button>
+                <button id="btn-stop-train" class="delete-btn-full" style="padding: 5px; font-size:0.8rem;">
+                    Stop
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="timeline-panel">
+    <div class="timeline-content">
+        <div class="timeline-header">
+            <span id="frameStatus">Frame: 0 / 0</span>
+            <span>Use Arrow Keys to Navigate</span>
+        </div>
+        <input type="range" id="frameSlider" min="0" max="100" value="0" disabled>
+    </div>
+</div>
+
+<div id="context-menu" class="context-menu" style="display: none;">
+    <div class="menu-header">Edit Annotation</div>
+    <div class="menu-content">
+        <div class="form-group">
+            <label>ID</label>
+            <input type="text" id="ctx-box-id">
+        </div>
+        <div class="form-group">
+            <label>Label</label>
+            <select id="ctx-label-select"></select>
+        </div>
+        <div class="menu-actions">
+            <button class="save-btn" onclick="saveContextMenu()" style="flex:1;">Save</button>
+            <button class="delete-btn-full" onclick="deleteFromMenu()" style="flex:1;">Delete</button>
+            <button class="cancel-btn" onclick="closeContextMenu()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="train-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span>Training Logs</span>
+            <button onclick="closeTrainModal()"
+                    style="background:none; border:none; color:white; cursor:pointer; font-size:1.2rem;">&times;
+            </button>
+        </div>
+        <div id="train-logs-area" class="log-terminal">Waiting for logs...</div>
+        <div class="modal-footer">
+            <button onclick="closeTrainModal()" class="save-btn" style="background:#555;">Close</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

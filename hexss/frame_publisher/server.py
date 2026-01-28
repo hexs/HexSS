@@ -1,5 +1,4 @@
 from __future__ import annotations
-import argparse
 import asyncio
 import json
 from dataclasses import dataclass
@@ -456,16 +455,17 @@ es.onerror = () => {{}};
     return app
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=2004)
-    ap.add_argument("--fps", type=float, default=30.0)
-    args = ap.parse_args()
+def run():
+    from hexss.config import load_config
+    cfg = load_config("frame_publisher_server", {
+        "ipv4": "0.0.0.0",
+        "port": 2004,
+        "fps": 30.0
+    })
 
-    app = build_app(fps=args.fps)
-    uvicorn.run(app, host=args.host, port=args.port)
+    app = build_app(fps=cfg.get("fps"))
+    uvicorn.run(app, host=cfg.get("ipv4"), port=cfg.get("port"))
 
 
 if __name__ == "__main__":
-    main()
+    run()

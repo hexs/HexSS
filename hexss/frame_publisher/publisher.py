@@ -1,12 +1,13 @@
 from __future__ import annotations
 import io
 import os
+import platform
 import sys
 import time
 import subprocess
 import webbrowser
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
 from urllib import request as urlreq, parse as urlparse
 
 import hexss
@@ -42,16 +43,23 @@ def _encode_ndarray_to_jpeg(arr: np.ndarray, quality: int) -> bytes:
 class FramePublisher:
     def __init__(
             self,
-            host: str = "0.0.0.0",
-            port: int = 2004,
+            host: Optional[str] = None,
+            port: Optional[int] = None,
             *,
             autostart: bool = True,
             wait_ready: float = 8.0,
             jpeg_quality: int = 80,
-            open_browser: bool = False,
-            unset_proxy: bool | None = None,
+            open_browser: bool = False
     ):
-        if unset_proxy: from hexss.env import unset_proxy; unset_proxy()
+        if host is None or port is None:
+            from hexss.config import load_config
+            cfg = load_config("frame_publisher_server", {
+                "ipv4": "0.0.0.0",
+                "port": 2004
+            })
+            host = host or cfg.get("ipv4")
+            port = port or cfg.get("port")
+
         self.host = host
         self.port = int(port)
         self.jpeg_quality = int(max(1, min(100, jpeg_quality)))
@@ -112,25 +120,53 @@ class FramePublisher:
         if not os.path.exists(script):
             return
 
-        cmd = [exe, script, "--host", self.host, "--port", str(self.port)]
-        kwargs = dict(
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=str(Path(script).parent),
-            close_fds=True,
-        )
+        cmd = [exe, script, str(self.port)]
+        os_name = platform.system()
 
-        if os.name == "nt":
-            flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-            subprocess.Popen(cmd, creationflags=flags, **kwargs)
+        if os_name == 'Windows':
+            flags = subprocess.CREATE_NEW_CONSOLE
+            subprocess.Popen(cmd, creationflags=flags)
+
+        elif os_name == 'Darwin':
+            cmd_str = " ".join(f"'{c}'" for c in cmd)
+            subprocess.Popen([
+                "osascript", "-e",
+                f'tell application "Terminal" to do script "{cmd_str}"'
+            ])
+
+        elif os_name == 'Linux':
+            cmd_str = " ".join(cmd)
+            terminals = [
+                ["gnome-terminal", "--"],  # Ubuntu/Gnome
+                ["x-terminal-emulator", "-e"],  # Debian standard
+                ["xfce4-terminal", "-e"],  # XFCE
+                ["konsole", "-e"],  # KDE
+                ["xterm", "-e"]  # Basic X11
+            ]
+            started = False
+            for term in terminals:
+                try:
+                    full_cmd = term + [cmd_str]
+                    if "gnome-terminal" in term[0]:
+                        full_cmd = term + cmd
+                    subprocess.Popen(full_cmd)
+                    started = True
+                    break
+                except FileNotFoundError:
+                    continue
+            if not started:
+                print("No compatible terminal found, running in background...")
+                subprocess.Popen(cmd)
+
         else:
-            subprocess.Popen(cmd, start_new_session=True, **kwargs)
+            subprocess.Popen(cmd)
 
         if open_browser:
+            time.sleep(1)
             try:
                 webbrowser.open(self.base_url)
             except Exception:
+                print('Error opening browser')
                 pass
 
     def _wait_until_up(self, timeout: float) -> bool:

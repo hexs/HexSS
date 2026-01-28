@@ -5,7 +5,7 @@ from random import randint
 from datetime import datetime
 from hexss.frame_publisher import FramePublisher
 
-f= FramePublisher(jpeg_quality=100, open_browser=True)
+f = FramePublisher(jpeg_quality=100, open_browser=True)
 
 xy1 = [300, 300]
 xy2 = [300, 300]

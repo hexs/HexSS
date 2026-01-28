@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from hexss.frame_publisher import FramePublisher
 
-f = FramePublisher(jpeg_quality=100, open_browser=True, unset_proxy=True)
+f = FramePublisher(jpeg_quality=100, open_browser=True)
 x, y = 50, 50
 vx, vy = 5, 4
 W = 640

@@ -180,6 +180,7 @@ def show_menu():
     options = [
         'camera_server',
         'file_manager_server',
+        'frame_publisher_server',
 
         'upgrade',
         'config',
@@ -257,6 +258,13 @@ def main():
         help='run the file manager server'
     )
     fm.set_defaults(func=lambda args: importlib.import_module('hexss.server.file_manager_server').run())
+
+    fp = subparsers.add_parser(
+        'frame_publisher_server',
+        aliases=['frame-publisher-server'],
+        help='run the frame publisher server'
+    )
+    fp.set_defaults(func=lambda args: importlib.import_module('hexss.frame_publisher.server').run())
 
     # install
     inst = subparsers.add_parser('install', help='install one or more packages')

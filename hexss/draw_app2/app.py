@@ -42,7 +42,7 @@ def convert_to_detection_datasets(data_store, input_paths):
     valid_ratio = parameters['valid_ratio']
     workers = parameters['workers']
 
-    output_path = Path('YOLO_detect') / parameters['output_path']
+    output_path = Path('YOLO_detect') / parameters['folder_name']
     global_names = []
     names_lock = threading.Lock()
     cnt_lock = threading.Lock()
@@ -168,9 +168,6 @@ def export_task(data_store):
     params = export_data['parameters']
     media_dir = data_store['media_dir']
 
-    print('parameters')
-    pprint(media_dir['export_dataset']['parameters'])
-
     try:
         input_list = []
         if params.get('all', False):
@@ -201,7 +198,7 @@ def export_task(data_store):
 
 def train_task(data_store):
     training = data_store['training']
-    parameters = training['parameters']
+    params = training['parameters']
     training['result'] = {
         'current_epoch': 0,
         'total_epochs': 0,
@@ -210,11 +207,11 @@ def train_task(data_store):
         'percent': 0,
         'message': '...'
     }
-    base_dir = hexss.path.get_script_dir() / 'YOLO_detect'
-    dataset_dir = base_dir / 'export_result' / 'datasets'
+    folder_name = params['folder_name']
+    base_dir = hexss.path.get_current_working_dir() / 'YOLO_detect'
+    dataset_dir = base_dir / folder_name / 'datasets'
     yaml_path = base_dir / "temp_data.yaml"
-
-    names = json_load(base_dir / 'export_result' / 'config.json')['names']
+    names = json_load(base_dir / folder_name / 'config.json')['names']
 
     yaml_content = f"""
     path: {dataset_dir.as_posix()}
@@ -232,19 +229,25 @@ def train_task(data_store):
         training['result']['message'] = f"Config Error: {e}"
         return
 
-    print('parameters')
-    pprint(parameters)
-
-    model = parameters['model']
-    epochs = parameters['epochs']
-    imgsz = parameters['imgsz']
-    project = parameters['project']
-
+    config = json_load('YOLO_detect/config.json', {
+        '1': {'value': "detect", 'option': ["detect"]},
+        '2': {'value': "train", 'option': ["train"]},
+        'model': {'value': "yolo11m.pt",
+                  'option': ["yolo11n.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt"]},
+        'epochs': {'value': 100},
+        'imgsz': {'value': 640}
+    })
     cmd = [
-        'yolo', 'detect', 'train', f'model={model}', f'data={yaml_path.name}', f'epochs={epochs}', f'imgsz={imgsz}',
-        f'project={base_dir / project}'
+        'yolo',
+        config['1']['value'],
+        config['2']['value'],
+        f"model={config['model']['value']}",
+        f'data={yaml_path.name}',
+        f'epochs={config["epochs"]["value"]}',
+        f'imgsz={config["imgsz"]["value"]}',
+        f'project={base_dir / folder_name / "model"}',
     ]
-
+    print(f"cmd = {' '.join(cmd)}")
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -260,9 +263,13 @@ def train_task(data_store):
 
     progress_pattern = re.compile(r"(\d+)/(\d+)\s+.*?\s+(\d+)%")
     start_time = time.time()
-
+    old = ''
     for line in iter(process.stdout.readline, ''):
-        print(end=f'{line.strip()}\n')
+        if old[:15] == line[:15]:
+            print(end=f'\r{old.strip()}\n')
+        print(end=f'\r{line.strip()}')
+        old = line
+
         if not line: break
         if training['result']['status'] == 'stopped':
             break
@@ -290,11 +297,13 @@ def train_task(data_store):
             training['result']['remaining'] = {'hours': int(h), 'minutes': int(m), 'seconds': int(s)}
             training['result']['percent'] = int(total_progress_ratio * 100)
 
-        elif 'Results saved to ' in line:
-            training['result']['status'] = 'completed'
-            break
-        elif 'Results saved to ' in line:
-            break
+        # elif 'Results saved to ' in line:
+        #     training['result']['status'] = 'completed'
+        #     break
+        # elif 'Results saved to ' in line:
+        #     break
+    print('train_task end')
+    training['status'] = 'completed',  # idle, running, completed, error, stopped
 
 
 @app.route('/')
@@ -492,17 +501,14 @@ def api_detect_export_dataset_start():
         if export_dataset['threading'] and export_dataset['threading'].is_alive():
             return jsonify({'status': 'error', 'message': 'Export in progress'})
 
-    output_path = request.json.get('output_path', 'export_result')
-    is_all = request.json.get('all', False)
-
     export_dataset['status'] = 'running'
     export_dataset['result'] = {
         'percent': 0,
         'message': 'Initializing...'
     }
     export_dataset['parameters'] = {
-        'output_path': output_path,
-        'all': is_all,
+        'folder_name': request.json.get('folder_name'),
+        'all': request.json.get('all', False),
         'input_path': media.source_path.name if media else None,
         'valid_ratio': 0.2,
         'workers': 4
@@ -578,6 +584,9 @@ def api_detect_training_start():
         'percent': 0,
         'message': 'Initializing training...'
     }
+    training['parameters'] = {
+        'folder_name': request.json.get('folder_name'),
+    }
 
     try:
         t = threading.Thread(target=train_task, args=(data_store,))
@@ -646,56 +655,100 @@ def api_detect_training_stream():
     return Response(generate(), mimetype='text/event-stream')
 
 
-def run(data):
-    app.config['data'] = data
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=True)
+@app.route('/api/detect/config', methods=['GET', 'POST'])
+def api_detect_config():
+    if request.method == 'POST':
+        req_data = request.get_json()
+        new = {}
+        model = req_data.get('model')
+        epochs = req_data.get('epochs')
+        imgsz = req_data.get('imgsz')
+
+        if model: new['model/value'] = model
+        if epochs: new['epochs/value'] = epochs
+        if imgsz: new['imgsz/value'] = imgsz
+
+        if new:
+            Path('YOLO_detect').mkdir(exist_ok=True)
+            json_update('YOLO_detect/config.json', new, deep='/')
+
+    config = json_load('YOLO_detect/config.json', {
+        '1': {'value': "detect", 'option': ["detect"]},
+        '2': {'value': "train", 'option': ["train"]},
+        'model': {'value': "yolo11m.pt",
+                  'option': ["yolo11n.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt"]},
+        'epochs': {'value': 100},
+        'imgsz': {'value': 640}
+    })
+
+    return jsonify({'status': 'success', 'config': config})
+
+
+def run():
+    from hexss.pyconfig import Config
+    cfg = Config('config.py', '''
+from pathlib import Path
+
+ipv4 = '0.0.0.0'
+port = 2003
+open_browser = True
+data_store = {
+    'running': True,
+    'open_browser': True,
+
+    'media_dir': Path('media_source'),
+    'media': None,
+
+    'export_dataset': {
+        'status': 'idle',  # idle, running, completed, error, stopped
+        'threading': None,  # threading.Thread object
+        'parameters': {
+            'folder_name': 'export_result',
+            'all': False,
+            'input_path': '',
+            'valid_ratio': 0.2,
+            'workers': 8
+        },
+        'result': {  # JSON-serializable status
+            'percent': 0,  # 0-100
+            'message': ''
+        }
+    },
+
+    'training': {
+        'status': 'idle',  # idle, running, completed, error, stopped
+        'threading': None,  # threading.Thread object
+        'process': None,
+        'parameters': {
+            'folder_name': 'export_result',
+        },
+        'result': {  # JSON-serializable status
+            'current_epoch': 0,
+            'total_epochs': 0,
+            'epoch_percent': 0,
+            'remaining': {'hours': 0, 'minutes': 0, 'seconds': 0},
+            'percent': 0,  # 0-100
+            'message': ''
+        }
+    },
+    'predict': {
+        'threading': None,
+        'result': None
+    }
+}
+''')
+
+    if cfg.open_browser is True:
+        from hexss.network import open_url
+        url = '127.0.0.1' if cfg.ipv4 == '0.0.0.0' else cfg.ipv4
+        open_url(f'http://{url}:{cfg.port}')
+
+    cfg.data_store['media_dir'].mkdir(parents=True, exist_ok=True)
+    app.config['data'] = cfg.data_store
+
+    pprint(cfg.data_store)
+    app.run(host=cfg.ipv4, port=cfg.port, debug=True, use_reloader=False, threaded=True)
 
 
 if __name__ == '__main__':
-    data_path = Path('media_source')
-    data_path.mkdir(parents=True, exist_ok=True)
-
-    run({
-        'running': True,
-        'media_dir': data_path,
-        'media': None,
-
-        'export_dataset': {
-            'status': 'idle',  # idle, running, completed, error, stopped
-            'threading': None,  # threading.Thread object
-            'parameters': {
-                'output_path': 'export_result',
-                'all': False,
-                'input_path': '',
-                'valid_ratio': 0.2,
-                'workers': 8
-            },
-            'result': {  # JSON-serializable status
-                'percent': 0,  # 0-100
-                'message': ''
-            }
-        },
-
-        'training': {
-            'status': 'idle',  # idle, running, completed, error, stopped
-            'threading': None,  # threading.Thread object
-            'parameters': {
-                'model': './yolo11m.pt',
-                'epochs': 100,
-                'imgsz': 640,
-                'project': './export_result/model'
-            },
-            'result': {  # JSON-serializable status
-                'current_epoch': 0,
-                'total_epochs': 0,
-                'epoch_percent': 0,
-                'remaining': {'hours': 0, 'minutes': 0, 'seconds': 0},
-                'percent': 0,  # 0-100
-                'message': ''
-            }
-        },
-        'predict': {
-            'threading': None,
-            'result': None
-        }
-    })
+    run()

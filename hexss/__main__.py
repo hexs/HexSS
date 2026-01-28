@@ -180,6 +180,7 @@ def show_menu():
     options = [
         'camera_server',
         'file_manager_server',
+        'labeler_server',
         'frame_publisher_server',
 
         'upgrade',
@@ -258,6 +259,13 @@ def main():
         help='run the file manager server'
     )
     fm.set_defaults(func=lambda args: importlib.import_module('hexss.server.file_manager_server').run())
+
+    fp = subparsers.add_parser(
+        'labeler_server',
+        aliases=['labeler-server'],
+        help='run the labeler server'
+    )
+    fp.set_defaults(func=lambda args: importlib.import_module('hexss.draw_app2.app').run())
 
     fp = subparsers.add_parser(
         'frame_publisher_server',

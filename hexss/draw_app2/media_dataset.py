@@ -1,4 +1,5 @@
 import random
+import threading
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from hexss.json import json_load, json_update, json_remove, json_rename
 class MediaDataset:
     def __init__(self, source_path: Path | str) -> None:
         self.source_path = Path(source_path)
+        self.lock = threading.Lock()
+
         if not self.source_path.exists():
             raise FileNotFoundError(f"Path does not exist: {self.source_path}")
 
@@ -22,6 +25,7 @@ class MediaDataset:
         self.cap: Optional[cv2.VideoCapture] = None
         if not self.is_dir:
             self.cap = cv2.VideoCapture(str(self.source_path))
+            self.cap.set(cv2.CAP_PROP_THREAD_COUNT, 0)
             if not self.cap.isOpened():
                 raise ValueError(f"Failed to open video file: {self.source_path}")
 
@@ -32,7 +36,8 @@ class MediaDataset:
             return sorted([p.name for p in self.source_path.glob('*.png')])
         else:
             if self.cap is None: return []
-            frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            with self.lock:
+                frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
             return [str(i) for i in range(frame_count)]
 
     def read_frame(self, frame_key: str) -> cv2.Mat:
@@ -40,13 +45,18 @@ class MediaDataset:
             img_path = self.source_path / frame_key
             self.frame = cv2.imread(str(img_path))
         else:
-            if self.cap is None:
-                raise RuntimeError("Video capture is not initialized")
-            frame_idx = int(frame_key)
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = self.cap.read()
-            if ret:
-                self.frame = frame
+            with self.lock:
+                if self.cap is None:
+                    raise RuntimeError("Video capture is not initialized")
+
+                if not self.cap.isOpened():
+                    return None
+
+                frame_idx = int(frame_key)
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = self.cap.read()
+                if ret:
+                    self.frame = frame
 
         return self.frame
 
@@ -90,9 +100,11 @@ class MediaDataset:
         self.annotations = json_remove(self.annotation_path, f"{frame_key}/boxes/{box_id}", deep="/")
 
     def release(self):
-        if self.cap is not None:
-            self.cap.release()
-            self.cap = None
+        with self.lock:
+            if self.cap is not None:
+                if self.cap.isOpened():
+                    self.cap.release()
+                self.cap = None
 
     def convert_to_detection_dataset(self, output_path: Path | str, valid=0.2, progress_callback=None):
         output_path = Path(output_path)

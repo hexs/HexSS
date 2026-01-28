@@ -50,12 +50,12 @@ export async function postRenameBox(payload) {
     return await res.json();
 }
 
-export async function fetchExportStart(isAll = false, outputPath = 'export_result') {
+export async function fetchExportStart(isAll = false, folderName = 'export_result') {
     const res = await fetch('/api/detect/export_dataset/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            output_path: outputPath,
+            folder_name: folderName,
             all: isAll
         })
     });
@@ -73,9 +73,13 @@ export function getExportStreamURL() {
     return '/api/detect/export_dataset/stream';
 }
 
-export async function fetchTrainStart() {
+export async function fetchTrainStart(folderName = 'export_result') {
     const res = await fetch('/api/detect/training/start', {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            folder_name: folderName
+        })
     });
     return await res.json();
 }
@@ -89,4 +93,18 @@ export async function fetchTrainStop() {
 
 export function getTrainStreamURL() {
     return '/api/detect/training/stream';
+}
+
+export async function fetchGetConfig() {
+    const res = await fetch('/api/detect/config');
+    return await res.json();
+}
+
+export async function fetchSaveConfig(payload) {
+    const res = await fetch('/api/detect/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    return await res.json();
 }

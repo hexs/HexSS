@@ -6,9 +6,7 @@
     <title>Labeler</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
     <script src="https://unpkg.com/konva@9.2.0/konva.min.js"></script>
-
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -81,8 +79,15 @@
     <div style="margin-top: 20px; border-top: 1px solid #444; padding-top: 15px;">
         <span class="panel-label">MODEL TRAINING</span>
 
+        <div class="btn-row" style="margin-bottom: 5px;">
+            <button id="btn-train-settings" class="tool-btn" style="width: 100%; gap: 8px; font-size: 0.9rem;"
+                    title="Config Training">
+                <i class="fa-solid fa-gear"></i> Configure
+            </button>
+        </div>
+
         <button id="btn-train" class="save-btn" style="width:100%; background-color: #8e44ad;">
-            <i class="fa-solid fa-brain"></i> Train YOLO Model
+            <i class="fa-solid fa-brain"></i> Start Training
         </button>
 
         <div id="train-progress-container" class="progress-container" style="display:none; margin-top:10px;">
@@ -150,6 +155,68 @@
         <div id="train-logs-area" class="log-terminal">Waiting for logs...</div>
         <div class="modal-footer">
             <button onclick="closeTrainModal()" class="save-btn" style="background:#555;">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content settings-content">
+        <div class="modal-header">
+            <span>Training Configuration</span>
+            <button class="close-btn" onclick="closeSettingsModal()"
+                    style="background:none; border:none; color:white; cursor:pointer; font-size:1.2rem;">&times;
+            </button>
+        </div>
+        <div class="modal-body" style="padding: 20px; overflow-y:auto;">
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; color:#aaa; margin-bottom:5px; font-size:0.8rem;">Task</label>
+                <div style="display:flex; gap:10px;">
+                    <select id="cfg-detect" disabled
+                            style="opacity:0.6; flex:1; padding:8px; background:#333; color:white; border:1px solid #444; border-radius:4px;">
+                        <option>detect</option>
+                    </select>
+                    <select id="cfg-train" disabled
+                            style="opacity:0.6; flex:1; padding:8px; background:#333; color:white; border:1px solid #444; border-radius:4px;">
+                        <option>train</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; color:#aaa; margin-bottom:5px; font-size:0.8rem;">Dataset YAML</label>
+                <input type="text" value="coco.yaml (auto-generated)" disabled
+                       style="opacity:0.6; font-family:monospace; width:100%;">
+            </div>
+
+            <hr style="border-color:#444; margin: 15px 0;">
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="cfg-model" style="display:block; color:#ccc; margin-bottom:5px; font-size:0.9rem;">Model
+                    (.pt)</label>
+                <select id="cfg-model" style="width:100%;">
+                    <option value="yolo11n.pt">yolo11n.pt</option>
+                    <option value="yolo11m.pt">yolo11m.pt</option>
+                    <option value="yolo11l.pt">yolo11l.pt</option>
+                    <option value="yolo11x.pt">yolo11x.pt</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="cfg-epochs"
+                       style="display:block; color:#ccc; margin-bottom:5px; font-size:0.9rem;">Epochs</label>
+                <input type="number" id="cfg-epochs" value="100" min="1">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label for="cfg-imgsz" style="display:block; color:#ccc; margin-bottom:5px; font-size:0.9rem;">Image
+                    Size (imgsz)</label>
+                <input type="number" id="cfg-imgsz" value="640" step="32">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="cancel-btn" onclick="closeSettingsModal()" style="margin-right:10px;">Cancel</button>
+            <button id="btn-save-settings" class="save-btn">Save Config</button>
         </div>
     </div>
 </div>

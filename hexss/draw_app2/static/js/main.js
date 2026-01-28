@@ -185,7 +185,7 @@ const progressContainer = document.getElementById('export-progress-container');
 const progressBar = document.getElementById('export-bar');
 const progressPercent = document.getElementById('export-percent');
 const statusText = document.getElementById('export-status-text');
-const outputInput = document.getElementById('outputFolderName');
+const folderNameInput = document.getElementById('outputFolderName');
 
 let exportEventSource = null;
 
@@ -193,7 +193,7 @@ async function handleExport(isAll) {
     const label = isAll ? "ALL media sources" : "CURRENT media source";
     if (!confirm(`Start converting ${label} to YOLO dataset?`)) return;
 
-    const outPath = outputInput.value.trim() || 'export_result';
+    const folderName = folderNameInput.value.trim();
 
     setExportUIState('running');
     statusText.innerText = "Initializing...";
@@ -202,7 +202,7 @@ async function handleExport(isAll) {
     progressBar.style.backgroundColor = '#3498db';
 
     try {
-        const res = await api.fetchExportStart(isAll, outPath);
+        const res = await api.fetchExportStart(isAll, folderName);
 
         if (res.status === 'success') {
             startExportStream();
@@ -278,12 +278,12 @@ function setExportUIState(state) {
     if (state === 'running') {
         btnExportCurrent.disabled = true;
         btnExportAll.disabled = true;
-        outputInput.disabled = true;
+        folderNameInput.disabled = true;
         progressContainer.style.display = 'block';
     } else {
         btnExportCurrent.disabled = false;
         btnExportAll.disabled = false;
-        outputInput.disabled = false;
+        folderNameInput.disabled = false;
         progressContainer.style.display = 'none';
     }
 }
@@ -294,7 +294,7 @@ if (btnExportStop) btnExportStop.addEventListener('click', stopExport);
 
 
 // ========================================================
-// 3. TRAINING LOGIC (Updated to match Export UI)
+// 3. TRAINING LOGIC & SETTINGS
 // ========================================================
 const btnTrain = document.getElementById('btn-train');
 const btnStopTrain = document.getElementById('btn-stop-train');
@@ -308,11 +308,68 @@ const trainBar = document.getElementById('train-bar');
 const modalTrain = document.getElementById('train-modal');
 const logsArea = document.getElementById('train-logs-area');
 
+// Settings Elements
+const settingsModal = document.getElementById('settings-modal');
+const btnSettings = document.getElementById('btn-train-settings');
+const btnSaveSettings = document.getElementById('btn-save-settings');
+const inpModel = document.getElementById('cfg-model');
+const inpEpochs = document.getElementById('cfg-epochs');
+const inpImgsz = document.getElementById('cfg-imgsz');
+
 let trainEventSource = null;
 
-// Start Training
+// --- Settings Logic ---
+window.closeSettingsModal = function() {
+    if (settingsModal) settingsModal.style.display = 'none';
+};
+
+if (btnSettings) {
+    btnSettings.addEventListener('click', async () => {
+        if (settingsModal) settingsModal.style.display = 'flex';
+        try {
+            const res = await api.fetchGetConfig();
+            if (res.status === 'success' && res.config) {
+                if (res.config.model) inpModel.value = res.config.model.value;
+                if (res.config.epochs) inpEpochs.value = res.config.epochs.value;
+                if (res.config.imgsz) inpImgsz.value = res.config.imgsz.value;
+            }
+        } catch (e) {
+            console.error("Failed to load config", e);
+            alert("Could not load current configuration.");
+        }
+    });
+}
+
+if (btnSaveSettings) {
+    btnSaveSettings.addEventListener('click', async () => {
+        const payload = {
+            model: inpModel.value,
+            epochs: parseInt(inpEpochs.value),
+            imgsz: parseInt(inpImgsz.value)
+        };
+
+        try {
+            btnSaveSettings.innerText = "Saving...";
+            const res = await api.fetchSaveConfig(payload);
+            if (res.status === 'success') {
+                window.closeSettingsModal();
+            } else {
+                alert("Error saving config: " + (res.message || "Unknown error"));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Connection error while saving.");
+        } finally {
+            btnSaveSettings.innerText = "Save Config";
+        }
+    });
+}
+
+// --- Training Logic ---
 if (btnTrain) btnTrain.addEventListener('click', async () => {
     if (!confirm("Start YOLO Training? This uses your exported dataset.")) return;
+
+    const folderName = folderNameInput.value.trim();
 
     setTrainUIState('running');
     logsArea.innerText = "Initializing training sequence...\n";
@@ -322,7 +379,7 @@ if (btnTrain) btnTrain.addEventListener('click', async () => {
     trainBar.style.backgroundColor = '#9b59b6';
 
     try {
-        const res = await api.fetchTrainStart();
+        const res = await api.fetchTrainStart(folderName);
         if (res.status === 'success') {
             startTrainingStream();
         } else {
@@ -337,7 +394,7 @@ if (btnTrain) btnTrain.addEventListener('click', async () => {
     }
 });
 
-// Open/Close Modal
+// Open/Close Logs Modal
 if (btnViewLogs) btnViewLogs.addEventListener('click', () => { modalTrain.style.display = 'flex'; });
 window.closeTrainModal = function() { modalTrain.style.display = 'none'; };
 
@@ -413,10 +470,12 @@ function setTrainUIState(state) {
         btnTrain.disabled = true;
         btnTrain.style.display = 'none';
         trainContainer.style.display = 'block';
+        if (btnSettings) btnSettings.disabled = true;
     } else {
         btnTrain.disabled = false;
         btnTrain.style.display = 'block';
         trainContainer.style.display = 'none';
+        if (btnSettings) btnSettings.disabled = false;
     }
 }
 
@@ -486,9 +545,19 @@ window.closeContextMenu = ui.closeContextMenu;
 
 async function loadDetectionLabels() {
     try {
+        const currentSelection = dom.detectLabel.value || lastSelectedLabel;
         const data = await api.fetchLoadDetectionLabels();
         if (data.status === 'success' && data.names) {
             dom.detectLabel.innerHTML = '';
+
+            if (data.names.length === 0) {
+                const placeholder = document.createElement('option');
+                placeholder.text = "-- Create a Label --";
+                placeholder.value = "";
+                placeholder.disabled = true;
+                placeholder.selected = true;
+                dom.detectLabel.appendChild(placeholder);
+            }
             data.names.forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
@@ -503,11 +572,14 @@ async function loadDetectionLabels() {
             dom.detectLabel.appendChild(newOpt);
             dom.detectLabel.disabled = false;
 
-            if (lastSelectedLabel && data.names.includes(lastSelectedLabel)) {
-                dom.detectLabel.value = lastSelectedLabel;
+            if (currentSelection && data.names.includes(currentSelection)) {
+                dom.detectLabel.value = currentSelection;
+                lastSelectedLabel = currentSelection;
             } else if (data.names.length > 0) {
-                dom.detectLabel.value = data.names[0];
-                lastSelectedLabel = data.names[0];
+                if (!dom.detectLabel.value) {
+                    dom.detectLabel.value = data.names[0];
+                    lastSelectedLabel = data.names[0];
+                }
             }
         }
     } catch (e) {
@@ -515,19 +587,39 @@ async function loadDetectionLabels() {
     }
 }
 
+async function refreshMediaSourceList() {
+    try {
+        const currentSelection = dom.select.value;
+
+        const list = await api.fetchMediaList();
+        dom.select.innerHTML = '';
+        list.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.innerText = n;
+            dom.select.appendChild(opt);
+        });
+        dom.select.disabled = false;
+
+        if (list.includes(currentSelection)) {
+            dom.select.value = currentSelection;
+        } else if (list.length > 0) {
+            if (currentSelection === 'Loading...' || !currentSelection) {
+                loadMedia(list[0]);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to refresh media list:", e);
+    }
+}
+
 async function init() {
     await loadDetectionLabels();
-    const list = await api.fetchMediaList();
-    dom.select.innerHTML = '';
-    list.forEach(n => {
-        const opt = document.createElement('option'); opt.value = n; opt.innerText = n;
-        dom.select.appendChild(opt);
-    });
-    dom.select.disabled = false;
-    if (list.length > 0) loadMedia(list[0]);
+    await refreshMediaSourceList();
 }
 
 dom.select.addEventListener('change', (e) => { loadMedia(e.target.value); e.target.blur(); });
+dom.select.addEventListener('mousedown', refreshMediaSourceList);
 dom.slider.addEventListener('input', (e) => {
     state.targetIndex = parseInt(e.target.value);
     dom.status.innerText = `Seeking... ${state.targetIndex + 1} / ${state.frameKeys.length}`;
@@ -543,6 +635,7 @@ dom.detectLabel.addEventListener('change', async function() {
     }
     lastSelectedLabel = this.value;
 });
+dom.detectLabel.addEventListener('mousedown', loadDetectionLabels);
 
 canvas.stage.on('click tap', (e) => {
     if (e.target === canvas.stage || e.target === canvas.konvaImage) { canvas.tr.nodes([]); canvas.layer.batchDraw(); }

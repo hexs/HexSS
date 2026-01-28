@@ -93,7 +93,7 @@ body {
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-select, input[type="text"] {
+select, input[type="text"], input[type="number"] {
     width: 100%;
     background-color: #333;
     color: white;
@@ -105,7 +105,7 @@ select, input[type="text"] {
     transition: border-color 0.2s;
 }
 
-select:focus, input[type="text"]:focus {
+select:focus, input:focus {
     border-color: #3498db;
     outline: none;
 }
@@ -390,7 +390,7 @@ input[type=range]::-moz-range-thumb {
 .cancel-btn:hover { background-color: #666; }
 
 /* =========================================
-   9. MODAL (Training Logs)
+   9. MODALS (Logs & Settings)
    ========================================= */
 .modal-overlay {
     position: fixed;
@@ -406,7 +406,7 @@ input[type=range]::-moz-range-thumb {
 
 .modal-content {
     background-color: #1e1e1e;
-    width: 700px;
+    width: 700px; /* Default for Logs */
     max-width: 90%;
     height: 550px;
     border-radius: 8px;
@@ -415,6 +415,12 @@ input[type=range]::-moz-range-thumb {
     border: 1px solid #444;
     box-shadow: 0 10px 30px rgba(0,0,0,0.8);
     overflow: hidden;
+}
+
+.settings-content {
+    width: 450px;
+    height: auto;
+    max-height: 85vh;
 }
 
 .modal-header {

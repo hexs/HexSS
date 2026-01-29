@@ -47,8 +47,84 @@
     </div>
 </div>
 
+<style>
+    /* ... existing styles ... */
+    .tg .clickable-bit {
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .tg .clickable-bit:hover {
+        opacity: 0.7;
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+    }
+</style>
+
 <script>
-    function renderBitfieldTable(reg) {
+     function writeRegister(slaveId, symbol, inputId) {
+        const input = document.getElementById(inputId);
+        const value = input.value;
+
+        if (value === "") {
+            alert("Please enter a value");
+            return;
+        }
+
+        const payload = {
+            slave: parseInt(slaveId),
+            register: symbol,
+            value: value // Backend handles hex string or int string conversion
+        };
+
+        fetch('/api/register/write', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(json => {
+            if (json.status === 'success') {
+                console.log(`Success: ${json.message}`);
+                // Optional: visual feedback or clear input
+                input.style.borderColor = "green";
+                setTimeout(() => input.style.borderColor = "", 1000);
+            } else {
+                alert(`Error: ${json.message}`);
+            }
+        })
+        .catch(err => {
+            console.error('Network error:', err);
+            alert('Network error');
+        });
+    }
+
+    function toggleBit(slaveId, symbol, bit, currentValue) {
+        const newValue = currentValue === 1 ? false : true;
+
+        const payload = {
+            slave: parseInt(slaveId),
+            register: symbol,
+            bit: parseInt(bit),
+            value: newValue
+        };
+
+        fetch('/api/register/write_bit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(json => {
+            if (json.status !== 'success') {
+                alert(`Error: ${json.message}`);
+            }
+            // ไม่ต้องทำอะไรเพิ่ม ถ้าสำเร็จ เดี๋ยว SSE จะส่งค่าใหม่กลับมาอัปเดตสีเอง
+        })
+        .catch(err => {
+            console.error('Network error:', err);
+        });
+    }
+
+    function renderBitfieldTable(reg, slaveId) { // รับ slaveId เพิ่ม
         let bits = [];
         let maxBit = 15;
         for (let i = maxBit; i >= 0; i--) {
@@ -65,10 +141,23 @@
         let ths = bits.map(b => `<th>${b.bit}</th>`).join('');
         let trs = bits.map(b => `<td>${b.symbol}</td>`).join('');
         let vals = bits.map(b => {
-            if (b.value === 1) return `<td class="green">1</td>`;
-            if (b.value === 0) return `<td class="red">0</td>`;
-            return `<td class="gray">-</td>`;
+            let cellClass = "gray";
+            let displayVal = "-";
+            let clickAction = "";
+
+            if (b.value === 1) {
+                cellClass = "green clickable-bit";
+                displayVal = "1";
+                clickAction = `onclick="toggleBit('${slaveId}', '${reg.symbol}', ${b.bit}, 1)"`;
+            } else if (b.value === 0) {
+                cellClass = "red clickable-bit";
+                displayVal = "0";
+                clickAction = `onclick="toggleBit('${slaveId}', '${reg.symbol}', ${b.bit}, 0)"`;
+            }
+
+            return `<td class="${cellClass}" ${clickAction}>${displayVal}</td>`;
         }).join('');
+
         return `
         <div class="pt-2">
           <table class="tg">
@@ -82,7 +171,7 @@
         `;
     }
 
-    function renderMultiWordBitfieldTable(reg) {
+    function renderMultiWordBitfieldTable(reg, slaveId) { // รับ slaveId เพิ่ม
         function makeTable(startBit, endBit) {
             let bits = [];
             for (let i = startBit; i >= endBit; i--) {
@@ -96,9 +185,21 @@
             let ths = bits.map(b => `<th>${b.bit}</th>`).join('');
             let trs = bits.map(b => `<td>${b.symbol}</td>`).join('');
             let vals = bits.map(b => {
-                if (b.value === 1) return `<td class="green">1</td>`;
-                if (b.value === 0) return `<td class="red">0</td>`;
-                return `<td class="gray">-</td>`;
+                let cellClass = "gray";
+                let displayVal = "-";
+                let clickAction = "";
+
+                if (b.value === 1) {
+                    cellClass = "green clickable-bit";
+                    displayVal = "1";
+                    clickAction = `onclick="toggleBit('${slaveId}', '${reg.symbol}', ${b.bit}, 1)"`;
+                } else if (b.value === 0) {
+                    cellClass = "red clickable-bit";
+                    displayVal = "0";
+                    clickAction = `onclick="toggleBit('${slaveId}', '${reg.symbol}', ${b.bit}, 0)"`;
+                }
+
+                return `<td class="${cellClass}" ${clickAction}>${displayVal}</td>`;
             }).join('');
             return `
             <div class="pt-2">
@@ -117,14 +218,29 @@
 
     function registerTable(registers) {
         let html = "";
+        let slaveSelect = document.getElementById('slaveSelect');
+        let currentSlave = slaveSelect.value;
+
         for (const [symbol, reg] of Object.entries(registers)) {
+            let inputId = `input-${symbol}`;
+
             html += `<div class="register-section card mb-3">
-                        <div class="card-header register-title">
-                            <strong>${reg.symbol} - ${reg.name}</strong>
-                            <span class="address-text ms-2">(Address: ${reg.address.map(a => "0x" + a.toString(16).padStart(4, "0")).join(", ")})</span>
+                        <div class="card-header register-title d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${reg.symbol} - ${reg.name}</strong>
+                                <span class="address-text ms-2">(Address: ${reg.address.map(a => "0x" + a.toString(16).padStart(4, "0")).join(", ")})</span>
+                            </div>
                         </div>
                         <div class="card-body">
-                            <div class="mb-2"><strong>Value:</strong> <span class="badge bg-dark">${reg.val !== null ? reg.val : "N/A"}</span></div>`;
+                            <div class="d-flex align-items-center flex-wrap gap-3 mb-2">
+                                <div>
+                                    <strong>Value:</strong> <span class="badge bg-dark fs-6">${reg.val !== null ? reg.val : "N/A"}</span>
+                                </div>
+                                <div class="input-group input-group-sm" style="width: 250px;">
+                                    <input type="text" class="form-control" id="${inputId}" placeholder="New Value (Dec/Hex)">
+                                    <button class="btn btn-outline-primary" type="button" onclick="writeRegister('${currentSlave}', '${reg.symbol}', '${inputId}')">Write</button>
+                                </div>
+                            </div>`;
 
             if (
                 reg.signals &&
@@ -132,10 +248,10 @@
                 reg.address.length === 2 &&
                 Math.max(...Object.keys(reg.signals).map(Number)) >= 16
             ) {
-                html += renderMultiWordBitfieldTable(reg);
+                html += renderMultiWordBitfieldTable(reg, currentSlave);
             }
             else if (reg.signals && Object.keys(reg.signals).length > 0) {
-                html += renderBitfieldTable(reg);
+                html += renderBitfieldTable(reg, currentSlave);
             }
 
             html += `</div></div>`;
@@ -185,7 +301,7 @@
                     updateDisplay(data);
                 }
             } catch (ex) {
-                document.getElementById('registerDisplay').innerHTML = `<div class="alert alert-danger">Error parsing data: ${ex}<br><pre>${e.data}</pre></div>`;
+                // console.error(ex);
             }
         };
     }

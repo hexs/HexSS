@@ -124,6 +124,35 @@ def read_register_socket():
     return Response(generate(), mimetype='text/event-stream')
 
 
+@app.route('/api/register/write', methods=['POST'])
+@validate_params('slave', 'register', 'value')
+@handle_errors
+def api_write_register():
+    robot: Robot = app.config['robot']
+    slave = request.json.get('slave')
+    register = request.json.get('register')  # Expecting Symbol string, e.g., "PCMD"
+    value = request.json.get('value')
+
+    robot.write_register(slave, register, value)
+
+    return jsonify(status='success', message=f"Written {value} to {register} on Slave {slave}")
+
+
+@app.route('/api/register/write_bit', methods=['POST'])
+@validate_params('slave', 'register', 'bit', 'value')
+@handle_errors
+def api_write_register_bit():
+    robot: Robot = app.config['robot']
+    slave = request.json.get('slave')
+    register = request.json.get('register')
+    bit = request.json.get('bit')
+    value = request.json.get('value')  # True (1) or False (0)
+
+    robot.write_register_bit(slave, register, bit, bool(value))
+
+    return jsonify(status='success', message=f"Set bit {bit} of {register} to {value} on Slave {slave}")
+
+
 @app.route('/api/socket/current_position', methods=['GET'])
 def current_position_socket():
     robot = app.config['robot']

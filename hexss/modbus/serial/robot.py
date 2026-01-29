@@ -675,7 +675,7 @@ class Registers:
         'PCMD': [0x9900, 0x9901],
         'INP': [0x9902, 0x9903],
         'VCMD': [0x9904, 0x9905],
-        # 'ACMD': [0x9906],
+        'ACMD': [0x9906],
         # 'PPOW': [0x9907],
         # 'CTLF': [0x9908],
     }
@@ -936,6 +936,31 @@ class Robot:
                 reg_just_val_dict[symbol] = {'val': reg.value}
             result[f"Slave {slave.id}"] = reg_just_val_dict if just_vals else reg_dict
         return json.dumps(result, indent=4)
+
+    def write_register(self, slave_id: int, symbol: str, value: int) -> None:
+        if slave_id not in self.slaves:
+            raise ValueError(f"Slave {slave_id} not found")
+
+        slave = self.slaves[slave_id]
+        if hasattr(slave.registers, symbol):
+            reg = getattr(slave.registers, symbol)
+            reg.write_value(int(str(value), 0))
+        else:
+            raise ValueError(f"Register symbol '{symbol}' not found on Slave {slave_id}")
+
+    def write_register_bit(self, slave_id: int, symbol: str, bit: int, value: bool) -> None:
+        if slave_id not in self.slaves:
+            raise ValueError(f"Slave {slave_id} not found")
+
+        slave = self.slaves[slave_id]
+        if hasattr(slave.registers, symbol):
+            reg = getattr(slave.registers, symbol)
+            if value:
+                reg.set_bit(bit)
+            else:
+                reg.reset_bit(bit)
+        else:
+            raise ValueError(f"Register symbol '{symbol}' not found on Slave {slave_id}")
 
     def alarm_reset(self) -> None:
         for id, slave in self.slaves.items():

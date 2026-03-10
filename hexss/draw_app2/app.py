@@ -7,6 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import threading
 from pprint import pprint
+import hexss
+
+hexss.check_packages('opencv-python', 'Flask', auto_install=True)
 
 import cv2
 import numpy as np
@@ -42,7 +45,7 @@ def convert_to_detection_datasets(data_store, input_paths):
     valid_ratio = parameters['valid_ratio']
     workers = parameters['workers']
 
-    output_path = Path('YOLO_detect') / parameters['folder_name']
+    output_path = Path('YOLO_detect') / parameters['output_path']
     global_names = []
     names_lock = threading.Lock()
     cnt_lock = threading.Lock()
@@ -168,6 +171,9 @@ def export_task(data_store):
     params = export_data['parameters']
     media_dir = data_store['media_dir']
 
+    print('parameters')
+    pprint(export_data['parameters'])
+
     try:
         input_list = []
         if params.get('all', False):
@@ -198,7 +204,7 @@ def export_task(data_store):
 
 def train_task(data_store):
     training = data_store['training']
-    params = training['parameters']
+    parameters = training['parameters']
     training['result'] = {
         'current_epoch': 0,
         'total_epochs': 0,
@@ -207,11 +213,11 @@ def train_task(data_store):
         'percent': 0,
         'message': '...'
     }
-    folder_name = params['folder_name']
-    base_dir = hexss.path.get_current_working_dir() / 'YOLO_detect'
-    dataset_dir = base_dir / folder_name / 'datasets'
+    base_dir = hexss.path.get_script_dir() / 'YOLO_detect'
+    dataset_dir = base_dir / 'export_result' / 'datasets'
     yaml_path = base_dir / "temp_data.yaml"
-    names = json_load(base_dir / folder_name / 'config.json')['names']
+
+    names = json_load(base_dir / 'export_result' / 'config.json')['names']
 
     yaml_content = f"""
     path: {dataset_dir.as_posix()}
@@ -229,25 +235,19 @@ def train_task(data_store):
         training['result']['message'] = f"Config Error: {e}"
         return
 
-    config = json_load('YOLO_detect/config.json', {
-        '1': {'value': "detect", 'option': ["detect"]},
-        '2': {'value': "train", 'option': ["train"]},
-        'model': {'value': "yolo11m.pt",
-                  'option': ["yolo11n.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt"]},
-        'epochs': {'value': 100},
-        'imgsz': {'value': 640}
-    })
+    print('parameters')
+    pprint(parameters)
+
+    model = parameters['model']
+    epochs = parameters['epochs']
+    imgsz = parameters['imgsz']
+    project = parameters['project']
+
     cmd = [
-        'yolo',
-        config['1']['value'],
-        config['2']['value'],
-        f"model={config['model']['value']}",
-        f'data={yaml_path.name}',
-        f'epochs={config["epochs"]["value"]}',
-        f'imgsz={config["imgsz"]["value"]}',
-        f'project={base_dir / folder_name / "model"}',
+        'yolo', 'detect', 'train', f'model={model}', f'data={yaml_path.name}', f'epochs={epochs}', f'imgsz={imgsz}',
+        f'project={base_dir / project}'
     ]
-    print(f"cmd = {' '.join(cmd)}")
+
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -263,13 +263,9 @@ def train_task(data_store):
 
     progress_pattern = re.compile(r"(\d+)/(\d+)\s+.*?\s+(\d+)%")
     start_time = time.time()
-    old = ''
-    for line in iter(process.stdout.readline, ''):
-        if old[:15] == line[:15]:
-            print(end=f'\r{old.strip()}\n')
-        print(end=f'\r{line.strip()}')
-        old = line
 
+    for line in iter(process.stdout.readline, ''):
+        print(end=f'{line.strip()}\n')
         if not line: break
         if training['result']['status'] == 'stopped':
             break
@@ -297,13 +293,11 @@ def train_task(data_store):
             training['result']['remaining'] = {'hours': int(h), 'minutes': int(m), 'seconds': int(s)}
             training['result']['percent'] = int(total_progress_ratio * 100)
 
-        # elif 'Results saved to ' in line:
-        #     training['result']['status'] = 'completed'
-        #     break
-        # elif 'Results saved to ' in line:
-        #     break
-    print('train_task end')
-    training['status'] = 'completed',  # idle, running, completed, error, stopped
+        elif 'Results saved to ' in line:
+            training['result']['status'] = 'completed'
+            break
+        elif 'Results saved to ' in line:
+            break
 
 
 @app.route('/')
@@ -477,7 +471,7 @@ def api_remove_box():
 def api_load_detection_label():
     data_store: dict = app.config['data']
     media_dir = data_store['media_dir']
-    config = json_load(media_dir / 'config.json', {'detection': {'names': []}})
+    config = json_load(media_dir / 'config.json', {'detection': {'names': []}}, True)
     new_label = request.args.get('new_label', None)
     if new_label is not None:
         if new_label not in config['detection']['names']:
@@ -501,14 +495,17 @@ def api_detect_export_dataset_start():
         if export_dataset['threading'] and export_dataset['threading'].is_alive():
             return jsonify({'status': 'error', 'message': 'Export in progress'})
 
+    output_path = request.json.get('output_path', 'export_result')
+    is_all = request.json.get('all', False)
+
     export_dataset['status'] = 'running'
     export_dataset['result'] = {
         'percent': 0,
         'message': 'Initializing...'
     }
     export_dataset['parameters'] = {
-        'folder_name': request.json.get('folder_name'),
-        'all': request.json.get('all', False),
+        'output_path': output_path,
+        'all': is_all,
         'input_path': media.source_path.name if media else None,
         'valid_ratio': 0.2,
         'workers': 4
@@ -583,9 +580,6 @@ def api_detect_training_start():
         'remaining': {'hours': 0, 'minutes': 0, 'seconds': 0},
         'percent': 0,
         'message': 'Initializing training...'
-    }
-    training['parameters'] = {
-        'folder_name': request.json.get('folder_name'),
     }
 
     try:

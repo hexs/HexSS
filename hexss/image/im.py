@@ -406,6 +406,36 @@ class Image:
         self.image = enhancer.enhance(factor)
         return self
 
+    def hue(self, degrees: float) -> Self:
+        '''
+        Rotate hue around the color wheel by `degrees`.
+        180 -> opposite hue, 0 (or any multiple of 360) -> unchanged.
+        Grayscale ('L') images have no hue and are returned as-is.
+        '''
+        if degrees % 360 == 0:
+            return self
+
+        img = self.image
+        mode = img.mode
+        if mode == 'L':
+            return self
+
+        alpha = img.split()[3] if mode == 'RGBA' else None
+        rgb = img.convert('RGB')
+
+        h, s, v = rgb.convert('HSV').split()
+        shift = int(round(degrees / 360.0 * 255)) % 256
+        h = h.point(lambda px: (px + shift) % 256)
+        rgb = PILImage.merge('HSV', (h, s, v)).convert('RGB')
+
+        if alpha is not None:
+            rgb = rgb.convert('RGBA')
+            rgb.putalpha(alpha)
+            self.image = rgb
+        else:
+            self.image = rgb.convert(mode)
+        return self
+
     def best_match_location(
             self,
             template_im: "Image",

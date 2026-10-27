@@ -11,12 +11,12 @@ hexss.check_packages('numpy', 'opencv-python', 'requests', 'pillow', auto_instal
 import numpy as np
 import cv2
 import requests
-from PIL._typing import Coords
 from PIL import Image as PILImage
 from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFilter, ImageGrab, ImageWin, ImageFont, ImageEnhance
 from PIL.Image import Transpose, Transform, Resampling, Dither, Palette, Quantize, SupportsArrayInterface
 
+Coords = Union[Sequence[float] , Sequence[Sequence[float]]]
 _Ink = Union[float, Tuple[int, ...], str]
 Array2 = np.ndarray
 Coord4 = Union[Tuple[float, float, float, float], Sequence[float]]

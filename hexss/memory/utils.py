@@ -102,17 +102,25 @@ class MemoryPointer:
         'd': ('d', 8), 'double': ('d', 8)
     }
 
-    def __init__(self, process, dtype, address=None, module=None, base_offset=None, offsets=None):
+    def __init__(self, process, dtype, address=None, module=None, base_offset=None, offsets=None,
+                 fallback_last_addr=False):
         self.process = process
         self.module = module
         self.base_offset = base_offset
         self.offsets = offsets if offsets else []
         self.static_address = address
+        self.fallback_last_addr = fallback_last_addr
+        self._last_addr = None
 
         if dtype not in self.TYPE_MAP:
             raise ValueError(f"Unknown dtype: {dtype}")
 
         self.struct_fmt, self.size = self.TYPE_MAP[dtype]
+
+    def _handle_read_fail(self):
+        if self.fallback_last_addr and self._last_addr is not None:
+            return self._last_addr
+        return None
 
     @property
     def addr(self):
@@ -120,36 +128,42 @@ class MemoryPointer:
             return self.static_address
 
         mod_base = self.process.get_module_addr(self.module)
-        if not mod_base: return 0
+        if not mod_base:
+            return self._handle_read_fail()
 
         current_addr = mod_base + self.base_offset
 
         for offset in self.offsets[:-1]:
             ptr = self.process.read_bytes(current_addr, 8)
-            if not ptr: return 0
+            if not ptr:
+                return self._handle_read_fail()
             val = struct.unpack('Q', ptr)[0]
-            if val == 0: return 0
+            if val == 0:
+                return self._handle_read_fail()
             current_addr = val + offset
 
         if self.offsets:
             ptr = self.process.read_bytes(current_addr, 8)
-            if not ptr: return 0
+            if not ptr:
+                return self._handle_read_fail()
             val = struct.unpack('Q', ptr)[0]
-            if val == 0: return 0
-            return val + self.offsets[-1]
+            if val == 0:
+                return self._handle_read_fail()
+            current_addr = val + self.offsets[-1]
 
+        self._last_addr = current_addr
         return current_addr
 
     def read(self):
         address = self.addr
-        if address == 0: return None
+        if address is None: return None
         data = self.process.read_bytes(address, self.size)
         if not data: return None
         return struct.unpack(self.struct_fmt, data)[0]
 
     def write(self, value):
         address = self.addr
-        if address == 0: return False
+        if address is None: return False
         try:
             data = struct.pack(self.struct_fmt, value)
             return self.process.write_bytes(address, data)
@@ -173,7 +187,8 @@ class MemoryPointer:
         return self.__add__(-other)
 
     def __str__(self):
-        return hex(self.addr)
+        address = self.addr
+        return hex(address) if address is not None else "None"
 
 
 class Memory:
@@ -205,8 +220,43 @@ class Memory:
     def set_addr(self, address, dtype: int | str = 4):
         return MemoryPointer(self, dtype, address=address)
 
-    def set_pointer(self, target_module, base_offset, offsets, dtype):
-        return MemoryPointer(self, dtype, module=target_module, base_offset=base_offset, offsets=offsets)
+    def set_pointer(self, target_module, base_offset, offsets, dtype, fallback_last_addr=False):
+        return MemoryPointer(self, dtype, module=target_module, base_offset=base_offset, offsets=offsets,
+                             fallback_last_addr=fallback_last_addr)
+
+    def set_xml(self, xml_string, fallback_last_addr=False):
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(xml_string.strip())
+        address_text = root.find('.//Address').text
+        var_type = root.find('.//VariableType').text.lower()
+
+        if 'byte' in var_type:
+            parts = var_type.split()
+            dtype = int(parts[0]) if parts[0].isdigit() else 1
+        else:
+            dtype = var_type
+
+        offsets_node = root.find('.//Offsets')
+
+        if '+' in address_text or offsets_node is not None:
+            module_name, base_offset_hex = address_text.split('+')
+            offsets = [int(offset.text, 16) for offset in root.findall('.//Offsets/Offset')]
+
+            return self.set_pointer(
+                target_module=module_name.strip('"'),
+                base_offset=int(base_offset_hex, 16),
+                offsets=offsets[::-1],  # รีเวิร์สลิสต์ของ offsets
+                dtype=dtype,
+                fallback_last_addr=fallback_last_addr
+            )
+        else:
+            address = int(address_text, 16)
+
+            return self.set_addr(
+                address=address,
+                dtype=dtype
+            )
 
     def read_bytes(self, address, size):
         buffer = ctypes.create_string_buffer(size)
@@ -233,29 +283,17 @@ class Memory:
 
 if __name__ == "__main__":
     import time
+    from hexss.memory import Memory
 
     mem = Memory("xdt.exe")
-
-    # z_pos = mem.set_addr(0x19FD3EF33E4, float)
-    # or
-    z_pos = mem.set_pointer(
-        target_module="mono-2.0-sgen.dll",
-        base_offset=0x004CEAA0,
-        offsets=[0x0, 0x18, 0x18, 0x60, 0x680, 0x16C],
-        dtype='float'
+    tension_mem = mem.set_xml(
+        '''
+        ''',
+        fallback_last_addr=True
     )
 
-    x_pos = z_pos - 4
-    y_pos = z_pos + 4
     while True:
-        x_val = x_pos.read()
-        y_val = y_pos.read()
-        z_val = z_pos.read()
+        tension = tension_mem.read()
+        print(f"{tension_mem}: {tension} | {tension_mem.addr}")
 
-        x_str = f"{x_val:.2f}" if x_val is not None else "None"
-        y_str = f"{y_val:.2f}" if y_val is not None else "None"
-        z_str = f"{z_val:.2f}" if z_val is not None else "None"
-
-        print(end=f"\r[Pointer] X: {x_str} Y: {y_str} Z: {z_str}")
         time.sleep(0.1)
-

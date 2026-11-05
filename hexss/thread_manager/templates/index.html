@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101827">
+    <title>Thread Monitor | Background Tasks</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b1120;
+            --surface: rgba(19, 29, 48, .88);
+            --surface-2: #172238;
+            --line: rgba(148, 163, 184, .15);
+            --muted: #91a0b8;
+            --text: #edf3ff;
+            --accent: #7c9cff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text);
+            font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(ellipse at 12% 0%, rgba(71, 100, 190, .22), transparent 36%),
+                radial-gradient(ellipse at 90% 15%, rgba(27, 180, 170, .10), transparent 30%),
+                var(--bg);
+        }
+        .page-wrap { max-width: 1240px; padding-top: 52px; padding-bottom: 56px; }
+        .topline { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:30px; }
+        .brand { display:flex; align-items:center; gap:15px; }
+        .brand-icon {
+            width:52px; height:52px; display:grid; place-items:center; border-radius:16px;
+            color:#c7d6ff; font-size:1.45rem;
+            background:linear-gradient(145deg, rgba(124,156,255,.25), rgba(75,95,160,.12));
+            border:1px solid rgba(124,156,255,.28);
+            box-shadow:0 8px 28px rgba(50,75,160,.15);
+        }
+        .eyebrow { color:#8ea5d5; font-size:.72rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
+        h1 { margin:4px 0 0; font-size:clamp(1.5rem, 3vw, 2rem); font-weight:800; letter-spacing:-.045em; }
+        .subtitle { color:var(--muted); margin:7px 0 0; font-size:.92rem; }
+        .live-pill {
+            display:inline-flex; align-items:center; gap:9px; border:1px solid rgba(52,211,153,.22);
+            color:#8de9c3; background:rgba(16,185,129,.09); padding:9px 13px; border-radius:999px;
+            font-size:.78rem; font-weight:700; white-space:nowrap;
+        }
+        .live-dot { width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 0 4px rgba(52,211,153,.12); }
+        .dashboard-card {
+            overflow:hidden; border:1px solid var(--line); border-radius:22px;
+            background:var(--surface); box-shadow:0 24px 70px rgba(0,0,0,.22);
+            backdrop-filter:blur(14px);
+        }
+        .card-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:23px 26px; border-bottom:1px solid var(--line); }
+        .section-title { margin:0; font-size:1rem; font-weight:700; }
+        .section-note { color:var(--muted); font-size:.8rem; margin-top:5px; }
+        .refresh-label { color:var(--muted); font-size:.78rem; display:flex; align-items:center; gap:8px; }
+        .refresh-label i { color:#8fa9ff; }
+        .table-responsive { padding:0 12px 10px; }
+        .table { --bs-table-bg:transparent; --bs-table-color:var(--text); --bs-table-hover-bg:rgba(124,156,255,.045); margin:0; }
+        .table thead th {
+            padding:17px 15px; color:#8494ae; border-bottom:1px solid var(--line);
+            font-size:.7rem; text-transform:uppercase; letter-spacing:.11em; font-weight:700; white-space:nowrap;
+        }
+        .table tbody td { padding:19px 15px; border-bottom:1px solid rgba(148,163,184,.09); vertical-align:middle; }
+        .table tbody tr:last-child td { border-bottom:0; }
+        .task-id { color:#dce6ff; font-weight:700; font-size:.88rem; }
+        .detail { color:#a4b1c7; font-size:.82rem; line-height:1.6; max-width:520px; overflow-wrap:anywhere; }
+        .badge { padding:7px 10px; font-size:.7rem; font-weight:700; letter-spacing:.02em; border:1px solid transparent; }
+        .status-running { color:#9eb8ff; background:rgba(91,128,255,.13); border-color:rgba(124,156,255,.2); }
+        .status-stopped { color:#f6cf80; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.2); }
+        .status-completed { color:#85e3b7; background:rgba(16,185,129,.12); border-color:rgba(52,211,153,.2); }
+        .status-failed { color:#ffa0a8; background:rgba(244,63,94,.12); border-color:rgba(244,63,94,.2); }
+        .status-pending { color:#c0ccdd; background:rgba(148,163,184,.12); border-color:rgba(148,163,184,.18); }
+        .btn-action { border-radius:10px; padding:7px 12px; font-size:.76rem; font-weight:700; transition:all .18s ease; }
+        .btn-stop { color:#ff9ca8; border:1px solid rgba(244,63,94,.27); background:rgba(244,63,94,.07); }
+        .btn-stop:hover { color:#fff; background:#e54861; border-color:#e54861; }
+        .btn-restart { color:#8be3b7; border:1px solid rgba(52,211,153,.25); background:rgba(16,185,129,.07); }
+        .btn-restart:hover { color:#062b1d; background:#62d6a0; border-color:#62d6a0; }
+        .empty-state { padding:46px 20px !important; text-align:center; color:var(--muted); }
+        .empty-state i { display:block; font-size:1.7rem; margin-bottom:10px; color:#7f91b1; }
+        .footer-note { color:#65748c; font-size:.75rem; text-align:center; margin-top:18px; }
+        @media (max-width: 700px) {
+            .page-wrap { padding:28px 14px 36px; }
+            .topline { align-items:flex-start; }
+            .brand-icon { width:44px; height:44px; border-radius:13px; }
+            .live-pill { font-size:0; padding:10px; }
+            .live-dot { width:8px; height:8px; }
+            .card-head { padding:18px; }
+            .table-responsive { padding:0 7px 7px; }
+            .table thead th, .table tbody td { padding:14px 10px; }
+            .detail { min-width:170px; }
+        }
+    </style>
+</head>
+<body>
+<main class="container page-wrap">
+    <header class="topline">
+        <div class="brand">
+            <div class="brand-icon"><i class="bi bi-cpu"></i></div>
+            <div>
+                <div class="eyebrow">System Overview</div>
+                <h1>Background Tasks</h1>
+                <p class="subtitle">ติดตามสถานะและจัดการงานเบื้องหลังแบบเรียลไทม์</p>
+            </div>
+        </div>
+        <div class="live-pill" title="อัปเดตข้อมูลอัตโนมัติ"><span class="live-dot"></span> LIVE MONITORING</div>
+    </header>
+
+    <section class="dashboard-card">
+        <div class="card-head">
+            <div>
+                <h2 class="section-title"><i class="bi bi-list-task me-2" style="color:#8fa9ff"></i>Task Activity</h2>
+                <div class="section-note">รายการงานทั้งหมดและผลลัพธ์ล่าสุด</div>
+            </div>
+            <div class="refresh-label"><i class="bi bi-arrow-repeat"></i> รีเฟรชทุก 1 วินาที</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Task ID</th>
+                        <th>Status</th>
+                        <th>Detail / Result</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="task-table-body">
+                    <tr><td colspan="4" class="empty-state"><i class="bi bi-hourglass-split"></i>กำลังโหลดข้อมูล...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <div class="footer-note"><i class="bi bi-shield-check me-1"></i> Thread Monitor Dashboard · Real-time task management</div>
+</main>
+
+<script>
+    function escapeHTML(value) {
+        return String(value ?? '-').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+    }
+
+    function getStatusBadge(status) {
+        const classes = {
+            Running: 'status-running',
+            Stopped: 'status-stopped',
+            Completed: 'status-completed',
+            Failed: 'status-failed',
+            Pending: 'status-pending'
+        };
+        return `<span class="badge rounded-pill ${classes[status] || 'status-pending'}">${escapeHTML(status)}</span>`;
+    }
+
+    async function fetchStatus() {
+        const tbody = document.getElementById('task-table-body');
+        try {
+            const response = await fetch('/api/status');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            if (!Array.isArray(data) || data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-inbox"></i>ยังไม่มีงานในระบบ</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(task => {
+                const id = escapeHTML(task.task_id);
+                const status = String(task.status || 'Pending');
+                const info = status === 'Completed' ? task.result : (task.error || '-');
+                let actionButton = '';
+
+                if (status === 'Running') {
+                    actionButton = `<button class="btn btn-action btn-stop" onclick="sendAction('${id}', 'stop')"><i class="bi bi-stop-circle me-1"></i>Stop</button>`;
+                } else if (['Stopped', 'Completed', 'Failed'].includes(status)) {
+                    actionButton = `<button class="btn btn-action btn-restart" onclick="sendAction('${id}', 'restart')"><i class="bi bi-play-circle me-1"></i>Restart</button>`;
+                }
+
+                return `<tr>
+                    <td><span class="task-id">${id}</span></td>
+                    <td>${getStatusBadge(status)}</td>
+                    <td><div class="detail">${escapeHTML(info)}</div></td>
+                    <td class="text-end">${actionButton}</td>
+                </tr>`;
+            }).join('');
+        } catch (error) {
+            console.error('Error fetching status:', error);
+            if (!tbody.dataset.hasData) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-triangle"></i>ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อ</td></tr>`;
+            }
+        }
+    }
+
+    async function sendAction(taskId, actionType) {
+        try {
+            const response = await fetch('/api/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({task_id: taskId, action: actionType})
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            await fetchStatus();
+        } catch (error) {
+            console.error('Error sending task action:', error);
+            alert('ดำเนินการไม่สำเร็จ กรุณาลองอีกครั้ง');
+        }
+    }
+
+    fetchStatus();
+    setInterval(fetchStatus, 1000);
+</script>
+</body>
+</html>

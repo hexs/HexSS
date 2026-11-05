@@ -26,7 +26,6 @@ ROOT_DIR = Path("/")
 
 @app.route('/')
 def root():
-    # return render_template('file_manager2.html')
     return redirect(url_for('path'))
 
 
@@ -142,14 +141,24 @@ def create_folder():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
-        return redirect(request.url)
-    file = request.files['file']
-    if file.filename == '':
-        return redirect(request.url)
-    if file:
-        file_path = os.path.normpath(os.path.join(ROOT_DIR, request.form['current_path'], file.filename))
-        file.save(file_path)
-    return redirect(url_for('path', subpath=request.form['current_path']))
+        return jsonify(success=False, error="No files provided")
+
+    files = request.files.getlist('file')
+    paths = request.form.getlist('paths')
+    current_path = request.form.get('current_path', '')
+
+    try:
+        for i, file in enumerate(files):
+            if file.filename == '':
+                continue
+            rel_path = paths[i] if i < len(paths) and paths[i] else file.filename
+            rel_path = rel_path.lstrip('/')
+            full_path = os.path.normpath(os.path.join(ROOT_DIR, current_path, rel_path))
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            file.save(full_path)
+        return jsonify(success=True)
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
 
 
 @app.route('/delete', methods=['POST'])

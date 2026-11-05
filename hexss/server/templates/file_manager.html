@@ -3,71 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Explorer</title>
+    <title>File Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-<header>
-    <form id="upload-form" method="post" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
-        <input type="file" name="file" id="file-upload">
-        <input type="hidden" name="current_path" value="{{ current_path }}">
-        <button type="submit" class="btn">Upload</button>
-        <button type="button" id="create-file-btn" class="btn">Create file</button>
-        <button type="button" id="create-folder-btn" class="btn">Create folder</button>
-    </form>
-</header>
-<div class="main-content">
-    <!--<p>Current Path: {{ current_path }}</p>-->
-    <p>
-        Current Path:
-        {% for crumb, crumb_path in breadcrumbs %}
-        <a href="{{ url_for('path', subpath=crumb_path) }}">{{ crumb }}</a>
-        {% if not loop.last %}/{% endif %}
-        {% endfor %}
-    </p>
 
-    <h3>Directories:</h3>
-    <ul id="directory-list">
-        {% if current_path %}
-        <li>
-            <a href="{{ url_for('path', subpath='/'.join(current_path.replace('\\', '/').split('/')[:-1])) }}">..</a>
-        </li>
-        {% endif %}
-        {% for directory in directories %}
-        <li><a href="{{ url_for('path', subpath=(current_path + '/' + directory).replace('\\', '/')) }}"
-               data-path="{{ (current_path + '/' + directory).replace('\\', '/') }}">{{ directory }}</a></li>
+<header class="navbar">
+    <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3zM9 3v18"/>
+        </svg>
+        <h2>File Explorer</h2>
+    </div>
+    <div class="breadcrumbs">
+        <a href="{{ url_for('path', subpath='') }}" class="crumb-link">Home</a>
+        {% for crumb, crumb_path in breadcrumbs %}
+        <span class="separator">/</span>
+        <a href="{{ url_for('path', subpath=crumb_path) }}" class="crumb-link">{{ crumb }}</a>
         {% endfor %}
-    </ul>
-    <h3>Files:</h3>
-    <ul id="file-list">
-        {% for file in files %}
-        <li><a href="{{ url_for('path', subpath=(current_path + '/' + file).replace('\\', '/')) }}"
-               data-path="{{ (current_path + '/' + file).replace('\\', '/') }}">{{ file }}</a></li>
-        {% endfor %}
-    </ul>
+    </div>
+</header>
+
+<div class="toolbar">
+    <form id="upload-form">
+        <input type="hidden" id="current_path" value="{{ current_path }}">
+        <input type="file" id="file-upload" class="hidden-input" multiple>
+        <input type="file" id="folder-upload" class="hidden-input" webkitdirectory directory multiple>
+
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('file-upload').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            Upload File
+        </button>
+
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('folder-upload').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+            </svg>
+            Upload Folder
+        </button>
+
+        <button type="button" id="create-file-btn" class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            New File
+        </button>
+        <button type="button" id="create-folder-btn" class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            New Folder
+        </button>
+    </form>
 </div>
+
+<div class="main-content">
+    <div class="file-list-container">
+        <div class="file-list-header">
+            <div class="col-name">Name</div>
+            <div class="col-type">Type</div>
+        </div>
+
+        <div class="file-list-body">
+            {% if current_path %}
+            <div class="file-row">
+                <div class="col-name">
+                    <img src="{{ url_for('static', filename='icon/folder.svg') }}" class="item-icon" alt="Up">
+                    <a href="{{ url_for('path', subpath='/'.join(current_path.replace('\\', '/').split('/')[:-1])) }}">...</a>
+                </div>
+                <div class="col-type">Up</div>
+            </div>
+            {% endif %}
+
+            {% for directory in directories %}
+            <div class="file-row item-directory" data-path="{{ (current_path + '/' + directory).replace('\\', '/') }}">
+                <div class="col-name">
+                    <img src="{{ url_for('static', filename='icon/folder.svg') }}" class="item-icon" alt="Folder">
+                    <a href="{{ url_for('path', subpath=(current_path + '/' + directory).replace('\\', '/')) }}">{{
+                        directory }}</a>
+                </div>
+                <div class="col-type">Folder</div>
+            </div>
+            {% endfor %}
+
+            {% for file in files %}
+            <div class="file-row item-file" data-path="{{ (current_path + '/' + file).replace('\\', '/') }}"
+                 data-filename="{{ file }}">
+                <div class="col-name">
+                    <img src="{{ url_for('static', filename='icon/file.svg') }}" class="item-icon dyn-icon" alt="File">
+                    <a href="{{ url_for('path', subpath=(current_path + '/' + file).replace('\\', '/')) }}">{{ file
+                        }}</a>
+                </div>
+                <div class="col-type">File</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
 <div id="context-menu" class="context-menu">
     <ul>
         <li id="download-option">Download</li>
         <li id="rename-option">Rename</li>
-        <li id="delete-option">Delete</li>
         <li id="edit-option">Edit</li>
         <li id="extract-option">Extract</li>
+        <li class="danger" id="delete-option">Delete</li>
     </ul>
 </div>
+
 <div id="edit-modal" class="modal">
     <div class="modal-content">
-        <label for="file-name">File name:</label>
-        <input type="text" id="file-name">
-        <textarea id="edit-content"></textarea>
-        <div class="btn-container">
-            <button id="save-edit" class="btn">Save</button>
-            <button id="cancel-edit" class="btn">Cancel</button>
+        <div class="modal-header">
+            <h3>Edit File</h3>
+            <span class="close-btn" id="cancel-edit-x">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="file-name" placeholder="Filename (e.g. script.py)">
+            <textarea id="edit-content" placeholder="Type your code here..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button id="cancel-edit" class="btn btn-outline">Cancel</button>
+            <button id="save-edit" class="btn btn-primary">Save Changes</button>
         </div>
     </div>
 </div>
 
 <script src="{{ url_for('static', filename='jquery-3.6.0.min.js') }}"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+    $(document).ready(function () {
+        $('#file-upload').change(function () {
+            if (this.files.length > 0) {
+                $('#upload-form').submit();
+            }
+        });
+
+        $.getJSON('/static/icon/icon.json', function (iconMap) {
+            $('.item-file').each(function () {
+                let filename = $(this).data('filename').toLowerCase();
+                let iconImg = $(this).find('.dyn-icon');
+                let suffix = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : '';
+
+                if (iconMap[suffix]) {
+                    iconImg.attr('src', '/static/icon/' + iconMap[suffix]);
+                }
+            });
+        }).fail(function () {
+            console.log("Failed to load icon.json");
+        });
+
+        $('#cancel-edit-x').click(function () {
+            $('#edit-modal').hide();
+        });
+
+        $('.file-row.item-file, .file-row.item-directory').on('contextmenu', function (e) {
+            window.showContextMenu(e, this);
+        });
+    });
+</script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 import ctypes
+from ctypes import wintypes
 import time
 import threading
+from .key_mappings import KEY_MAPPINGS, EXTENDED_KEYS
 
 # --- CTYPES STRUCTURES ---
 SendInput = ctypes.windll.user32.SendInput
@@ -47,48 +49,16 @@ KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 KEYEVENTF_SCANCODE = 0x0008
 
-ordinary_scancodes = {
-    0x00: 'error code',
-    0x01: ['Esc'],
-    0x02: ['1', '!'], 0x03: ['2', '@'], 0x04: ['3', '#'], 0x05: ['4', '$'], 0x06: ['5', '%'], 0x07: ['6', '^'],
-    0x08: ['7', '&'], 0x09: ['8', '*'], 0x0A: ['9', '('], 0x0B: ['0', ')'], 0x0C: ['-', '_'], 0x0D: ['=', '+'],
-    0x0E: ['Backspace'],
-    0x0F: ['Tab'], 0x10: ['Q'], 0x11: ['W'], 0x12: ['E'], 0x13: ['R'], 0x14: ['T'], 0x15: ['Y'], 0x16: ['U'],
-    0x17: ['I'], 0x18: ['O'], 0x19: ['P'], 0x1A: ['[', '{'], 0x1B: [']', '}'],
-    0x1C: ['Enter'], 0x1D: ['LCtrl', 'left ctrl', 'ctrl'],
-    0x1E: ['A'], 0x1F: ['S'], 0x20: ['D'], 0x21: ['F'], 0x22: ['G'], 0x23: ['H'], 0x24: ['J'], 0x25: ['K'],
-    0x26: ['L'], 0x27: [';', ':'], 0x28: ["'", '"'],
-    0x29: ['`', '~'],
-    0x2A: ['LShift', 'left shift', 'shift'],
-    0x2B: ['\\', '|'],
-    0x2C: ['Z'], 0x2D: ['X'], 0x2E: ['C'], 0x2F: ['V'], 0x30: ['B'], 0x31: ['N'], 0x32: ['M'],
-    0x33: [',', '<'], 0x34: ['.', '>'], 0x35: ['/', '?'], 0x36: ['RShift', 'right shift'],
-    0x37: ['Keypad-*', 'PrtScn'],
-    0x38: ['LAlt', 'left alt', 'alt'], 0x39: ['Space', 'space bar'], 0x3A: ['CapsLock'],
-    0x3B: ['F1'], 0x3C: ['F2'], 0x3D: ['F3'], 0x3E: ['F4'], 0x3F: ['F5'], 0x40: ['F6'],
-    0x41: ['F7'], 0x42: ['F8'], 0x43: ['F9'], 0x44: ['F10'],
-    0x45: ['NumLock'], 0x46: ['ScrollLock'],
-    0x47: ['Keypad-7', 'Home'], 0x48: ['Keypad-8', 'Up'], 0x49: ['Keypad-9', 'PgUp'],
-    0x4A: ['Keypad--'],
-    0x4B: ['Keypad-4', 'Left'], 0x4C: ['Keypad-5'], 0x4D: ['Keypad-6', 'Right'], 0x4E: ['Keypad-+'],
-    0x4F: ['Keypad-1', 'End'], 0x50: ['Keypad-2', 'Down'], 0x51: ['Keypad-3', 'PgDn'],
-    0x52: ['Keypad-0', 'Ins'], 0x53: ['Keypad-.', 'Del'],
-    0x57: ['F11'], 0x58: ['F12'],
-    0x5B: ['Win', 'left win'], 0x5C: ['right win']
-}
+WH_KEYBOARD_LL = 13
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
+WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
 
 SCAN_CODES = {}
-
-for key, value in ordinary_scancodes.items():
-    if isinstance(value, list):
-        for char in value:
-            SCAN_CODES[char.lower()] = key
-
-EXTENDED_KEYS = {
-    'right ctrl', 'right alt', 'up', 'down', 'left', 'right',
-    'win', 'left win', 'right win', 'home', 'end', 'ins', 'del', 'pgup', 'pgdn'
-}
-SHIFT_CHARS = set('~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+for scancode, data in KEY_MAPPINGS.items():
+    for name in data['name']:
+        SCAN_CODES[name.lower()] = scancode
 
 
 # --- KEYBOARD CLASS ---
@@ -138,7 +108,6 @@ class keyboard:
             code = int.from_bytes(utf16_bytes[i:i + 2], byteorder='little')
 
             ii_ = Input_I()
-
             # Press
             ii_.ki = KeyBdInput(0, 0, KEYEVENTF_UNICODE, 0, ctypes.pointer(extra))
             ii_.ki.wScan = code
@@ -220,3 +189,132 @@ class keyboard:
             cls._release_key(SCAN_CODES[hotkey], is_extended=is_ext)
         else:
             print(f"[Error] Unknown key: {hotkey}")
+
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("vkCode", wintypes.DWORD),
+        ("scanCode", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", PUL)
+    ]
+
+
+HOOKPROC = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+
+
+class Key:
+    def __init__(self, vk, scancode, unicode_char, mod=0, flags=0):
+        self.vk = vk
+        self.unicode = unicode_char
+        self.mod = mod
+
+        actual_scancode = scancode | 0xE000 if (flags & 1) and scancode < 0xE000 else scancode
+        self.scancode = actual_scancode
+
+        mapping = KEY_MAPPINGS.get(self.scancode)
+        if mapping and mapping['vk'] == self.vk:
+            self.name = mapping['name'][0]
+        else:
+            self.name = f"UNKNOWN_{self.vk}"
+            for sc, data in KEY_MAPPINGS.items():
+                if data['vk'] == self.vk:
+                    self.name = data['name'][0]
+                    break
+
+        if 65 <= self.vk <= 90:
+            self.key = self.vk + 32
+        else:
+            self.key = self.vk
+
+    def __str__(self):
+        return (f"<Key(name: {self.name}, unicode: '{self.unicode}', key: {self.key}, mod: {self.mod}, "
+                f"scancode: {self.scancode}, VK:{self.vk})>")
+
+
+class Listener(threading.Thread):
+    def __init__(self, on_press=None, on_release=None, suppress=False):
+        super().__init__()
+        self.daemon = True
+        self.on_press = on_press
+        self.on_release = on_release
+        self.suppress = suppress
+        self.hook_id = None
+        self._hook_proc_pointer = None
+
+    def run(self):
+        self.thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+        self._hook_proc_pointer = HOOKPROC(self._hook_proc)
+
+        ctypes.windll.kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
+        ctypes.windll.user32.SetWindowsHookExW.restype = wintypes.HHOOK
+        ctypes.windll.user32.CallNextHookEx.restype = wintypes.LPARAM
+
+        ctypes.windll.kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+        ctypes.windll.user32.SetWindowsHookExW.argtypes = [
+            ctypes.c_int,
+            HOOKPROC,
+            wintypes.HINSTANCE,
+            wintypes.DWORD
+        ]
+        ctypes.windll.user32.CallNextHookEx.argtypes = [
+            wintypes.HHOOK,
+            ctypes.c_int,
+            wintypes.WPARAM,
+            wintypes.LPARAM
+        ]
+
+        h_mod = ctypes.windll.kernel32.GetModuleHandleW(None)
+
+        self.hook_id = ctypes.windll.user32.SetWindowsHookExW(
+            WH_KEYBOARD_LL,
+            self._hook_proc_pointer,
+            h_mod,
+            0
+        )
+
+        if not self.hook_id:
+            print("[Error] Failed to install keyboard hook.")
+            return
+
+        msg = wintypes.MSG()
+        while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) > 0:
+            ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
+            ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
+
+        ctypes.windll.user32.UnhookWindowsHookEx(self.hook_id)
+
+    def stop(self):
+        if hasattr(self, 'thread_id'):
+            ctypes.windll.user32.PostThreadMessageW(self.thread_id, 0x0012, 0, 0)
+
+    def _hook_proc(self, nCode, wParam, lParam):
+        if nCode >= 0:
+            kb = ctypes.cast(lParam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
+            vk = kb.vkCode
+            scancode = kb.scanCode
+
+            keyboard_state = (ctypes.c_uint8 * 256)()
+            ctypes.windll.user32.GetKeyboardState(ctypes.byref(keyboard_state))
+
+            mod = 0
+            if keyboard_state[0x10] & 0x80: mod |= 1  # VK_SHIFT
+            if keyboard_state[0x11] & 0x80: mod |= 2  # VK_CONTROL
+            if keyboard_state[0x12] & 0x80: mod |= 4  # VK_MENU
+
+            buffer = ctypes.create_unicode_buffer(4)
+            result = ctypes.windll.user32.ToUnicode(vk, scancode, keyboard_state, buffer, 4, 0)
+            unicode_char = buffer.value if result > 0 else None
+
+            key_obj = Key(vk, scancode, unicode_char, mod, kb.flags)
+
+            if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN) and self.on_press:
+                self.on_press(key_obj)
+            elif wParam in (WM_KEYUP, WM_SYSKEYUP) and self.on_release:
+                self.on_release(key_obj)
+
+            if self.suppress:
+                return 1
+
+        return ctypes.windll.user32.CallNextHookEx(self.hook_id, nCode, wParam, lParam)

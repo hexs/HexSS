@@ -229,7 +229,8 @@ class Key:
             self.key = self.vk
 
     def __str__(self):
-        return (f"<Key(name: {self.name}, unicode: '{self.unicode}', key: {self.key}, mod: {self.mod}, "
+        unicode_str = repr(self.unicode) if self.unicode else "None"
+        return (f"<Key(name: {self.name}, unicode: {unicode_str}, key: {self.key}, mod: {self.mod}, "
                 f"scancode: {self.scancode}, VK:{self.vk})>")
 
 
@@ -294,18 +295,75 @@ class Listener(threading.Thread):
             kb = ctypes.cast(lParam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
             vk = kb.vkCode
             scancode = kb.scanCode
+            user32 = ctypes.windll.user32
 
             keyboard_state = (ctypes.c_uint8 * 256)()
-            ctypes.windll.user32.GetKeyboardState(ctypes.byref(keyboard_state))
+            user32.GetKeyboardState(ctypes.byref(keyboard_state))
+
+            is_keydown = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
+
+            is_lshift = bool(user32.GetAsyncKeyState(0xA0) & 0x8000)
+            is_rshift = bool(user32.GetAsyncKeyState(0xA1) & 0x8000)
+            is_lctrl = bool(user32.GetAsyncKeyState(0xA2) & 0x8000)
+            is_rctrl = bool(user32.GetAsyncKeyState(0xA3) & 0x8000)
+            is_lalt = bool(user32.GetAsyncKeyState(0xA4) & 0x8000)
+            is_ralt = bool(user32.GetAsyncKeyState(0xA5) & 0x8000)
+            is_lwin = bool(user32.GetAsyncKeyState(0x5B) & 0x8000)
+            is_rwin = bool(user32.GetAsyncKeyState(0x5C) & 0x8000)
+
+            is_numlock = bool(user32.GetKeyState(0x90) & 1)
+            is_caps = bool(user32.GetKeyState(0x14) & 1)
+
+            if vk in (0x10, 0xA0, 0xA1):
+                if scancode == 0x36 or (kb.flags & 1):
+                    is_rshift = is_keydown
+                else:
+                    is_lshift = is_keydown
+            elif vk in (0x11, 0xA2, 0xA3):
+                if (kb.flags & 1):
+                    is_rctrl = is_keydown
+                else:
+                    is_lctrl = is_keydown
+            elif vk in (0x12, 0xA4, 0xA5):
+                if (kb.flags & 1):
+                    is_ralt = is_keydown
+                else:
+                    is_lalt = is_keydown
+            elif vk == 0x5B:
+                is_lwin = is_keydown
+            elif vk == 0x5C:
+                is_rwin = is_keydown
+
+            keyboard_state[0x10] = 0x80 if (is_lshift or is_rshift) else 0
+            keyboard_state[0x11] = 0x80 if (is_lctrl or is_rctrl) else 0
+            keyboard_state[0x12] = 0x80 if (is_lalt or is_ralt) else 0
+            keyboard_state[0x14] = 1 if is_caps else 0
+            keyboard_state[0x90] = 1 if is_numlock else 0
 
             mod = 0
-            if keyboard_state[0x10] & 0x80: mod |= 1  # VK_SHIFT
-            if keyboard_state[0x11] & 0x80: mod |= 2  # VK_CONTROL
-            if keyboard_state[0x12] & 0x80: mod |= 4  # VK_MENU
+            if is_lshift:  mod |= 1
+            if is_rshift:  mod |= 2
+            if is_lctrl:   mod |= 64
+            if is_rctrl:   mod |= 128
+            if is_lalt:    mod |= 256
+            if is_ralt:    mod |= 512
+            if is_lwin:    mod |= 1024
+            if is_rwin:    mod |= 2048
+            if is_numlock: mod |= 4096
+            if is_caps:    mod |= 8192
+
+            hwnd = user32.GetForegroundWindow()
+            pid = ctypes.c_ulong()
+            thread_id = user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            hkl = user32.GetKeyboardLayout(thread_id)
 
             buffer = ctypes.create_unicode_buffer(4)
-            result = ctypes.windll.user32.ToUnicode(vk, scancode, keyboard_state, buffer, 4, 0)
-            unicode_char = buffer.value if result > 0 else None
+            result = user32.ToUnicodeEx(vk, scancode, keyboard_state, buffer, 4, 0, hkl)
+
+            if result > 0:
+                unicode_char = buffer.value
+            else:
+                unicode_char = None
 
             key_obj = Key(vk, scancode, unicode_char, mod, kb.flags)
 

@@ -1,7 +1,6 @@
-# key_mappings.py
+# https://kbdlayout.info/kbdusx/virtualkeys+scancodes?arrangement=ANSI104
 
 KEY_MAPPINGS = {
-    0x00: {'vk': 0x00, 'name': ['error code']},
     0x01: {'vk': 0x1B, 'name': ['ESCAPE', 'Esc']},
     0x02: {'vk': 0x31, 'name': ['1', '!']},
     0x03: {'vk': 0x32, 'name': ['2', '@']},

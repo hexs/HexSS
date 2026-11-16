@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Server Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete@1.4.5/build/rete.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete-vue-render-plugin@0.2.1/build/vue-render-plugin.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete-connection-plugin@0.9.0/build/connection-plugin.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="header">
+    <h2>📷 Camera Server Manager</h2>
+    <div class="profile-section">
+        <label><b>Profile:</b></label>
+        <select id="profile-select" class="modern-select" onchange="switchProfile(this.value)"></select>
+        <button class="btn-primary" onclick="createNewProfile()">+ New Profile</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="sidebar-left">
+        <div id="camera-palette">
+            <h3>Cameras</h3>
+        </div>
+        <div>
+            <h3>Properties</h3>
+            <div class="drag-item prop" draggable="true" data-type="Prop" data-name="CAP_PROP_FRAME_HEIGHT">CAP_PROP_FRAME_HEIGHT</div>
+            <div class="drag-item prop" draggable="true" data-type="Prop" data-name="CAP_PROP_FRAME_WIDTH">CAP_PROP_FRAME_WIDTH</div>
+            <div class="drag-item prop" draggable="true" data-type="Prop" data-name="CAP_PROP_AUTO_EXPOSURE">CAP_PROP_AUTO_EXPOSURE</div>
+            <div class="drag-item prop" draggable="true" data-type="Prop" data-name="CAP_PROP_EXPOSURE">CAP_PROP_EXPOSURE</div>
+        </div>
+        <div>
+            <h3>Functions</h3>
+            <div class="drag-item func" draggable="true" data-type="Read">Read Frame</div>
+            <div class="drag-item func" draggable="true" data-type="Delay">Delay (ms)</div>
+        </div>
+        <div>
+            <h3>Triggers</h3>
+            <div class="drag-item trigger" draggable="true" data-type="Start">Start</div>
+            <div class="drag-item trigger" draggable="true" data-type="Trigger">Trigger</div>
+        </div>
+    </div>
+
+    <div id="rete"></div>
+
+    <div class="sidebar-right" id="output-panel">
+        <div class="output-header">
+            <h3>Outputs</h3>
+        </div>
+        <div id="image-results"></div>
+    </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>

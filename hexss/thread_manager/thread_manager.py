@@ -100,11 +100,11 @@ class ThreadManager:
                 "joinable": self._joinable.get(tid)
             } for tid in self._task_configs.keys()]
 
-    def start_monitor_server(self, ip: str = '0.0.0.0', port: int = 2000) -> None:
+    def start_monitor_server(self, host: str = '0.0.0.0', port: int = 2000) -> None:
         from .app import run_server
         monitor_thread = threading.Thread(
             target=run_server,
-            args=(self, ip, port),
+            args=(self, host, port),
             daemon=True,
             name="MonitorServer"
         )

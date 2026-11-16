@@ -185,7 +185,7 @@ def get_ip_addresses(include_loopback: bool = False) -> tuple[list[str], list[st
 
 
 def get_local_ipv4_hosts() -> list[str]:
-    return sorted({"localhost", socket.gethostname(), *get_ip_addresses(True)[0]})
+    return sorted({'localhost', '127.0.0.1', socket.gethostname(), *get_ip_addresses(True)[0]})
 
 
 # --------------------------------------------------------------------------- #

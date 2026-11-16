@@ -28,17 +28,18 @@ def show(data, stop_event):
 def file_manager_server():
     hexss.server.file_manager_server.run()
 
+
 def count():
     i = 0
     while True:
-        i+=1
+        i += 1
         if i == 10:
             return 0
         time.sleep(1)
 
 
 m = ThreadManager()
-m.start_monitor_server(ip='0.0.0.0', port=2000)
+m.start_monitor_server(host='0.0.0.0', port=2000)
 data = {'img': None}
 
 m.add_task(target=capture, args=(data,), task_id="capture")

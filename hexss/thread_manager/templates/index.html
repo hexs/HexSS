@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,80 +20,315 @@
             --text: #edf3ff;
             --accent: #7c9cff;
         }
-        * { box-sizing: border-box; }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             min-height: 100vh;
             margin: 0;
             color: var(--text);
             font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-            background:
-                radial-gradient(ellipse at 12% 0%, rgba(71, 100, 190, .22), transparent 36%),
-                radial-gradient(ellipse at 90% 15%, rgba(27, 180, 170, .10), transparent 30%),
-                var(--bg);
+            background: radial-gradient(ellipse at 12% 0%, rgba(71, 100, 190, .22), transparent 36%),
+            radial-gradient(ellipse at 90% 15%, rgba(27, 180, 170, .10), transparent 30%),
+            var(--bg);
         }
-        .page-wrap { max-width: 1240px; padding-top: 52px; padding-bottom: 56px; }
-        .topline { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:30px; }
-        .brand { display:flex; align-items:center; gap:15px; }
+
+        .page-wrap {
+            max-width: 1240px;
+            padding-top: 52px;
+            padding-bottom: 56px;
+        }
+
+        .topline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
         .brand-icon {
-            width:52px; height:52px; display:grid; place-items:center; border-radius:16px;
-            color:#c7d6ff; font-size:1.45rem;
-            background:linear-gradient(145deg, rgba(124,156,255,.25), rgba(75,95,160,.12));
-            border:1px solid rgba(124,156,255,.28);
-            box-shadow:0 8px 28px rgba(50,75,160,.15);
+            width: 52px;
+            height: 52px;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            color: #c7d6ff;
+            font-size: 1.45rem;
+            background: linear-gradient(145deg, rgba(124, 156, 255, .25), rgba(75, 95, 160, .12));
+            border: 1px solid rgba(124, 156, 255, .28);
+            box-shadow: 0 8px 28px rgba(50, 75, 160, .15);
         }
-        .eyebrow { color:#8ea5d5; font-size:.72rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
-        h1 { margin:4px 0 0; font-size:clamp(1.5rem, 3vw, 2rem); font-weight:800; letter-spacing:-.045em; }
-        .subtitle { color:var(--muted); margin:7px 0 0; font-size:.92rem; }
+
+        .eyebrow {
+            color: #8ea5d5;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 4px 0 0;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 800;
+            letter-spacing: -.045em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin: 7px 0 0;
+            font-size: .92rem;
+        }
+
         .live-pill {
-            display:inline-flex; align-items:center; gap:9px; border:1px solid rgba(52,211,153,.22);
-            color:#8de9c3; background:rgba(16,185,129,.09); padding:9px 13px; border-radius:999px;
-            font-size:.78rem; font-weight:700; white-space:nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            border: 1px solid rgba(52, 211, 153, .22);
+            color: #8de9c3;
+            background: rgba(16, 185, 129, .09);
+            padding: 9px 13px;
+            border-radius: 999px;
+            font-size: .78rem;
+            font-weight: 700;
+            white-space: nowrap;
         }
-        .live-dot { width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 0 4px rgba(52,211,153,.12); }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 0 4px rgba(52, 211, 153, .12);
+        }
+
         .dashboard-card {
-            overflow:hidden; border:1px solid var(--line); border-radius:22px;
-            background:var(--surface); box-shadow:0 24px 70px rgba(0,0,0,.22);
-            backdrop-filter:blur(14px);
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: var(--surface);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .22);
+            backdrop-filter: blur(14px);
         }
-        .card-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:23px 26px; border-bottom:1px solid var(--line); }
-        .section-title { margin:0; font-size:1rem; font-weight:700; }
-        .section-note { color:var(--muted); font-size:.8rem; margin-top:5px; }
-        .refresh-label { color:var(--muted); font-size:.78rem; display:flex; align-items:center; gap:8px; }
-        .refresh-label i { color:#8fa9ff; }
-        .table-responsive { padding:0 12px 10px; }
-        .table { --bs-table-bg:transparent; --bs-table-color:var(--text); --bs-table-hover-bg:rgba(124,156,255,.045); margin:0; }
+
+        .card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 23px 26px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .section-note {
+            color: var(--muted);
+            font-size: .8rem;
+            margin-top: 5px;
+        }
+
+        .refresh-label {
+            color: var(--muted);
+            font-size: .78rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-label i {
+            color: #34d399;
+        }
+
+        .table-responsive {
+            padding: 0 12px 10px;
+        }
+
+        .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text);
+            --bs-table-hover-bg: rgba(124, 156, 255, .045);
+            margin: 0;
+        }
+
         .table thead th {
-            padding:17px 15px; color:#8494ae; border-bottom:1px solid var(--line);
-            font-size:.7rem; text-transform:uppercase; letter-spacing:.11em; font-weight:700; white-space:nowrap;
+            padding: 17px 15px;
+            color: #8494ae;
+            border-bottom: 1px solid var(--line);
+            font-size: .7rem;
+            text-transform: uppercase;
+            letter-spacing: .11em;
+            font-weight: 700;
+            white-space: nowrap;
         }
-        .table tbody td { padding:19px 15px; border-bottom:1px solid rgba(148,163,184,.09); vertical-align:middle; }
-        .table tbody tr:last-child td { border-bottom:0; }
-        .task-id { color:#dce6ff; font-weight:700; font-size:.88rem; }
-        .detail { color:#a4b1c7; font-size:.82rem; line-height:1.6; max-width:520px; overflow-wrap:anywhere; }
-        .badge { padding:7px 10px; font-size:.7rem; font-weight:700; letter-spacing:.02em; border:1px solid transparent; }
-        .status-running { color:#9eb8ff; background:rgba(91,128,255,.13); border-color:rgba(124,156,255,.2); }
-        .status-stopped { color:#f6cf80; background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.2); }
-        .status-completed { color:#85e3b7; background:rgba(16,185,129,.12); border-color:rgba(52,211,153,.2); }
-        .status-failed { color:#ffa0a8; background:rgba(244,63,94,.12); border-color:rgba(244,63,94,.2); }
-        .status-pending { color:#c0ccdd; background:rgba(148,163,184,.12); border-color:rgba(148,163,184,.18); }
-        .btn-action { border-radius:10px; padding:7px 12px; font-size:.76rem; font-weight:700; transition:all .18s ease; }
-        .btn-stop { color:#ff9ca8; border:1px solid rgba(244,63,94,.27); background:rgba(244,63,94,.07); }
-        .btn-stop:hover { color:#fff; background:#e54861; border-color:#e54861; }
-        .btn-restart { color:#8be3b7; border:1px solid rgba(52,211,153,.25); background:rgba(16,185,129,.07); }
-        .btn-restart:hover { color:#062b1d; background:#62d6a0; border-color:#62d6a0; }
-        .empty-state { padding:46px 20px !important; text-align:center; color:var(--muted); }
-        .empty-state i { display:block; font-size:1.7rem; margin-bottom:10px; color:#7f91b1; }
-        .footer-note { color:#65748c; font-size:.75rem; text-align:center; margin-top:18px; }
+
+        .table tbody td {
+            padding: 19px 15px;
+            border-bottom: 1px solid rgba(148, 163, 184, .09);
+            vertical-align: middle;
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .task-id {
+            color: #dce6ff;
+            font-weight: 700;
+            font-size: .88rem;
+        }
+
+        .detail {
+            color: #a4b1c7;
+            font-size: .82rem;
+            line-height: 1.6;
+            max-width: 520px;
+            overflow-wrap: anywhere;
+        }
+
+        .badge {
+            padding: 7px 10px;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            border: 1px solid transparent;
+        }
+
+        .status-running {
+            color: #9eb8ff;
+            background: rgba(91, 128, 255, .13);
+            border-color: rgba(124, 156, 255, .2);
+        }
+
+        .status-stopped {
+            color: #f6cf80;
+            background: rgba(245, 158, 11, .12);
+            border-color: rgba(245, 158, 11, .2);
+        }
+
+        .status-completed {
+            color: #85e3b7;
+            background: rgba(16, 185, 129, .12);
+            border-color: rgba(52, 211, 153, .2);
+        }
+
+        .status-failed {
+            color: #ffa0a8;
+            background: rgba(244, 63, 94, .12);
+            border-color: rgba(244, 63, 94, .2);
+        }
+
+        .status-pending {
+            color: #c0ccdd;
+            background: rgba(148, 163, 184, .12);
+            border-color: rgba(148, 163, 184, .18);
+        }
+
+        .btn-action {
+            border-radius: 10px;
+            padding: 7px 12px;
+            font-size: .76rem;
+            font-weight: 700;
+            transition: all .18s ease;
+        }
+
+        .btn-stop {
+            color: #ff9ca8;
+            border: 1px solid rgba(244, 63, 94, .27);
+            background: rgba(244, 63, 94, .07);
+        }
+
+        .btn-stop:hover {
+            color: #fff;
+            background: #e54861;
+            border-color: #e54861;
+        }
+
+        .btn-restart {
+            color: #8be3b7;
+            border: 1px solid rgba(52, 211, 153, .25);
+            background: rgba(16, 185, 129, .07);
+        }
+
+        .btn-restart:hover {
+            color: #062b1d;
+            background: #62d6a0;
+            border-color: #62d6a0;
+        }
+
+        .empty-state {
+            padding: 46px 20px !important;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .empty-state i {
+            display: block;
+            font-size: 1.7rem;
+            margin-bottom: 10px;
+            color: #7f91b1;
+        }
+
+        .footer-note {
+            color: #65748c;
+            font-size: .75rem;
+            text-align: center;
+            margin-top: 18px;
+        }
+
         @media (max-width: 700px) {
-            .page-wrap { padding:28px 14px 36px; }
-            .topline { align-items:flex-start; }
-            .brand-icon { width:44px; height:44px; border-radius:13px; }
-            .live-pill { font-size:0; padding:10px; }
-            .live-dot { width:8px; height:8px; }
-            .card-head { padding:18px; }
-            .table-responsive { padding:0 7px 7px; }
-            .table thead th, .table tbody td { padding:14px 10px; }
-            .detail { min-width:170px; }
+            .page-wrap {
+                padding: 28px 14px 36px;
+            }
+
+            .topline {
+                align-items: flex-start;
+            }
+
+            .brand-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 13px;
+            }
+
+            .live-pill {
+                font-size: 0;
+                padding: 10px;
+            }
+
+            .live-dot {
+                width: 8px;
+                height: 8px;
+            }
+
+            .card-head {
+                padding: 18px;
+            }
+
+            .table-responsive {
+                padding: 0 7px 7px;
+            }
+
+            .table thead th, .table tbody td {
+                padding: 14px 10px;
+            }
+
+            .detail {
+                min-width: 170px;
+            }
         }
     </style>
 </head>
@@ -105,37 +340,41 @@
             <div>
                 <div class="eyebrow">System Overview</div>
                 <h1>Background Tasks</h1>
-                <p class="subtitle">ติดตามสถานะและจัดการงานเบื้องหลังแบบเรียลไทม์</p>
+                <p class="subtitle">Track status and manage background tasks in real-time</p>
             </div>
         </div>
-        <div class="live-pill" title="อัปเดตข้อมูลอัตโนมัติ"><span class="live-dot"></span> LIVE MONITORING</div>
+        <div class="live-pill" title="Auto-updating data"><span class="live-dot"></span> LIVE MONITORING</div>
     </header>
 
     <section class="dashboard-card">
         <div class="card-head">
             <div>
                 <h2 class="section-title"><i class="bi bi-list-task me-2" style="color:#8fa9ff"></i>Task Activity</h2>
-                <div class="section-note">รายการงานทั้งหมดและผลลัพธ์ล่าสุด</div>
+                <div class="section-note">All tasks and their latest results</div>
             </div>
-            <div class="refresh-label"><i class="bi bi-arrow-repeat"></i> รีเฟรชทุก 1 วินาที</div>
+            <div class="refresh-label"><i class="bi bi-broadcast"></i> Live updates via SSE</div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
-                    <tr>
-                        <th>Task ID</th>
-                        <th>Status</th>
-                        <th>Detail / Result</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
+                <tr>
+                    <th>Task ID</th>
+                    <th>Status</th>
+                    <th>Detail / Result</th>
+                    <th class="text-end">Actions</th>
+                </tr>
                 </thead>
                 <tbody id="task-table-body">
-                    <tr><td colspan="4" class="empty-state"><i class="bi bi-hourglass-split"></i>กำลังโหลดข้อมูล...</td></tr>
+                <tr>
+                    <td colspan="4" class="empty-state"><i class="bi bi-hourglass-split"></i>Loading data...</td>
+                </tr>
                 </tbody>
             </table>
         </div>
     </section>
-    <div class="footer-note"><i class="bi bi-shield-check me-1"></i> Thread Monitor Dashboard · Real-time task management</div>
+    <div class="footer-note"><i class="bi bi-shield-check me-1"></i> Thread Monitor Dashboard · Real-time task
+        management
+    </div>
 </main>
 
 <script>
@@ -156,15 +395,15 @@
         return `<span class="badge rounded-pill ${classes[status] || 'status-pending'}">${escapeHTML(status)}</span>`;
     }
 
-    async function fetchStatus() {
+    function initEventStream() {
         const tbody = document.getElementById('task-table-body');
-        try {
-            const response = await fetch('/api/status');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+        const source = new EventSource('/api/status');
+
+        source.onmessage = function (event) {
+            const data = JSON.parse(event.data);
 
             if (!Array.isArray(data) || data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-inbox"></i>ยังไม่มีงานในระบบ</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-inbox"></i>No tasks in the system</td></tr>`;
                 return;
             }
 
@@ -181,18 +420,17 @@
                 }
 
                 return `<tr>
-                    <td><span class="task-id">${id}</span></td>
-                    <td>${getStatusBadge(status)}</td>
-                    <td><div class="detail">${escapeHTML(info)}</div></td>
-                    <td class="text-end">${actionButton}</td>
-                </tr>`;
+            <td><span class="task-id">${id}</span></td>
+            <td>${getStatusBadge(status)}</td>
+            <td><div class="detail">${escapeHTML(info)}</div></td>
+            <td class="text-end">${actionButton}</td>
+        </tr>`;
             }).join('');
-        } catch (error) {
-            console.error('Error fetching status:', error);
-            if (!tbody.dataset.hasData) {
-                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-triangle"></i>ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการเชื่อมต่อ</td></tr>`;
-            }
-        }
+        };
+
+        source.onerror = function () {
+            tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="bi bi-exclamation-triangle"></i>Connection lost. Attempting to reconnect...</td></tr>`;
+        };
     }
 
     async function sendAction(taskId, actionType) {
@@ -203,15 +441,13 @@
                 body: JSON.stringify({task_id: taskId, action: actionType})
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            await fetchStatus();
         } catch (error) {
             console.error('Error sending task action:', error);
-            alert('ดำเนินการไม่สำเร็จ กรุณาลองอีกครั้ง');
+            alert('Action failed. Please try again.');
         }
     }
 
-    fetchStatus();
-    setInterval(fetchStatus, 1000);
+    initEventStream();
 </script>
 </body>
 </html>

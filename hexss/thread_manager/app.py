@@ -1,7 +1,16 @@
 import json
 import time
-from flask import Flask, render_template, request, jsonify, Response
-from waitress import serve
+import hexss
+from hexss.constants import *
+
+try:
+    from flask import Flask, render_template, request, jsonify, Response
+    from waitress import serve
+except ImportError:
+    hexss.check_packages('Flask', 'waitress', auto_install=True)
+    from flask import Flask, render_template, request, jsonify, Response
+    from waitress import serve
+
 
 def run_server(manager, host='0.0.0.0', port=2000):
     app = Flask(__name__)
@@ -36,5 +45,11 @@ def run_server(manager, host='0.0.0.0', port=2000):
 
         return jsonify({"success": True})
 
-    print(f"🌐 Web Monitor started at: http://127.0.0.1:{port} (Silent Mode)")
+    if host != '0.0.0.0':
+        print(f'🌐 {CYAN}Web Monitor started at: http://{host}:{port}{END}')
+    else:
+        print(f'🌐 {CYAN}Web Monitor started at:{END}')
+        for _host in hexss.network.get_local_ipv4_hosts():
+            print(f'http://{_host}:{port}')
+
     serve(app, host=host, port=port)

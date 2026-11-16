@@ -1,13 +1,16 @@
 import platform
 
 if platform.system() == 'Windows':
-    from ._winkeyboard import keyboard as _win_kb
+    from ._winkeyboard import keyboard as _kb
     from ._winkeyboard import Listener
+elif platform.system() == 'Linux':
+    from ._nixkeyboard import keyboard as _kb
+    from ._nixkeyboard import Listener
 else:
-    raise NotImplementedError("Currently, only Windows is supported.")
+    raise NotImplementedError(f"Currently, {platform.system()} is not supported.")
 
 
-press = _win_kb.press
-release = _win_kb.release
-send = _win_kb.send
-write = _win_kb.write
+press = _kb.press
+release = _kb.release
+send = _kb.send
+write = _kb.write

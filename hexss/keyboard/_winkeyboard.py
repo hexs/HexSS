@@ -244,6 +244,13 @@ class Listener(threading.Thread):
         self.hook_id = None
         self._hook_proc_pointer = None
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
+
     def run(self):
         self.thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
         self._hook_proc_pointer = HOOKPROC(self._hook_proc)

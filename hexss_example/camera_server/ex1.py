@@ -22,4 +22,4 @@ if __name__ == '__main__':
     # shutdown_camera_server()
     # or
     # from hexss.network import kill_process_on_port
-    # kill_process_on_port(2000)
+    # kill_process_on_port(2002)

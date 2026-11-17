@@ -397,15 +397,24 @@ def is_server_running(port):
     return False
 
 
-def run(profile_name="default", background=False, port: Optional[int] = None):
+def run(host: Optional[str] = None, port: Optional[int] = None, background=False, profile_name="default"):
     c = Config(get_hexss_dir() / 'config/camera_server/cfg.py')
-    host = c.host = c.host or '0.0.0.0'
-    port = c.port = port or c.port or 2002
+    c.host = c.host or '0.0.0.0'
+    c.port = c.port or 2002
+    host = host or c.host
+    port = port or c.port
 
     if is_server_running(port):
         print(f"[*] Camera Server is already running on background at http://127.0.0.1:{port}")
         print("[*] Skipped creating a new process.")
         return
+    txt = ''
+    if host != '0.0.0.0':
+        txt += f'🌐 {CYAN}Camera server started at: http://{host}:{port}{END}\n'
+    else:
+        txt += f'🌐 {CYAN}Camera server started at:{END}\n'
+        for _host in hexss.network.get_local_ipv4_hosts():
+            txt += f'http://{_host}:{port}\n'
 
     if background:
         script = f"from hexss import camera_server; camera_server.run(profile_name='{profile_name}', background=False, port={port})"
@@ -417,16 +426,9 @@ def run(profile_name="default", background=False, port: Optional[int] = None):
         else:
             subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        print(f"[*] Camera Server started in background at http://127.0.0.1:{port}")
+        print(end=txt)
         return
 
-    execute_start_node(profile_name)
-    txt = ''
-    if host != '0.0.0.0':
-        txt += f'🌐 {CYAN}Camera server started at: http://{host}:{port}{END}\n'
-    else:
-        txt += f'🌐 {CYAN}Camera server started at:{END}\n'
-        for _host in hexss.network.get_local_ipv4_hosts():
-            txt += f'http://{_host}:{port}\n'
     print(end=txt)
+    execute_start_node(profile_name)
     app.run(host=host, port=port, debug=False, use_reloader=False)

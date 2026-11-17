@@ -19,3 +19,9 @@ include hexss/threading/templates/*.html
 include hexss/example/templates/index.html
 
 include hexss/modbus/serial/templates/*.html
+
+recursive-include hexss/file_manager_server/templates *
+recursive-include hexss/file_manager_server/static *
+
+recursive-include hexss/camera_server/templates *
+recursive-include hexss/camera_server/static *

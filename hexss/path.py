@@ -224,28 +224,125 @@ def shorten(
     return f"{leading_str}{sep}{trailing}"
 
 
+_WIN_DRIVE_TYPES = {
+    0: "Unknown",
+    1: "No Root Directory",
+    2: "Removable",
+    3: "Fixed",
+    4: "Network",
+    5: "CD/DVD",
+    6: "RAM Disk",
+}
+
+# filesystem ที่เป็นเครือข่าย
+_NETWORK_FS = {
+    "nfs", "nfs4", "cifs", "smb3", "smbfs", "sshfs", "fuse.sshfs",
+    "afs", "ceph", "glusterfs", "fuse.glusterfs", "9p", "davfs",
+}
+
+# filesystem เสมือน ไม่ใช่ไดรฟ์จริง
+_PSEUDO_FS = {
+    "proc", "sysfs", "devtmpfs", "devpts", "cgroup", "cgroup2", "securityfs",
+    "debugfs", "tracefs", "configfs", "fusectl", "pstore", "bpf", "mqueue",
+    "hugetlbfs", "autofs", "binfmt_misc", "rpc_pipefs", "nsfs", "overlay",
+    "squashfs", "efivarfs", "selinuxfs", "ramfs",
+}
+
+
+def _unescape_mount(s: str) -> str:
+    return (s.replace("\\040", " ").replace("\\011", "\t")
+            .replace("\\012", "\n").replace("\\134", "\\"))
+
+
+def _block_base(dev: str):
+    name = os.path.basename(os.path.realpath(dev))
+    if not name:
+        return None
+    sys_path = f"/sys/class/block/{name}"
+    if not os.path.exists(sys_path):
+        return None
+    if os.path.exists(os.path.join(sys_path, "partition")):
+        return os.path.basename(os.path.dirname(os.path.realpath(sys_path)))
+    return name
+
+
+def _read_sys(path: str):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _linux_drive_type(dev: str, fstype: str) -> str:
+    if fstype in _NETWORK_FS:
+        return "Network"
+    if fstype in ("iso9660", "udf"):
+        return "CD/DVD"
+    if fstype == "tmpfs":
+        return "RAM Disk"
+
+    base = _block_base(dev) if dev.startswith("/dev/") else None
+    if base is None:
+        return "Unknown"
+    if base.startswith("ram") or base.startswith("zram"):
+        return "RAM Disk"
+    if base.startswith("sr"):
+        return "CD/DVD"
+
+    sys_base = f"/sys/class/block/{base}"
+    if _read_sys(f"{sys_base}/removable") == "1":
+        return "Removable"
+    if "/usb" in os.path.realpath(sys_base):
+        return "Removable"
+    return "Fixed"
+
+
 def list_drives():
     system = platform.system()
-    if system == 'Windows':
-        _DRIVE_TYPES = {
-            0: "Unknown",
-            1: "No Root Directory",
-            2: "Removable",
-            3: "Fixed",
-            4: "Network",
-            5: "CD/DVD",
-            6: "RAM Disk"
-        }
+
+    if system == "Windows":
         drives = []
         mask = ctypes.windll.kernel32.GetLogicalDrives()
-        for i, letter in enumerate('ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+        for i, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
             if mask & (1 << i):
                 path = f"{letter}:\\"
                 dtype = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(path))
-                drives.append({"path": path, "type": _DRIVE_TYPES.get(dtype, "Unknown")})
+                drives.append({"path": path, "type": _WIN_DRIVE_TYPES.get(dtype, "Unknown")})
         return drives
-    elif system == 'Linux':
-        ...
+
+    if system == "Linux":
+        drives, seen = [], set()
+        with open("/proc/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                dev, mount, fstype = parts[0], _unescape_mount(parts[1]), parts[2]
+                if fstype in _PSEUDO_FS or mount in seen:
+                    continue
+                if fstype == "tmpfs" and mount.startswith(("/run", "/sys", "/dev", "/proc")):
+                    continue
+                if not (dev.startswith("/dev/") or fstype in _NETWORK_FS
+                        or fstype.startswith("fuse") or fstype == "tmpfs"):
+                    continue
+                if dev.startswith("/dev/loop") and mount.startswith("/snap/"):
+                    continue
+                seen.add(mount)
+                drives.append({"path": mount, "type": _linux_drive_type(dev, fstype)})
+        return drives
+
+    if system == "Darwin":
+        base = "/Volumes"
+        drives = [{"path": "/", "type": "Fixed"}]
+        if os.path.isdir(base):
+            for name in sorted(os.listdir(base)):
+                p = os.path.join(base, name)
+                if os.path.ismount(p):
+                    drives.append({"path": p, "type": "Unknown"})
+        return drives
+
+    raise NotImplementedError(f"Unsupported platform: {system}")
 
 
 def list_network_shares(server: str):
@@ -347,25 +444,26 @@ def last_component(p: Path) -> str:
     print(last_component(Path(r'C:/')))  # C:\
     print(last_component(Path(r'C:/b')))  # b
 
-    def create_incremental_dir(path_prefix: Path | str):
-        target = Path(path_prefix)
-        parent = target.parent
-        prefix = target.name
 
-        existing_nums = []
+def create_incremental_dir(path_prefix: Path | str):
+    target = Path(path_prefix)
+    parent = target.parent
+    prefix = target.name
 
-        if parent.exists():
-            for p in parent.glob(f'{prefix}*'):
-                suffix = p.name[len(prefix):]
-                if suffix.isdigit():
-                    existing_nums.append(int(suffix))
+    existing_nums = []
 
-        next_num = max(existing_nums, default=0) + 1
+    if parent.exists():
+        for p in parent.glob(f'{prefix}*'):
+            suffix = p.name[len(prefix):]
+            if suffix.isdigit():
+                existing_nums.append(int(suffix))
 
-        new_path = parent / f"{prefix}{next_num}"
-        new_path.mkdir(parents=True, exist_ok=True)
+    next_num = max(existing_nums, default=0) + 1
 
-        return new_path
+    new_path = parent / f"{prefix}{next_num}"
+    new_path.mkdir(parents=True, exist_ok=True)
+
+    return new_path
 
 
 if __name__ == "__main__":

@@ -1,11 +1,105 @@
 import argparse
 import os
+import sys
 import importlib
 
 import hexss
 from hexss.constants.terminal_color import *
 from hexss import hexss_dir, json_load, json_update
 from hexss.config import list_config_files
+
+
+def _read_key():
+    """Return 'up', 'down', 'home', 'end', 'enter', 'esc' or the character pressed."""
+    if os.name == 'nt':
+        import msvcrt
+        ch = msvcrt.getwch()
+        if ch in ('\x00', '\xe0'):  # special key prefix (arrows etc.)
+            return {'H': 'up', 'P': 'down', 'G': 'home', 'O': 'end'}.get(msvcrt.getwch(), '')
+        if ch in ('\r', '\n'):
+            return 'enter'
+        if ch == '\x1b':
+            return 'esc'
+        if ch == '\x03':
+            raise KeyboardInterrupt
+        return ch
+    else:
+        import termios, tty, select
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            if ch == '\x1b':
+                if select.select([sys.stdin], [], [], 0.05)[0]:
+                    seq = sys.stdin.read(2)
+                    return {'[A': 'up', '[B': 'down', '[H': 'home', '[F': 'end'}.get(seq, '')
+                return 'esc'
+            if ch in ('\r', '\n'):
+                return 'enter'
+            if ch == '\x03':
+                raise KeyboardInterrupt
+            return ch
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _numeric_menu(options, title):
+    """Fallback menu: type a number (used when stdin is not a real terminal)."""
+    print(title)
+    for i, option in enumerate(options, 1):
+        print(f"({i:{int(len(options) / 10) + 1}}) {option}")
+    try:
+        choice = int(input(">> ").strip())
+    except (ValueError, EOFError, KeyboardInterrupt):
+        return None
+    if 1 <= choice <= len(options):
+        return options[choice - 1]
+    return None
+
+
+def select_menu(options, title='Choose an option:'):
+    """Arrow-key menu. Returns the selected option, or None if cancelled."""
+    if not sys.stdin.isatty():
+        return _numeric_menu(options, title)
+
+    os.system('')  # enable ANSI escape codes on Windows terminals
+    index = 0
+    print(title + '  (↑/↓ move, Enter select, Esc/q quit)')
+    sys.stdout.write('\x1b[?25l')  # hide cursor
+
+    def draw(first=False):
+        if not first:
+            sys.stdout.write(f'\x1b[{len(options)}A')  # move cursor back up
+        for i, opt in enumerate(options):
+            line = f'{CYAN}> {opt}{END}' if i == index else f'  {opt}'
+            sys.stdout.write('\r\x1b[2K' + line + '\n')
+        sys.stdout.flush()
+
+    try:
+        draw(first=True)
+        while True:
+            key = _read_key()
+            if key == 'up':
+                index = (index - 1) % len(options)
+            elif key == 'down':
+                index = (index + 1) % len(options)
+            elif key == 'home':
+                index = 0
+            elif key == 'end':
+                index = len(options) - 1
+            elif key == 'enter':
+                return options[index]
+            elif key in ('esc', 'q', 'Q'):
+                return None
+            else:
+                continue
+            draw()
+    except KeyboardInterrupt:
+        return None
+    finally:
+        sys.stdout.write('\x1b[?25h')  # show cursor again
+        sys.stdout.flush()
 
 
 def show_config(data, keys):
@@ -98,21 +192,9 @@ def run_config(args):
             print('No configuration file found.')
             return
 
-        print('Choose a configuration file:')
-        for i, config_file in enumerate(list_config, start=1):
-            print(f'({i}) {config_file}')
-
-        try:
-            choice = int(input(">> ").strip())
-            if choice == 0:
-                print("Exiting.")
-                return
-            elif choice <= len(list_config):
-                file_name = list_config[choice - 1]
-            else:
-                print("Invalid choice. Exiting.")
-                return
-        except:
+        file_name = select_menu(list_config, 'Choose a configuration file:')
+        if file_name is None:
+            print("Exiting.")
             return
 
     cfg_path = hexss_dir / 'config' / f'{file_name}.json'
@@ -176,6 +258,60 @@ def get_details():
     print('script dir       :', hexss.path.get_script_dir())
 
 
+def file_manager_menu():
+    """Sub-menu for file_manager_server. Only offers actions that make sense right now."""
+    fm = importlib.import_module('hexss.file_manager_server.app')
+    port = fm.load_config().port
+
+    def start(background, kill):
+        fm.run(background=background, kill_port_process=kill or None)
+
+    def stop():
+        if fm.stop_server(port):
+            print(f'Stopped file manager server on port {port}.')
+        else:
+            print(f'Could not stop the server on port {port}.')
+
+    def restart():
+        stop()
+        start(background=True, kill=False)
+
+    if fm.is_server_running(port):
+        status = f'running on port {port}'
+        actions = {
+            'stop server': stop,
+            'restart (background)': restart,
+        }
+    elif fm.is_port_in_use(port):
+        status = f'port {port} is used by another process'
+        actions = {
+            'run + kill port process': lambda: start(False, True),
+            'run in background + kill port process': lambda: start(True, True),
+        }
+    else:
+        status = 'not running'
+        actions = {
+            'run': lambda: start(False, False),
+            'run in background': lambda: start(True, False),
+        }
+
+    choice = select_menu(list(actions), f'file_manager_server ({status}):')
+    if choice is None:
+        print("Exiting.")
+        return
+    actions[choice]()
+
+
+def run_file_manager_server(args):
+    """Handler for 'file_manager_server' command (default: background, like before)."""
+    fm = importlib.import_module('hexss.file_manager_server.app')
+    if args.stop:
+        port = fm.load_config().port
+        print('Stopped.' if fm.stop_server(port) else f'Could not stop the server on port {port}.')
+        return
+    fm.run(background=not args.foreground, kill_port_process=args.kill_port_process or None)
+
+
 def show_menu():
     options = [
         'camera_server',
@@ -190,28 +326,18 @@ def show_menu():
 
         'details'
     ]
-    print("Choose an option:")
-    for i, option in enumerate(options, 1):
-        print(f"({i:{int(len(options) / 10) + 1}}) {option}")
 
-    try:
-        choice = input(">> ").strip()
-        choice = int(choice)
-        if choice == 0:
-            print("Exiting.")
-            return
+    action = select_menu(options)
+    if action is None:
+        print("Exiting.")
+        return
 
-        elif choice <= len(options):
-            action = options[choice - 1]
-            main_args = [action]
+    if action == 'file_manager_server':
+        file_manager_menu()
+        return
 
-            import sys
-            sys.argv = [sys.argv[0]] + main_args
-            main()
-        else:
-            print("Invalid choice. Exiting.")
-    except:
-        pass
+    sys.argv = [sys.argv[0], action]
+    main()
 
 
 def main():
@@ -250,7 +376,7 @@ def main():
         aliases=['camera-server'],
         help='run the camera server'
     )
-    cs.set_defaults(func=lambda args: importlib.import_module('hexss.server.camera_server').run())
+    cs.set_defaults(func=lambda args: importlib.import_module('hexss.camera_server').run())
 
     # file_manager_server
     fm = subparsers.add_parser(
@@ -258,7 +384,10 @@ def main():
         aliases=['file-manager-server'],
         help='run the file manager server'
     )
-    fm.set_defaults(func=lambda args: importlib.import_module('hexss.server.file_manager_server').run())
+    fm.add_argument('-f', '--foreground', action='store_true', help='run in the foreground (default: background)')
+    fm.add_argument('-k', '--kill-port-process', action='store_true', help='kill the process using the port first')
+    fm.add_argument('--stop', action='store_true', help='stop the running server')
+    fm.set_defaults(func=run_file_manager_server)
 
     fp = subparsers.add_parser(
         'labeler_server',

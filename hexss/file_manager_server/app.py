@@ -3,12 +3,14 @@ import os
 import platform
 import re
 import shutil
+import socket
 import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -16,11 +18,12 @@ from typing import Optional
 import hexss
 from hexss import Config
 from hexss.constants import *
+from hexss.network import get_local_ipv4_hosts, kill_process_on_port
 from hexss.path import iterdir, list_drives, last_component, get_hexss_dir
 
 hexss.check_packages('Flask', auto_install=True, venv_only=False)
+sys.stdout.reconfigure(encoding='utf-8')
 
-from hexss.network import kill_process_on_port
 from flask import Flask, request, send_file, redirect, url_for, jsonify, abort
 
 app = Flask(__name__)
@@ -133,6 +136,11 @@ def path(subpath=''):
 
 
 # ---------------------------------------------------------------- APIs
+@app.route('/api/status', methods=['GET'])
+def server_status():
+    return jsonify({"success": True, "status": "running", "message": "..."})
+
+
 @app.route('/api/get_list_dir')
 def listdir():
     try:
@@ -366,25 +374,74 @@ def shutdown_server():
     return jsonify(success=True)
 
 
-def run(host: Optional[str] = None, port: Optional[int] = None, background=False):
-    global ALLOWED_NETS
+def is_server_running(port):
+    try:
+        url = f"http://127.0.0.1:{port}/api/status"
+        req = urllib.request.Request(url, method='GET')
+        with urllib.request.urlopen(req, timeout=1) as response:
+            if response.status == 200:
+                return True
+    except Exception:
+        return False
+    return False
 
+
+def load_config():
     c = Config(get_hexss_dir() / 'config/file_manager_server.py')
     c.host = c.host or '0.0.0.0'
     c.port = c.port or 2001
     if c.kill_port_process is None:
-        c.kill_port_process = True  # True = ฆ่า process ที่ใช้พอร์ตนี้อยู่ก่อนสตาร์ต
-    c.allowed_networks = c.allowed_networks or []  # เช่น ["127.0.0.1/32", "192.168.1.0/24"]; ว่าง = ทุก IP
+        c.kill_port_process = False
+    c.allowed_networks = c.allowed_networks or []  # เช่น ["127.0.0.1/32", "192.168.1.0/24"]; ว่าง = ทุก IP'
+    return c
+
+
+def is_port_in_use(port, host='127.0.0.1'):
+    """True if something is already listening on the port (any program)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
+def stop_server(port, timeout=3.0):
+    """Ask the running file manager server to shut down. Returns True when it is gone."""
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/shutdown",
+            data=b'', method='POST',
+            headers={'X-Requested-With': 'XMLHttpRequest'},  # required by guard()
+        )
+        urllib.request.urlopen(req, timeout=2).close()
+    except Exception:
+        pass  # the server may drop the connection while exiting
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not is_server_running(port):
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def run(
+        host: Optional[str] = None, port: Optional[int] = None,
+        background=False,
+        kill_port_process: Optional[bool] = None
+):
+    global ALLOWED_NETS
+
+    c = load_config()
 
     host = host or c.host
     port = port or c.port
+    kill_port_process = kill_port_process or c.kill_port_process
 
     txt = ''
     if host != '0.0.0.0':
         txt += f'🌐 {CYAN}File manager server started at: http://{host}:{port}{END}\n'
     else:
         txt += f'🌐 {CYAN}File manager server started at:{END}\n'
-        for _host in hexss.network.get_local_ipv4_hosts():
+        for _host in get_local_ipv4_hosts():
             txt += f'http://{_host}:{port}\n'
 
     if background:
@@ -393,6 +450,8 @@ def run(host: Optional[str] = None, port: Optional[int] = None, background=False
         log_path = log_dir / 'file_manager_server.log'
 
         cmd = [sys.executable, '-u', str(Path(__file__).resolve()), '--host', host, '--port', str(port)]
+        if kill_port_process:
+            cmd.append('--kill-port-process')
         kwargs = {}
         if platform.system() == 'Windows':
             # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
@@ -412,8 +471,12 @@ def run(host: Optional[str] = None, port: Optional[int] = None, background=False
 
     ALLOWED_NETS = [ipaddress.ip_network(n, strict=False) for n in c.allowed_networks]
 
-    if c.kill_port_process:
+    if kill_port_process:
         kill_process_on_port(port, host)
+    elif is_server_running(port):
+        print(f"[*] File manager server is already running on background at http://127.0.0.1:{port}")
+        print("[*] Skipped creating a new process.")
+        return
 
     print(end=txt)
 
@@ -431,5 +494,6 @@ if __name__ == '__main__':
     ap.add_argument('--host')
     ap.add_argument('--port', type=int)
     ap.add_argument('--background', action='store_true')
+    ap.add_argument('--kill-port-process', action='store_true')
     args = ap.parse_args()
-    run(host=args.host, port=args.port, background=args.background)
+    run(host=args.host, port=args.port, background=args.background, kill_port_process=args.kill_port_process or None)

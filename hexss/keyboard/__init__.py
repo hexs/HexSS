@@ -14,3 +14,4 @@ press = _kb.press
 release = _kb.release
 send = _kb.send
 write = _kb.write
+is_pressed = _kb.is_pressed

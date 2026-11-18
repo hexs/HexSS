@@ -29,6 +29,10 @@ REV_E0_MAP = {v: k for k, v in E0_MAP.items()}
 
 SCAN_CODES = {}
 CHAR_TO_CODE_SHIFT = {}
+KEY_NAME_TO_SCANCODE = {}
+for _sc, _data in KEY_MAPPINGS.items():
+    for _name in _data['name']:
+        KEY_NAME_TO_SCANCODE[_name.lower()] = _sc
 
 for scancode, data in KEY_MAPPINGS.items():
     linux_code = scancode
@@ -153,6 +157,20 @@ class keyboard:
                     pass
             time.sleep(interval)
 
+    @classmethod
+    def is_pressed(cls, key: str = None, scancode: int = None) -> bool:
+        if (key is None) == (scancode is None):
+            raise ValueError("Specify exactly one of `key` or `scancode`.")
+
+        if scancode is None:
+            name = key.lower()
+            if name not in KEY_NAME_TO_SCANCODE:
+                raise ValueError(f"Unknown key: {key}")
+            scancode = KEY_NAME_TO_SCANCODE[name]
+
+        _start_monitor()
+        return scancode in _pressed_scancodes
+
 
 class Key:
     def __init__(self, vk, scancode, unicode_char, mod=0, flags=0):
@@ -260,3 +278,20 @@ class Listener(threading.Thread):
 
     def stop(self):
         self._stop_event.set()
+
+
+_pressed_scancodes = set()
+_monitor = None
+_monitor_lock = threading.Lock()
+
+
+def _start_monitor():
+    global _monitor
+    with _monitor_lock:
+        if _monitor is None:
+            ensure_root()
+            _monitor = Listener(
+                on_press=lambda k: _pressed_scancodes.add(k.scancode),
+                on_release=lambda k: _pressed_scancodes.discard(k.scancode),
+            )
+            _monitor.start()

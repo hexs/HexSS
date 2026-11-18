@@ -2,6 +2,8 @@ import ctypes
 from ctypes import wintypes
 import time
 import threading
+from typing import Optional
+
 from .key_mappings import KEY_MAPPINGS, EXTENDED_KEYS
 
 # --- CTYPES STRUCTURES ---
@@ -189,6 +191,29 @@ class keyboard:
             cls._release_key(SCAN_CODES[hotkey], is_extended=is_ext)
         else:
             print(f"[Error] Unknown key: {hotkey}")
+
+    @classmethod
+    def is_pressed(cls, key: Optional[str | int] = None,  vk: Optional[int] = None) -> bool:
+        if (key or vk) is None:
+            raise ValueError("...")
+        if isinstance(key, str):
+            name = key.lower()
+            if name not in SCAN_CODES:
+                raise ValueError(f"Unknown key: {key}")
+            scancode = SCAN_CODES[name]
+        elif isinstance(key, int):
+            scancode = key
+
+        mapping = KEY_MAPPINGS.get(scancode)
+        if mapping:
+            vk = mapping['vk']
+        else:
+            # MAPVK_VSC_TO_VK_EX = 3
+            vk = ctypes.windll.user32.MapVirtualKeyW(scancode & 0xFF, 3)
+        if not vk:
+            raise ValueError(f"Unknown scancode: {hex(scancode)}")
+
+        return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
 
 class KBDLLHOOKSTRUCT(ctypes.Structure):

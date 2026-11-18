@@ -158,10 +158,31 @@ KEY_MAPPINGS = {
     0xE11D: {'vk': 0x13, 'name': ['PAUSE']}
 }
 
-
 EXTENDED_KEYS = {
     'right ctrl', 'right alt', 'up', 'down', 'left', 'right',
     'win', 'left win', 'right win', 'home', 'end', 'ins', 'del', 'pgup', 'pgdn'
 }
 
 SHIFT_CHARS = set('~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+if __name__ == '__main__':
+    import ctypes
+    import platform
+
+    if platform.system() == 'Windows':
+        valid_scancodes = list(range(0x01, 0x80)) + list(range(0xE001, 0xE080)) + [0xE11D]
+        for scancode in valid_scancodes:
+            vk = ctypes.windll.user32.MapVirtualKeyW(scancode, 3)
+
+            buffer = ctypes.create_unicode_buffer(256)
+            lParam = (scancode & 0xFF) << 16
+            if (scancode & 0xFF00) in (0xE000, 0xE100):
+                lParam |= (1 << 24)
+
+            ctypes.windll.user32.GetKeyNameTextW(lParam, buffer, 256)
+            name = buffer.value
+
+            if vk == 0 and name == '':
+                continue
+
+            print(f"{hex(scancode):<8} {hex(vk):<8} {name}")

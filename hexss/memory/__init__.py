@@ -1,1 +1,2 @@
-from hexss.memory.utils import Memory
+from .memory import Memory, Address
+from .pointer_scanner import PointerScanner

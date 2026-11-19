@@ -29,12 +29,21 @@ def _read_key():
         old = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
-            ch = sys.stdin.read(1)
+            ch = os.read(fd, 1).decode('utf-8', errors='ignore')
             if ch == '\x1b':
-                if select.select([sys.stdin], [], [], 0.05)[0]:
-                    seq = sys.stdin.read(2)
-                    return {'[A': 'up', '[B': 'down', '[H': 'home', '[F': 'end'}.get(seq, '')
-                return 'esc'
+                seq = ''
+                while select.select([fd], [], [], 0.05)[0]:
+                    seq += os.read(fd, 1).decode('utf-8', errors='ignore')
+                    if len(seq) >= 2 and seq[-1].isalpha() or seq[-1:] == '~':
+                        break
+                if not seq:
+                    return 'esc'
+                return {
+                    '[A': 'up', 'OA': 'up',
+                    '[B': 'down', 'OB': 'down',
+                    '[H': 'home', 'OH': 'home', '[1~': 'home', '[7~': 'home',
+                    '[F': 'end', 'OF': 'end', '[4~': 'end', '[8~': 'end',
+                }.get(seq, '')
             if ch in ('\r', '\n'):
                 return 'enter'
             if ch == '\x03':

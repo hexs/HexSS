@@ -1,6 +1,7 @@
 import json
 import time
 import cv2
+import hexss
 from hexss.image import get_image
 from hexss.image.func import numpy_to_pygame_surface
 from hexss.multiprocessing import Multicore
@@ -26,6 +27,7 @@ def predict(data):
 
 
 def show(data):
+    hexss.check_packages('pygame', 'pygame-gui',auto_install=True)
     import pygame
     from pygame import Rect
     from pygame_gui import UIManager

@@ -1,5 +1,23 @@
 # https://kbdlayout.info/kbdusx/virtualkeys+scancodes?arrangement=ANSI104
 
+# --- MODIFIER BITMASKS (SDL/Pygame KMOD compatible) ---
+MOD_NONE = 0
+MOD_LSHIFT = 1 << 0  # 1
+MOD_RSHIFT = 1 << 1  # 2
+MOD_SHIFT = MOD_LSHIFT | MOD_RSHIFT
+MOD_LCTRL = 1 << 6  # 64
+MOD_RCTRL = 1 << 7  # 128
+MOD_CTRL = MOD_LCTRL | MOD_RCTRL
+MOD_LALT = 1 << 8  # 256
+MOD_RALT = 1 << 9  # 512
+MOD_ALT = MOD_LALT | MOD_RALT
+MOD_LWIN = 1 << 10  # 1024
+MOD_RWIN = 1 << 11  # 2048
+MOD_WIN = MOD_LWIN | MOD_RWIN
+MOD_NUMLOCK = 1 << 12  # 4096
+MOD_CAPSLOCK = 1 << 13  # 8192
+MOD_SCROLLLOCK = 1 << 15  # 32768
+
 KEY_MAPPINGS = {
     0x01: {'vk': 0x1B, 'name': ['ESCAPE', 'Esc']},
     0x02: {'vk': 0x31, 'name': ['1', '!']},
@@ -29,7 +47,7 @@ KEY_MAPPINGS = {
     0x1A: {'vk': 0xDB, 'name': ['OEM_4', '[', '{']},
     0x1B: {'vk': 0xDD, 'name': ['OEM_6', ']', '}']},
     0x1C: {'vk': 0x0D, 'name': ['RETURN', 'Enter']},
-    0x1D: {'vk': 0xA2, 'name': ['LCONTROL', 'LCtrl', 'left ctrl', 'ctrl']},
+    0x1D: {'vk': 0xA2, 'name': ['lctrl', 'ctrl', 'left ctrl', 'lcontrol']},
     0x1E: {'vk': 0x41, 'name': ['A']},
     0x1F: {'vk': 0x53, 'name': ['S']},
     0x20: {'vk': 0x44, 'name': ['D']},
@@ -42,7 +60,7 @@ KEY_MAPPINGS = {
     0x27: {'vk': 0xBA, 'name': ['OEM_1', ';', ':']},
     0x28: {'vk': 0xDE, 'name': ['OEM_7', "'", '"']},
     0x29: {'vk': 0xC0, 'name': ['OEM_3', '`', '~']},
-    0x2A: {'vk': 0xA0, 'name': ['LSHIFT', 'LShift', 'left shift', 'shift']},
+    0x2A: {'vk': 0xA0, 'name': ['lshift', 'shift', 'left shift']},
     0x2B: {'vk': 0xDC, 'name': ['OEM_5', '\\', '|']},
     0x2C: {'vk': 0x5A, 'name': ['Z']},
     0x2D: {'vk': 0x58, 'name': ['X']},
@@ -54,11 +72,11 @@ KEY_MAPPINGS = {
     0x33: {'vk': 0xBC, 'name': ['OEM_COMMA', ',', '<']},
     0x34: {'vk': 0xBE, 'name': ['OEM_PERIOD', '.', '>']},
     0x35: {'vk': 0xBF, 'name': ['OEM_2', '/', '?']},
-    0x36: {'vk': 0xA1, 'name': ['RSHIFT', 'RShift', 'right shift']},
-    0x37: {'vk': 0x6A, 'name': ['MULTIPLY', 'Keypad-*', 'PrtScn']},
-    0x38: {'vk': 0xA4, 'name': ['LMENU', 'LAlt', 'left alt', 'alt']},
+    0x36: {'vk': 0xA1, 'name': ['rshift', 'right shift']},
+    0x37: {'vk': 0x6A, 'name': ['MULTIPLY', 'Keypad-*']},
+    0x38: {'vk': 0xA4, 'name': ['lalt', 'alt', 'left alt', 'lmenu']},
     0x39: {'vk': 0x20, 'name': ['SPACE', 'Space', 'space bar']},
-    0x3A: {'vk': 0x14, 'name': ['CAPITAL', 'CapsLock']},
+    0x3A: {'vk': 0x14, 'name': ['CAPITAL', 'CapsLock', 'caps lock', 'caps']},
     0x3B: {'vk': 0x70, 'name': ['F1']},
     0x3C: {'vk': 0x71, 'name': ['F2']},
     0x3D: {'vk': 0x72, 'name': ['F3']},
@@ -69,29 +87,29 @@ KEY_MAPPINGS = {
     0x42: {'vk': 0x77, 'name': ['F8']},
     0x43: {'vk': 0x78, 'name': ['F9']},
     0x44: {'vk': 0x79, 'name': ['F10']},
-    0x45: {'vk': 0x90, 'name': ['NUMLOCK', 'NumLock']},
-    0x46: {'vk': 0x91, 'name': ['SCROLL', 'ScrollLock']},
-    0x47: {'vk': 0x24, 'name': ['HOME', 'Keypad-7', 'Home']},
-    0x48: {'vk': 0x26, 'name': ['UP', 'Keypad-8', 'Up']},
-    0x49: {'vk': 0x21, 'name': ['PRIOR', 'Keypad-9', 'PgUp']},
+    0x45: {'vk': 0x90, 'name': ['NUMLOCK', 'NumLock', 'num lock']},
+    0x46: {'vk': 0x91, 'name': ['SCROLL', 'ScrollLock', 'scroll lock']},
+    0x47: {'vk': 0x24, 'name': ['HOME', 'Keypad-7']},
+    0x48: {'vk': 0x26, 'name': ['UP', 'Keypad-8']},
+    0x49: {'vk': 0x21, 'name': ['PRIOR', 'Keypad-9']},
     0x4A: {'vk': 0x6D, 'name': ['SUBTRACT', 'Keypad--']},
-    0x4B: {'vk': 0x25, 'name': ['LEFT', 'Keypad-4', 'Left']},
+    0x4B: {'vk': 0x25, 'name': ['LEFT', 'Keypad-4']},
     0x4C: {'vk': 0x0C, 'name': ['CLEAR', 'Keypad-5']},
-    0x4D: {'vk': 0x27, 'name': ['RIGHT', 'Keypad-6', 'Right']},
+    0x4D: {'vk': 0x27, 'name': ['RIGHT', 'Keypad-6']},
     0x4E: {'vk': 0x6B, 'name': ['ADD', 'Keypad-+']},
-    0x4F: {'vk': 0x23, 'name': ['END', 'Keypad-1', 'End']},
-    0x50: {'vk': 0x28, 'name': ['DOWN', 'Keypad-2', 'Down']},
-    0x51: {'vk': 0x22, 'name': ['NEXT', 'Keypad-3', 'PgDn']},
-    0x52: {'vk': 0x2D, 'name': ['INSERT', 'Keypad-0', 'Ins']},
-    0x53: {'vk': 0x2E, 'name': ['DELETE', 'Keypad-.', 'Del']},
-    0x54: {'vk': 0x2C, 'name': ['SNAPSHOT']},
+    0x4F: {'vk': 0x23, 'name': ['END', 'Keypad-1']},
+    0x50: {'vk': 0x28, 'name': ['DOWN', 'Keypad-2']},
+    0x51: {'vk': 0x22, 'name': ['NEXT', 'Keypad-3']},
+    0x52: {'vk': 0x2D, 'name': ['INSERT', 'Keypad-0']},
+    0x53: {'vk': 0x2E, 'name': ['DELETE', 'Keypad-.']},
+    0x54: {'vk': 0x2C, 'name': ['SYSREQ']},
     0x56: {'vk': 0xE2, 'name': ['OEM_102']},
     0x57: {'vk': 0x7A, 'name': ['F11']},
     0x58: {'vk': 0x7B, 'name': ['F12']},
-    0x59: {'vk': 0x0C, 'name': ['CLEAR']},
+    0x59: {'vk': 0x0C, 'name': ['OEM_CLEAR']},
     0x5A: {'vk': 0xEE, 'name': ['OEM_WSCTRL']},
-    0x5B: {'vk': 0xF1, 'name': ['DBE_KATAKANA', 'Win', 'left win']},
-    0x5C: {'vk': 0xEA, 'name': ['OEM_JUMP', 'right win']},
+    0x5B: {'vk': 0xF1, 'name': ['DBE_KATAKANA']},
+    0x5C: {'vk': 0xEA, 'name': ['OEM_JUMP']},
     0x5D: {'vk': 0xF9, 'name': ['DBE_FLUSHSTRING']},
     0x5E: {'vk': 0xF5, 'name': ['OEM_BACKTAB']},
     0x5F: {'vk': 0xF3, 'name': ['OEM_AUTO']},
@@ -113,14 +131,14 @@ KEY_MAPPINGS = {
     0x73: {'vk': 0xC1, 'name': ['ABNT_C1']},
     0x76: {'vk': 0x87, 'name': ['F24']},
     0x7B: {'vk': 0xEB, 'name': ['OEM_PA1']},
-    0x7C: {'vk': 0x09, 'name': ['TAB']},
+    0x7C: {'vk': 0x09, 'name': ['OEM_TAB']},
     0x7E: {'vk': 0xC2, 'name': ['ABNT_C2']},
 
     # --- Extended Keys ---
     0xE010: {'vk': 0xB1, 'name': ['MEDIA_PREV_TRACK']},
     0xE019: {'vk': 0xB0, 'name': ['MEDIA_NEXT_TRACK']},
-    0xE01C: {'vk': 0x0D, 'name': ['RETURN']},
-    0xE01D: {'vk': 0xA3, 'name': ['RCONTROL', 'right ctrl']},
+    0xE01C: {'vk': 0x0D, 'name': ['KP_ENTER', 'numpad enter', 'kp enter']},
+    0xE01D: {'vk': 0xA3, 'name': ['rctrl', 'right ctrl', 'rcontrol']},
     0xE020: {'vk': 0xAD, 'name': ['VOLUME_MUTE']},
     0xE021: {'vk': 0xB7, 'name': ['LAUNCH_APP2']},
     0xE022: {'vk': 0xB3, 'name': ['MEDIA_PLAY_PAUSE']},
@@ -128,23 +146,23 @@ KEY_MAPPINGS = {
     0xE02E: {'vk': 0xAE, 'name': ['VOLUME_DOWN']},
     0xE030: {'vk': 0xAF, 'name': ['VOLUME_UP']},
     0xE032: {'vk': 0xAC, 'name': ['BROWSER_HOME']},
-    0xE035: {'vk': 0x6F, 'name': ['DIVIDE']},
-    0xE037: {'vk': 0x2C, 'name': ['SNAPSHOT']},
-    0xE038: {'vk': 0xA5, 'name': ['RMENU', 'right alt']},
+    0xE035: {'vk': 0x6F, 'name': ['DIVIDE', 'Keypad-/']},
+    0xE037: {'vk': 0x2C, 'name': ['SNAPSHOT', 'PrtScn', 'print screen']},
+    0xE038: {'vk': 0xA5, 'name': ['ralt', 'right alt', 'rmenu', 'altgr']},
     0xE046: {'vk': 0x03, 'name': ['CANCEL']},
-    0xE047: {'vk': 0x24, 'name': ['HOME']},
+    0xE047: {'vk': 0x24, 'name': ['HOME', 'Home']},
     0xE048: {'vk': 0x26, 'name': ['UP', 'up']},
-    0xE049: {'vk': 0x21, 'name': ['PRIOR', 'pgup']},
+    0xE049: {'vk': 0x21, 'name': ['PRIOR', 'pgup', 'page up']},
     0xE04B: {'vk': 0x25, 'name': ['LEFT', 'left']},
     0xE04D: {'vk': 0x27, 'name': ['RIGHT', 'right']},
     0xE04F: {'vk': 0x23, 'name': ['END', 'end']},
     0xE050: {'vk': 0x28, 'name': ['DOWN', 'down']},
-    0xE051: {'vk': 0x22, 'name': ['NEXT', 'pgdn']},
+    0xE051: {'vk': 0x22, 'name': ['NEXT', 'pgdn', 'page down']},
     0xE052: {'vk': 0x2D, 'name': ['INSERT', 'ins']},
     0xE053: {'vk': 0x2E, 'name': ['DELETE', 'del']},
-    0xE05B: {'vk': 0x5B, 'name': ['LWIN']},
-    0xE05C: {'vk': 0x5C, 'name': ['RWIN']},
-    0xE05D: {'vk': 0x5D, 'name': ['APPS']},
+    0xE05B: {'vk': 0x5B, 'name': ['lmeta', 'meta', 'super', 'win', 'lwin', 'left win', 'cmd']},
+    0xE05C: {'vk': 0x5C, 'name': ['rmeta', 'rsuper', 'rwin', 'right win']},
+    0xE05D: {'vk': 0x5D, 'name': ['APPS', 'menu']},
     0xE05F: {'vk': 0x5F, 'name': ['SLEEP']},
     0xE065: {'vk': 0xAA, 'name': ['BROWSER_SEARCH']},
     0xE066: {'vk': 0xAB, 'name': ['BROWSER_FAVORITES']},
@@ -159,11 +177,137 @@ KEY_MAPPINGS = {
 }
 
 EXTENDED_KEYS = {
-    'right ctrl', 'right alt', 'up', 'down', 'left', 'right',
-    'win', 'left win', 'right win', 'home', 'end', 'ins', 'del', 'pgup', 'pgdn'
+    name.lower()
+    for sc, data in KEY_MAPPINGS.items()
+    if sc >= 0xE000
+    for name in data['name']
 }
 
 SHIFT_CHARS = set('~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+# ---------------------------------------------------------------------------
+# Derived lookup tables — คำนวณจาก KEY_MAPPINGS (แหล่งข้อมูลเดียว ใช้ร่วมทุก backend)
+# ---------------------------------------------------------------------------
+NAME_TO_SCANCODE = {}   # alias (ตัวพิมพ์เล็ก) -> scancode  (ปุ่ม E0 ชนะปุ่ม keypad ที่ชื่อซ้ำ เช่น 'home')
+SCANCODE_TO_VK = {}
+VK_TO_SCANCODES = {}
+for _sc, _data in KEY_MAPPINGS.items():
+    SCANCODE_TO_VK[_sc] = _data['vk']
+    VK_TO_SCANCODES.setdefault(_data['vk'], set()).add(_sc)
+    for _name in _data['name']:
+        NAME_TO_SCANCODE[_name.lower()] = _sc
+
+# ชื่อรวมสำหรับ is_pressed: 'ctrl' = ซ้ายหรือขวาก็ได้ (ส่วน send/press ยังใช้ 'ctrl' = ซ้าย เหมือนเดิม)
+KEY_GROUPS = {
+    'shift': (0x2A, 0x36),
+    'ctrl': (0x1D, 0xE01D),
+    'control': (0x1D, 0xE01D),
+    'alt': (0x38, 0xE038),
+    'win': (0xE05B, 0xE05C),
+    'meta': (0xE05B, 0xE05C),
+    'super': (0xE05B, 0xE05C),
+    'cmd': (0xE05B, 0xE05C),
+}
+
+# ปุ่มบน numpad (ใช้ตัดสินว่า key = SPECIAL | scancode)
+KEYPAD_SCANCODES = frozenset({
+    0x37, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53,
+    0xE01C, 0xE035,
+})
+
+
+def scancode_of(name: str) -> int:
+    """ชื่อ/alias ของปุ่ม -> scancode (ยก ValueError ถ้าไม่รู้จัก)"""
+    try:
+        return NAME_TO_SCANCODE[name.strip().lower()]
+    except KeyError:
+        raise ValueError(f"Unknown key: {name}") from None
+
+
+def resolve_scancodes(key=None, scancode=None, vk=None) -> frozenset:
+    """แปลงอาร์กิวเมนต์ของ is_pressed เป็นชุด scancode (ระบุได้อย่างใดอย่างหนึ่งเท่านั้น)"""
+    if sum(x is not None for x in (key, scancode, vk)) != 1:
+        raise ValueError("Specify exactly one of `key`, `scancode`, or `vk`.")
+    if key is not None:
+        if isinstance(key, str):
+            name = key.strip().lower()
+            if name in KEY_GROUPS:
+                return frozenset(KEY_GROUPS[name])
+            if name in NAME_TO_SCANCODE:
+                return frozenset((NAME_TO_SCANCODE[name],))
+            raise ValueError(f"Unknown key: {key}")
+        if isinstance(key, int):
+            return frozenset((key,))
+        raise TypeError("`key` must be a str or int.")
+    if scancode is not None:
+        return frozenset((scancode,))
+    if vk in VK_TO_SCANCODES:
+        return frozenset(VK_TO_SCANCODES[vk])
+    raise ValueError(f"Unknown vk: {hex(vk)}")
+
+
+# --- ตารางตัวอักษร US layout (ใช้โดย Linux: write() และแปลง scancode -> ตัวอักษร) ---
+# ชื่อตัวอักษรเดี่ยวตัวแรกของปุ่ม = ไม่กด shift, ตัวที่สอง = กด shift
+# (โค้ดเดิมตีว่าทุกชื่อหลัง names[0] ต้องกด shift ทำให้ ; - = [ ] ... ถูกพิมพ์เป็น : _ + { } บน Linux)
+CHAR_TO_KEY = {}      # char -> (scancode, shift)
+KEY_TO_CHARS = {}     # scancode -> (ปกติ, shift หรือ None)
+for _sc, _data in KEY_MAPPINGS.items():
+    _chars = [_n for _n in _data['name'] if len(_n) == 1]
+    if not _chars:
+        continue
+    _base = _chars[0]
+    _shifted = _chars[1] if len(_chars) > 1 else None
+    if _base.isalpha():
+        _base, _shifted = _base.lower(), _base.upper()
+    KEY_TO_CHARS[_sc] = (_base, _shifted)
+    CHAR_TO_KEY[_base] = (_sc, False)
+    if _shifted:
+        CHAR_TO_KEY[_shifted] = (_sc, True)
+CHAR_TO_KEY[' '] = (0x39, False)
+KEY_TO_CHARS[0x39] = (' ', ' ')
+
+CONTROL_CHARS = {0x01: '\x1b', 0x0E: '\x08', 0x0F: '\t', 0x1C: '\r'}
+
+
+def us_char(scancode: int, shift: bool = False, caps: bool = False) -> str:
+    """scancode -> ตัวอักษรตาม US layout ('' ถ้าปุ่มนี้ไม่มีตัวอักษร)"""
+    if scancode in CONTROL_CHARS:
+        return CONTROL_CHARS[scancode]
+    pair = KEY_TO_CHARS.get(scancode)
+    if pair is None:
+        return ''
+    base, shifted = pair
+    if base.isalpha():
+        return shifted if (shift != caps) else base
+    return shifted if (shift and shifted) else base
+
+
+
+def parse_hotkey(hotkey_str: str) -> list[str]:
+    """Parse hotkey string like 'ctrl + shift + a', 'left ctrl + +', or '+'."""
+    if hotkey_str == ' ':
+        return ['space']
+
+    s = hotkey_str.strip().lower()
+    if not s:
+        return []
+    if s == '+':
+        return ['+']
+
+    parts = [p.strip() for p in s.split('+')]
+    keys = []
+    i = 0
+    while i < len(parts):
+        if parts[i] == '':
+            keys.append('+')
+            i += 1
+            if i < len(parts) and parts[i] == '':
+                i += 1
+        else:
+            keys.append(parts[i])
+            i += 1
+    return keys
+
 
 if __name__ == '__main__':
     import ctypes

@@ -1,14 +1,50 @@
-import time
-import threading
+"""Linux
+
+ส่วนส่งปุ่ม (class keyboard)  : uinput — คงพฤติกรรมเดิม (แก้การแมป ; - = [ ] ... ที่เคยผิด)
+ส่วนรับปุ่ม (class Backend)   : evdev -> RawKey  (ตอนนี้ layout/ตัวอักษรเป็น US อย่างเดียว —
+                                 รองรับภาษาไทยบน Linux ต้องต่อ xkbcommon เพิ่ม ดู README)
+ต้องรันด้วย root
+"""
+import fcntl
 import struct
-from ._nixcommon import EV_KEY, aggregate_devices, ensure_root, make_uinput, EV_SYN
-from .key_mappings import KEY_MAPPINGS, EXTENDED_KEYS
+import threading
+import time
+import traceback
+import warnings
+from queue import Empty
+
+from ._nixcommon import (
+    EV_KEY,
+    EV_SYN,
+    VIRTUAL_KEYBOARD_NAME,
+    aggregate_devices,
+    ensure_root,
+    event_bin_format,
+    make_uinput,
+)
+from .events import Layout, RawKey
+from .key_mappings import (
+    CHAR_TO_KEY,
+    MOD_NUMLOCK,
+    MOD_CAPSLOCK,
+    MOD_SCROLLLOCK,
+    SCANCODE_TO_VK,
+    parse_hotkey,
+    scancode_of,
+    us_char,
+)
+
+# Linux evdev EVIOCGLED(2) = _IOR('E', 0x19, 2)
+EVIOCGLED_2 = 0x80024519
+LED_NUML = 0
+LED_CAPSL = 1
+LED_SCROLLL = 2
 
 E0_MAP = {
-    0xE01C: 96,  # KEY_KPENTER
-    0xE01D: 97,  # KEY_RIGHTCTRL
-    0xE035: 98,  # KEY_KPSLASH
-    0xE037: 99,  # KEY_SYSRQ
+    0xE01C: 96,   # KEY_KPENTER
+    0xE01D: 97,   # KEY_RIGHTCTRL
+    0xE035: 98,   # KEY_KPSLASH
+    0xE037: 99,   # KEY_SYSRQ
     0xE038: 100,  # KEY_RIGHTALT
     0xE047: 102,  # KEY_HOME
     0xE048: 103,  # KEY_UP
@@ -24,41 +60,51 @@ E0_MAP = {
     0xE05C: 126,  # KEY_RIGHTMETA
     0xE05D: 127,  # KEY_COMPOSE
 }
-
 REV_E0_MAP = {v: k for k, v in E0_MAP.items()}
 
-SCAN_CODES = {}
-CHAR_TO_CODE_SHIFT = {}
-KEY_NAME_TO_SCANCODE = {}
-for _sc, _data in KEY_MAPPINGS.items():
-    for _name in _data['name']:
-        KEY_NAME_TO_SCANCODE[_name.lower()] = _sc
-
-for scancode, data in KEY_MAPPINGS.items():
-    linux_code = scancode
-    if scancode >= 0xE000:
-        linux_code = E0_MAP.get(scancode, scancode & 0xFF)
-
-    names = data['name']
-    for name in names:
-        SCAN_CODES[name.lower()] = linux_code
-
-    if len(names) >= 1:
-        base_name = names[0]
-        if len(base_name) == 1:
-            CHAR_TO_CODE_SHIFT[base_name.lower()] = (linux_code, False)
-        for name in names[1:]:
-            if len(name) == 1:
-                CHAR_TO_CODE_SHIFT[name] = (linux_code, True)
-
-for char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-    if char.lower() in CHAR_TO_CODE_SHIFT:
-        code, _ = CHAR_TO_CODE_SHIFT[char.lower()]
-        CHAR_TO_CODE_SHIFT[char] = (code, True)
+KEY_LEFTSHIFT = 42
+_EN_US = Layout(0, 0x0409, "en-US")
 
 
+def linux_code(scancode: int) -> int:
+    """scancode ของ Windows (มี E0) -> keycode ของ evdev"""
+    return E0_MAP.get(scancode, scancode & 0xFF) if scancode >= 0xE000 else scancode
+
+
+def raw_from_event(type_val, code, value, injected=False):
+    """evdev event -> RawKey (None ถ้าไม่ใช่ปุ่มคีย์บอร์ด)"""
+    if type_val != EV_KEY or code >= 0x100:      # >= 0x100 คือ BTN_* (เมาส์/จอย)
+        return None
+    sc = REV_E0_MAP.get(code, code)
+    return RawKey(SCANCODE_TO_VK.get(sc, 0), sc, value != 0, injected)
+
+
+def _read_initial_toggle_mods(device) -> int:
+    """อ่านสถานะ NumLock / CapsLock / ScrollLock (LED) ตอนเริ่ม"""
+    devices = getattr(device, 'devices', [device])
+    buf = bytearray(2)
+    for dev in devices:
+        try:
+            fcntl.ioctl(dev.input_file.fileno(), EVIOCGLED_2, buf, True)
+            led_bits = int.from_bytes(buf, byteorder='little')
+            mod = 0
+            if led_bits & (1 << LED_NUML):
+                mod |= MOD_NUMLOCK
+            if led_bits & (1 << LED_CAPSL):
+                mod |= MOD_CAPSLOCK
+            if led_bits & (1 << LED_SCROLLL):
+                mod |= MOD_SCROLLLOCK
+            return mod
+        except OSError:
+            continue
+    return 0
+
+
+# ===========================================================================
+# ส่งปุ่ม (output)
+# ===========================================================================
 class keyboard:
-    active_keys = {}
+    active_keys: dict = {}
     _uinput_device = None
     _lock = threading.Lock()
 
@@ -71,70 +117,56 @@ class keyboard:
             return cls._uinput_device
 
     @classmethod
-    def _write_event(cls, type, code, value):
+    def _write_event(cls, type_val, code, value):
         device = cls._get_uinput()
         integer, fraction = divmod(time.time(), 1)
         seconds = int(integer)
         microseconds = int(fraction * 1e6)
-        event_bin_format = 'llHHI'
-        data_event = struct.pack(event_bin_format, seconds, microseconds, type, code, value)
+        data_event = struct.pack(event_bin_format, seconds, microseconds, type_val, code, value)
         sync_event = struct.pack(event_bin_format, seconds, microseconds, EV_SYN, 0, 0)
-        device.write(data_event + sync_event)
-        device.flush()
+        with cls._lock:
+            device.write(data_event + sync_event)
+            device.flush()
 
     @classmethod
     def press(cls, hotkey: str):
-        hotkey = hotkey.lower()
-        if hotkey in SCAN_CODES:
-            if cls.active_keys.get(hotkey, False):
-                return
-            cls.active_keys[hotkey] = True
-            code = SCAN_CODES[hotkey]
-            cls._write_event(EV_KEY, code, 1)
-        else:
-            print(f"[Error] Unknown key: {hotkey}")
+        """กดค้าง (desktop session จะ auto-repeat เองบน Linux จึงส่ง keydown ครั้งเดียว)"""
+        hotkey = hotkey.strip().lower()
+        code = linux_code(scancode_of(hotkey))
+        if cls.active_keys.get(hotkey, False):
+            return
+        cls.active_keys[hotkey] = True
+        cls._write_event(EV_KEY, code, 1)
 
     @classmethod
     def release(cls, hotkey: str):
-        hotkey = hotkey.lower()
-        if hotkey in SCAN_CODES:
-            cls.active_keys[hotkey] = False
-            code = SCAN_CODES[hotkey]
-            cls._write_event(EV_KEY, code, 0)
-        else:
-            print(f"[Error] Unknown key: {hotkey}")
+        hotkey = hotkey.strip().lower()
+        code = linux_code(scancode_of(hotkey))
+        cls.active_keys[hotkey] = False
+        cls._write_event(EV_KEY, code, 0)
 
     @classmethod
     def send(cls, hotkey_str: str, do_press: bool = True, do_release: bool = True):
-        hotkey_str = hotkey_str.replace(' ', '').lower()
-        if '++' in hotkey_str:
-            hotkey_str = hotkey_str.replace('++', '+plus_key')
-            keys = ['+' if k == 'plus_key' else k for k in hotkey_str.split('+')]
-        elif hotkey_str == '+':
-            keys = ['+']
-        else:
-            keys = hotkey_str.split('+')
-
-        for k in keys:
-            if k not in SCAN_CODES:
-                print(f"[Error] Unknown key: {k}")
-                return
+        keys = parse_hotkey(hotkey_str)
+        if not keys:
+            return
+        codes = [linux_code(scancode_of(k)) for k in keys]     # ValueError ถ้าไม่รู้จักปุ่ม (ก่อนส่งจริง)
 
         if do_press:
-            for k in keys:
-                code = SCAN_CODES[k]
+            for code in codes:
                 cls._write_event(EV_KEY, code, 1)
                 time.sleep(0.01)
         if do_press and do_release:
             time.sleep(0.05)
         if do_release:
-            for k in reversed(keys):
-                code = SCAN_CODES[k]
+            for code in reversed(codes):
                 cls._write_event(EV_KEY, code, 0)
                 time.sleep(0.01)
 
     @classmethod
     def write(cls, text: str, interval: float = 0.02):
+        """พิมพ์ข้อความ (ตอนนี้ได้เฉพาะตัวอักษรที่มีบน US layout; ตัวอื่นเช่นภาษาไทยจะถูกข้ามพร้อมคำเตือน)"""
+        skipped = []
         for ch in text:
             if ch == '\n':
                 cls.send('enter')
@@ -144,154 +176,101 @@ class keyboard:
                 cls.send('backspace')
             elif ch == '\r':
                 continue
+            elif ch in CHAR_TO_KEY:
+                scancode, shift = CHAR_TO_KEY[ch]
+                code = linux_code(scancode)
+                if shift:
+                    cls._write_event(EV_KEY, KEY_LEFTSHIFT, 1)
+                    time.sleep(0.005)
+                cls._write_event(EV_KEY, code, 1)
+                cls._write_event(EV_KEY, code, 0)
+                if shift:
+                    time.sleep(0.005)
+                    cls._write_event(EV_KEY, KEY_LEFTSHIFT, 0)
             else:
-                if ch in CHAR_TO_CODE_SHIFT:
-                    code, shift = CHAR_TO_CODE_SHIFT[ch]
-                    if shift: cls._write_event(EV_KEY, 42, 1)  # LSHIFT
-                    cls._write_event(EV_KEY, code, 1)
-                    cls._write_event(EV_KEY, code, 0)
-                    if shift: cls._write_event(EV_KEY, 42, 0)
-                else:
-                    # For non-ASCII, we don't have a good way via uinput without layout knowledge.
-                    # On Windows, it uses KEYEVENTF_UNICODE. Linux doesn't have an equivalent in uinput.
-                    pass
+                skipped.append(ch)
             time.sleep(interval)
-
-    @classmethod
-    def is_pressed(cls, key: str = None, scancode: int = None) -> bool:
-        if (key is None) == (scancode is None):
-            raise ValueError("Specify exactly one of `key` or `scancode`.")
-
-        if scancode is None:
-            name = key.lower()
-            if name not in KEY_NAME_TO_SCANCODE:
-                raise ValueError(f"Unknown key: {key}")
-            scancode = KEY_NAME_TO_SCANCODE[name]
-
-        _start_monitor()
-        return scancode in _pressed_scancodes
+        if skipped:
+            warnings.warn(f"write(): ข้ามตัวอักษรที่พิมพ์ไม่ได้บน Linux: {''.join(dict.fromkeys(skipped))!r}",
+                          RuntimeWarning, stacklevel=2)
 
 
-class Key:
-    def __init__(self, vk, scancode, unicode_char, mod=0, flags=0):
-        self.vk = vk
-        self.unicode = unicode_char
-        self.mod = mod
-        self.scancode = scancode
+# ===========================================================================
+# รับปุ่ม (input backend)
+# ===========================================================================
+class Backend:
+    native_state = False       # is_pressed ต้องใช้ state จาก hook (core จัดการให้)
+    supports_suppress = False  # ต้องใช้ EVIOCGRAB + ส่งต่อผ่าน uinput (ยังไม่ทำ)
 
-        mapping = KEY_MAPPINGS.get(self.scancode)
-        if mapping:
-            self.name = mapping['name'][0]
-            if self.vk is None:
-                self.vk = mapping.get('vk')
-        else:
-            self.name = f"UNKNOWN_{self.scancode}"
+    def __init__(self):
+        self._device = None
+        self._virtual = set()
+        self._thread = None
+        self._stop = threading.Event()
+        self._on_raw = None
+        self._toggle = 0
 
-        if self.vk and 65 <= self.vk <= 90:
-            self.key = self.vk + 32
-        else:
-            self.key = self.vk or 0
-
-    def __str__(self):
-        unicode_str = repr(self.unicode) if self.unicode else "None"
-        return (f"<Key(name: {self.name}, unicode: {unicode_str}, key: {self.key}, mod: {self.mod}, "
-                f"scancode: {self.scancode}, VK:{self.vk})>")
-
-
-class Listener(threading.Thread):
-    def __init__(self, on_press=None, on_release=None, suppress=False):
-        super().__init__()
-        self.daemon = True
-        self.on_press = on_press
-        self.on_release = on_release
-        self.suppress = suppress
-        self._stop_event = threading.Event()
-        self.mod_state = 0
-
-    def run(self):
+    def start(self, on_raw) -> None:
+        if self._thread:
+            return
         ensure_root()
-        device = aggregate_devices('keyboard')
+        if self._device is None:
+            device = aggregate_devices('keyboard', create_uinput=False)
+            if device is None:
+                raise RuntimeError("No keyboard input devices found.")
+            self._device = device
+            # event ที่มาจาก uinput ของเราเอง (send/write) -> injected=True
+            self._virtual = {d.path for d in getattr(device, 'devices', []) if d.name == VIRTUAL_KEYBOARD_NAME}
+        self._drain()
+        self._toggle = _read_initial_toggle_mods(self._device)
+        self._on_raw = on_raw
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, name="keyboard-evdev", daemon=True)
+        self._thread.start()
 
-        while not self._stop_event.is_set():
-            # aggregate_devices returns an AggregatedEventDevice which uses a queue.
-            # read_event() blocks on the queue.
+    def stop(self) -> None:
+        t = self._thread
+        if not t:
+            return
+        self._stop.set()
+        t.join(timeout=1)
+        self._thread = None
+
+    def _drain(self) -> None:
+        """ทิ้ง event ที่ค้างในคิวระหว่างที่หยุดอยู่ (reader thread ของ evdev อ่านต่อเนื่องตลอด)"""
+        queue = getattr(self._device, 'event_queue', None)
+        while queue is not None:
             try:
-                # We can't easily timeout on read_event if it's blocking on a queue
-                # unless we modify AggregatedEventDevice.
-                # But since it's a daemon thread, it's okay for now.
-                time_val, type_val, code, value, device_id = device.read_event()
-            except:
+                queue.get_nowait()
+            except Empty:
                 break
 
-            if type_val == EV_KEY:
-                is_down = (value != 0)
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                _t, type_val, code, value, path = self._device.read_event(timeout=0.1)
+            except Empty:
+                continue
+            except Exception:
+                traceback.print_exc()
+                break
+            raw = raw_from_event(type_val, code, value, path in self._virtual)
+            if raw is None:
+                continue
+            try:
+                self._on_raw(raw)
+            except Exception:
+                traceback.print_exc()
 
-                # Update mod_state (matching Windows bits)
-                if code == 42:  # LSHIFT
-                    if is_down:
-                        self.mod_state |= 1
-                    else:
-                        self.mod_state &= ~1
-                elif code == 54:  # RSHIFT
-                    if is_down:
-                        self.mod_state |= 2
-                    else:
-                        self.mod_state &= ~2
-                elif code == 29:  # LCTRL
-                    if is_down:
-                        self.mod_state |= 64
-                    else:
-                        self.mod_state &= ~64
-                elif code == 97:  # RCTRL
-                    if is_down:
-                        self.mod_state |= 128
-                    else:
-                        self.mod_state &= ~128
-                elif code == 56:  # LALT
-                    if is_down:
-                        self.mod_state |= 256
-                    else:
-                        self.mod_state &= ~256
-                elif code == 100:  # RALT
-                    if is_down:
-                        self.mod_state |= 512
-                    else:
-                        self.mod_state &= ~512
-                elif code == 125:  # LWIN
-                    if is_down:
-                        self.mod_state |= 1024
-                    else:
-                        self.mod_state &= ~1024
-                elif code == 126:  # RWIN
-                    if is_down:
-                        self.mod_state |= 2048
-                    else:
-                        self.mod_state &= ~2048
+    # ---------------------------------------------------------- layout
+    def get_layout(self) -> Layout:
+        return _EN_US
 
-                win_scancode = REV_E0_MAP.get(code, code)
-                key_obj = Key(None, win_scancode, None, self.mod_state)
+    def translate(self, vk, scancode, shift, ctrl, alt, caps, hkl) -> str:
+        return us_char(scancode, shift, caps)
 
-                if is_down:
-                    if self.on_press: self.on_press(key_obj)
-                else:
-                    if self.on_release: self.on_release(key_obj)
+    def toggle_state(self) -> int:
+        return self._toggle
 
-    def stop(self):
-        self._stop_event.set()
-
-
-_pressed_scancodes = set()
-_monitor = None
-_monitor_lock = threading.Lock()
-
-
-def _start_monitor():
-    global _monitor
-    with _monitor_lock:
-        if _monitor is None:
-            ensure_root()
-            _monitor = Listener(
-                on_press=lambda k: _pressed_scancodes.add(k.scancode),
-                on_release=lambda k: _pressed_scancodes.discard(k.scancode),
-            )
-            _monitor.start()
+    def is_down(self, scancode):
+        return None

@@ -1,127 +1,216 @@
+"""Windows
+
+ส่วนส่งปุ่ม (class keyboard)  : SendInput — คงพฤติกรรมเดิม
+ส่วนรับปุ่ม (class Backend)   : WH_KEYBOARD_LL hook -> RawKey, หา layout ของหน้าต่างที่พิมพ์อยู่,
+                                 แปลง scancode -> ตัวอักษรด้วย ToUnicodeEx
+"""
 import ctypes
-from ctypes import wintypes
-import time
 import threading
-from typing import Optional
+import time
+import traceback
+from ctypes import wintypes
 
-from .key_mappings import KEY_MAPPINGS, EXTENDED_KEYS
+from .events import Layout, RawKey
+from .key_mappings import (
+    MOD_NUMLOCK, MOD_CAPSLOCK, MOD_SCROLLLOCK,
+    SCANCODE_TO_VK, parse_hotkey, scancode_of,
+)
 
-# --- CTYPES STRUCTURES ---
-SendInput = ctypes.windll.user32.SendInput
-PUL = ctypes.POINTER(ctypes.c_ulong)
+# ใช้ instance ส่วนตัว (ไม่ใช่ ctypes.windll.user32 ที่ใช้ร่วมกันทั้งโปรเซส) เพื่อไม่ไปเปลี่ยน argtypes ของโค้ดอื่น
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+ULONG_PTR = ctypes.c_size_t
+LRESULT = ctypes.c_ssize_t
 
 
 class KeyBdInput(ctypes.Structure):
-    _fields_ = [("wVk", ctypes.c_ushort),
-                ("wScan", ctypes.c_ushort),
-                ("dwFlags", ctypes.c_ulong),
-                ("time", ctypes.c_ulong),
-                ("dwExtraInfo", PUL)]
+    _fields_ = [
+        ("wVk", wintypes.WORD),
+        ("wScan", wintypes.WORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
 
 
 class HardwareInput(ctypes.Structure):
-    _fields_ = [("uMsg", ctypes.c_ulong),
-                ("wParamL", ctypes.c_short),
-                ("wParamH", ctypes.c_ushort)]
+    _fields_ = [
+        ("uMsg", wintypes.DWORD),
+        ("wParamL", wintypes.WORD),
+        ("wParamH", wintypes.WORD),
+    ]
 
 
 class MouseInput(ctypes.Structure):
-    _fields_ = [("dx", ctypes.c_long),
-                ("dy", ctypes.c_long),
-                ("mouseData", ctypes.c_ulong),
-                ("dwFlags", ctypes.c_ulong),
-                ("time", ctypes.c_ulong),
-                ("dwExtraInfo", PUL)]
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
 
 
 class Input_I(ctypes.Union):
-    _fields_ = [("ki", KeyBdInput),
-                ("mi", MouseInput),
-                ("hi", HardwareInput)]
+    _fields_ = [("ki", KeyBdInput), ("mi", MouseInput), ("hi", HardwareInput)]
 
 
 class Input(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_ulong),
-                ("ii", Input_I)]
+    _fields_ = [("type", wintypes.DWORD), ("ii", Input_I)]
 
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("vkCode", wintypes.DWORD),
+        ("scanCode", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class GUITHREADINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("hwndActive", wintypes.HWND),
+        ("hwndFocus", wintypes.HWND),
+        ("hwndCapture", wintypes.HWND),
+        ("hwndMenuOwner", wintypes.HWND),
+        ("hwndMoveSize", wintypes.HWND),
+        ("hwndCaret", wintypes.HWND),
+        ("rcCaret", wintypes.RECT),
+    ]
+
+
+HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+
+# --- WIN32 SIGNATURES (64-bit safe) ---
+user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(Input), ctypes.c_int]
+user32.SendInput.restype = wintypes.UINT
+user32.MapVirtualKeyW.argtypes = [wintypes.UINT, wintypes.UINT]
+user32.MapVirtualKeyW.restype = wintypes.UINT
+user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+user32.GetAsyncKeyState.restype = ctypes.c_short
+user32.GetKeyState.argtypes = [ctypes.c_int]
+user32.GetKeyState.restype = ctypes.c_short
+user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+user32.SetWindowsHookExW.restype = ctypes.c_void_p
+user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+user32.CallNextHookEx.restype = LRESULT
+user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT]
+user32.GetMessageW.restype = ctypes.c_int
+user32.PeekMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT,
+                                wintypes.UINT, wintypes.UINT]
+user32.PeekMessageW.restype = wintypes.BOOL
+user32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.PostThreadMessageW.restype = wintypes.BOOL
+user32.GetForegroundWindow.argtypes = []
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GUITHREADINFO)]
+user32.GetGUIThreadInfo.restype = wintypes.BOOL
+user32.GetKeyboardLayout.argtypes = [wintypes.DWORD]
+user32.GetKeyboardLayout.restype = ctypes.c_void_p            # HKL เป็น pointer-sized ห้ามถูกตัดเป็น int 32 บิต
+user32.ToUnicodeEx.argtypes = [wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_ubyte),
+                               wintypes.LPWSTR, ctypes.c_int, wintypes.UINT, ctypes.c_void_p]
+user32.ToUnicodeEx.restype = ctypes.c_int
+kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+kernel32.GetCurrentThreadId.argtypes = []
+kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+kernel32.LCIDToLocaleName.argtypes = [wintypes.DWORD, wintypes.LPWSTR, ctypes.c_int, wintypes.DWORD]
+kernel32.LCIDToLocaleName.restype = ctypes.c_int
 
 # --- CONSTANTS ---
+INPUT_KEYBOARD = 1
 KEYEVENTF_EXTENDEDKEY = 0x0001
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
 KEYEVENTF_SCANCODE = 0x0008
 
 WH_KEYBOARD_LL = 13
-WM_KEYDOWN = 0x0100
-WM_KEYUP = 0x0101
-WM_SYSKEYDOWN = 0x0104
-WM_SYSKEYUP = 0x0105
+HC_ACTION = 0
+WM_QUIT = 0x0012
+LLKHF_EXTENDED = 0x01
+LLKHF_INJECTED = 0x10
+LLKHF_UP = 0x80
+TOUNICODE_NO_STATE_CHANGE = 0x04   # Win10 1607+: ไม่ให้ ToUnicodeEx แตะ dead-key state ของระบบ
 
-SCAN_CODES = {}
-for scancode, data in KEY_MAPPINGS.items():
-    for name in data['name']:
-        SCAN_CODES[name.lower()] = scancode
+VK_SHIFT, VK_CONTROL, VK_MENU, VK_PAUSE = 0x10, 0x11, 0x12, 0x13
+VK_CAPITAL, VK_NUMLOCK, VK_SCROLL = 0x14, 0x90, 0x91
 
 
-# --- KEYBOARD CLASS ---
+def _focus_thread_id() -> int:
+    """thread id ของหน้าต่างที่รับการพิมพ์อยู่ (focus > active > foreground)"""
+    gti = GUITHREADINFO()
+    gti.cbSize = ctypes.sizeof(gti)
+    hwnd = None
+    if user32.GetGUIThreadInfo(0, ctypes.byref(gti)):
+        hwnd = gti.hwndFocus or gti.hwndActive
+    if not hwnd:
+        hwnd = user32.GetForegroundWindow()
+    return user32.GetWindowThreadProcessId(hwnd, None) if hwnd else 0
+
+
+# ===========================================================================
+# ส่งปุ่ม (output)
+# ===========================================================================
 class keyboard:
-    active_keys = {}
+    active_keys: dict = {}
+    _lock = threading.Lock()
 
     @staticmethod
-    def _press_key(hexKeyCode: int, is_extended: bool = False):
-        extra = ctypes.c_ulong(0)
+    def _key_input(code: int, flags: int) -> Input:
         ii_ = Input_I()
+        ii_.ki = KeyBdInput(0, code, flags, 0, 0)
+        return Input(INPUT_KEYBOARD, ii_)
+
+    @staticmethod
+    def _send_inputs(inputs) -> int:
+        n = len(inputs)
+        arr = (Input * n)(*inputs)
+        return user32.SendInput(n, arr, ctypes.sizeof(Input))
+
+    @classmethod
+    def _send_scancode(cls, scancode: int, keyup: bool = False):
         flags = KEYEVENTF_SCANCODE
-        if is_extended:
+        if keyup:
+            flags |= KEYEVENTF_KEYUP
+        if scancode >= 0xE000:
             flags |= KEYEVENTF_EXTENDEDKEY
-        ii_.ki = KeyBdInput(0, hexKeyCode, flags, 0, ctypes.pointer(extra))
-        x = Input(ctypes.c_ulong(1), ii_)
-        SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+        cls._send_inputs([cls._key_input(scancode & 0xFF, flags)])
 
-    @staticmethod
-    def _release_key(hexKeyCode: int, is_extended: bool = False):
-        extra = ctypes.c_ulong(0)
-        ii_ = Input_I()
-        flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
-        if is_extended:
-            flags |= KEYEVENTF_EXTENDEDKEY
-        ii_.ki = KeyBdInput(0, hexKeyCode, flags, 0, ctypes.pointer(extra))
-        x = Input(ctypes.c_ulong(1), ii_)
-        SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    @classmethod
+    def _press_key(cls, scancode: int):
+        cls._send_scancode(scancode, keyup=False)
 
-    @staticmethod
-    def _auto_repeat(hotkey: str, scan_code: int, is_ext: bool):
-        keyboard._press_key(scan_code, is_extended=is_ext)
-        time_elapsed = 0.0
-        while keyboard.active_keys.get(hotkey, False) and time_elapsed < 0.5:
+    @classmethod
+    def _release_key(cls, scancode: int):
+        cls._send_scancode(scancode, keyup=True)
+
+    @classmethod
+    def _auto_repeat(cls, stop_event: threading.Event, scancode: int):
+        cls._press_key(scancode)
+        if stop_event.wait(0.5):
+            return
+        while not stop_event.wait(0.03):
+            cls._press_key(scancode)
+
+    @classmethod
+    def _write_unicode(cls, ch: str):
+        """พิมพ์ตัวอักษรตรงๆ (ไม่ขึ้นกับ layout) — พิมพ์ภาษาไทยได้แม้หน้าต่างอยู่ภาษาอังกฤษ"""
+        utf16 = ch.encode('utf-16-le')
+        for i in range(0, len(utf16), 2):
+            code = int.from_bytes(utf16[i:i + 2], byteorder='little')
+            cls._send_inputs([cls._key_input(code, KEYEVENTF_UNICODE)])
             time.sleep(0.01)
-            time_elapsed += 0.01
-
-        while keyboard.active_keys.get(hotkey, False):
-            keyboard._press_key(scan_code, is_extended=is_ext)
-            time.sleep(0.03)
-
-    @staticmethod
-    def _write_unicode(ch: str):
-        extra = ctypes.c_ulong(0)
-        utf16_bytes = ch.encode('utf-16-le')
-
-        for i in range(0, len(utf16_bytes), 2):
-            code = int.from_bytes(utf16_bytes[i:i + 2], byteorder='little')
-
-            ii_ = Input_I()
-            # Press
-            ii_.ki = KeyBdInput(0, 0, KEYEVENTF_UNICODE, 0, ctypes.pointer(extra))
-            ii_.ki.wScan = code
-            x = Input(ctypes.c_ulong(1), ii_)
-            SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
-            time.sleep(0.01)
-
-            # Release
-            ii_.ki = KeyBdInput(0, 0, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
-            ii_.ki.wScan = code
-            x = Input(ctypes.c_ulong(1), ii_)
-            SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+            cls._send_inputs([cls._key_input(code, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)])
 
     @classmethod
     def write(cls, text: str, interval: float = 0.02):
@@ -136,275 +225,163 @@ class keyboard:
                 continue
             else:
                 cls._write_unicode(ch)
-
             time.sleep(interval)
 
     @classmethod
     def send(cls, hotkey_str: str, do_press: bool = True, do_release: bool = True):
-        hotkey_str = hotkey_str.replace(' ', '').lower()
-        if '++' in hotkey_str:
-            hotkey_str = hotkey_str.replace('++', '+plus_key')
-            keys = ['+' if k == 'plus_key' else k for k in hotkey_str.split('+')]
-        elif hotkey_str == '+':
-            keys = ['+']
-        else:
-            keys = hotkey_str.split('+')
-
-        for k in keys:
-            if k not in SCAN_CODES:
-                print(f"[Error] Unknown key: {k}")
-                return
+        keys = parse_hotkey(hotkey_str)
+        if not keys:
+            return
+        scancodes = [scancode_of(k) for k in keys]      # ตรวจชื่อทั้งหมดก่อนส่งจริง (ValueError ถ้าไม่รู้จัก)
 
         if do_press:
-            for k in keys:
-                is_ext = k in EXTENDED_KEYS
-                cls._press_key(SCAN_CODES[k], is_extended=is_ext)
+            for sc in scancodes:
+                cls._press_key(sc)
                 time.sleep(0.01)
         if do_press and do_release:
             time.sleep(0.05)
         if do_release:
-            for k in reversed(keys):
-                is_ext = k in EXTENDED_KEYS
-                cls._release_key(SCAN_CODES[k], is_extended=is_ext)
+            for sc in reversed(scancodes):
+                cls._release_key(sc)
                 time.sleep(0.01)
 
     @classmethod
     def press(cls, hotkey: str):
-        hotkey = hotkey.lower()
-        if hotkey in SCAN_CODES:
-            if cls.active_keys.get(hotkey, False):
+        """กดค้าง (ส่ง auto-repeat ให้เหมือนคีย์บอร์ดจริงจนกว่าจะ release)"""
+        hotkey = hotkey.strip().lower()
+        scancode = scancode_of(hotkey)
+        with cls._lock:
+            if hotkey in cls.active_keys:
                 return
-            cls.active_keys[hotkey] = True
-            is_ext = hotkey in EXTENDED_KEYS
-            t = threading.Thread(target=cls._auto_repeat, args=(hotkey, SCAN_CODES[hotkey], is_ext))
-            t.daemon = True
-            t.start()
-        else:
-            print(f"[Error] Unknown key: {hotkey}")
+            stop_event = threading.Event()
+            cls.active_keys[hotkey] = stop_event
+        threading.Thread(target=cls._auto_repeat, args=(stop_event, scancode), daemon=True).start()
 
     @classmethod
     def release(cls, hotkey: str):
-        hotkey = hotkey.lower()
-        if hotkey in SCAN_CODES:
-            cls.active_keys[hotkey] = False
-            is_ext = hotkey in EXTENDED_KEYS
-            cls._release_key(SCAN_CODES[hotkey], is_extended=is_ext)
-        else:
-            print(f"[Error] Unknown key: {hotkey}")
+        hotkey = hotkey.strip().lower()
+        scancode = scancode_of(hotkey)
+        with cls._lock:
+            stop_event = cls.active_keys.pop(hotkey, None)
+        if stop_event is not None:
+            stop_event.set()
+        cls._release_key(scancode)
 
-    @classmethod
-    def is_pressed(cls, key: Optional[str | int] = None,  vk: Optional[int] = None) -> bool:
-        if (key or vk) is None:
-            raise ValueError("...")
-        if isinstance(key, str):
-            name = key.lower()
-            if name not in SCAN_CODES:
-                raise ValueError(f"Unknown key: {key}")
-            scancode = SCAN_CODES[name]
-        elif isinstance(key, int):
-            scancode = key
 
-        mapping = KEY_MAPPINGS.get(scancode)
-        if mapping:
-            vk = mapping['vk']
-        else:
-            # MAPVK_VSC_TO_VK_EX = 3
-            vk = ctypes.windll.user32.MapVirtualKeyW(scancode & 0xFF, 3)
+# ===========================================================================
+# รับปุ่ม (input backend)
+# ===========================================================================
+class Backend:
+    native_state = True        # is_pressed ใช้ GetAsyncKeyState ได้เลย ไม่ต้องมี hook
+    supports_suppress = True
+
+    def __init__(self):
+        self._layouts = {}
+        self._thread = None
+        self._tid = 0
+        self._proc = None
+        self._on_raw = None
+        self._error = None
+
+    # ------------------------------------------------------------ hook
+    def start(self, on_raw) -> None:
+        if self._thread:
+            return
+        self._on_raw = on_raw
+        self._error = None
+        ready = threading.Event()
+        self._thread = threading.Thread(target=self._run, args=(ready,), name="keyboard-hook", daemon=True)
+        self._thread.start()
+        ready.wait()
+        if self._error:
+            self._thread = None
+            raise self._error
+
+    def stop(self) -> None:
+        t = self._thread
+        if not t:
+            return
+        user32.PostThreadMessageW(self._tid, WM_QUIT, 0, 0)
+        t.join(timeout=2)
+        self._thread = None
+
+    def _run(self, ready: threading.Event) -> None:
+        self._tid = kernel32.GetCurrentThreadId()
+        msg = wintypes.MSG()
+        user32.PeekMessageW(ctypes.byref(msg), None, 0x400, 0x400, 0)   # สร้าง message queue ของ thread นี้
+        self._proc = HOOKPROC(self._hook_proc)    # ต้องเก็บ reference ไว้ ไม่งั้นถูก GC แล้ว crash
+        hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._proc, kernel32.GetModuleHandleW(None), 0)
+        if not hook:
+            self._error = ctypes.WinError(ctypes.get_last_error())
+            ready.set()
+            return
+        ready.set()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            pass
+        user32.UnhookWindowsHookEx(hook)
+
+    def _hook_proc(self, n_code, w_param, l_param):
+        if n_code == HC_ACTION:
+            try:
+                info = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
+                vk = info.vkCode
+                sc = info.scanCode
+                if not sc:                               # event ที่จำลองด้วย vk อย่างเดียว
+                    sc = user32.MapVirtualKeyW(vk, 0)
+                if vk == VK_NUMLOCK:                     # NumLock ถูกรายงานพร้อม flag extended
+                    sc = 0x45
+                elif vk == VK_PAUSE:                     # Pause มี scancode 0x45 เหมือน NumLock
+                    sc = 0xE11D
+                elif sc == 0x21D:                        # LCtrl ปลอมที่ Windows ส่งคู่กับ AltGr
+                    sc = 0x1D
+                elif info.flags & LLKHF_EXTENDED:
+                    sc |= 0xE000
+                raw = RawKey(vk, sc, not (info.flags & LLKHF_UP), bool(info.flags & LLKHF_INJECTED))
+                if self._on_raw(raw):
+                    return 1                             # suppress
+            except Exception:
+                traceback.print_exc()                    # error ใน hook ต้องไม่ทำให้คีย์บอร์ดทั้งระบบค้าง
+        return user32.CallNextHookEx(None, n_code, w_param, l_param)
+
+    # ---------------------------------------------------------- layout
+    def get_layout(self) -> Layout:
+        hkl = user32.GetKeyboardLayout(_focus_thread_id()) or 0
+        layout = self._layouts.get(hkl)
+        if layout is None:
+            langid = hkl & 0xFFFF
+            buf = ctypes.create_unicode_buffer(85)
+            n = kernel32.LCIDToLocaleName(langid, buf, 85, 0)
+            layout = Layout(hkl, langid, buf.value if n > 0 else f"0x{langid:04x}")
+            self._layouts[hkl] = layout
+        return layout
+
+    def translate(self, vk, scancode, shift, ctrl, alt, caps, hkl) -> str:
+        """scancode + modifier + layout -> ตัวอักษร ('' ถ้าปุ่มนี้ไม่ให้ตัวอักษร / เป็น dead key)"""
+        ks = (ctypes.c_ubyte * 256)()
+        if shift:
+            ks[VK_SHIFT] = 0x80
+        if ctrl:
+            ks[VK_CONTROL] = 0x80
+        if alt:
+            ks[VK_MENU] = 0x80
+        if caps:
+            ks[VK_CAPITAL] = 0x01
+        buf = ctypes.create_unicode_buffer(8)
+        n = user32.ToUnicodeEx(vk, scancode & 0xFF, ks, buf, 8, TOUNICODE_NO_STATE_CHANGE, hkl)
+        return buf.value[:n] if n > 0 else ""
+
+    def toggle_state(self) -> int:
+        mods = 0
+        if user32.GetKeyState(VK_NUMLOCK) & 1:
+            mods |= MOD_NUMLOCK
+        if user32.GetKeyState(VK_CAPITAL) & 1:
+            mods |= MOD_CAPSLOCK
+        if user32.GetKeyState(VK_SCROLL) & 1:
+            mods |= MOD_SCROLLLOCK
+        return mods
+
+    def is_down(self, scancode: int) -> bool:
+        vk = SCANCODE_TO_VK.get(scancode) or user32.MapVirtualKeyW(scancode & 0xFF, 3)
         if not vk:
             raise ValueError(f"Unknown scancode: {hex(scancode)}")
-
-        return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
-
-
-class KBDLLHOOKSTRUCT(ctypes.Structure):
-    _fields_ = [
-        ("vkCode", wintypes.DWORD),
-        ("scanCode", wintypes.DWORD),
-        ("flags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", PUL)
-    ]
-
-
-HOOKPROC = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
-
-
-class Key:
-    def __init__(self, vk, scancode, unicode_char, mod=0, flags=0):
-        self.vk = vk
-        self.unicode = unicode_char
-        self.mod = mod
-
-        actual_scancode = scancode | 0xE000 if (flags & 1) and scancode < 0xE000 else scancode
-        self.scancode = actual_scancode
-
-        mapping = KEY_MAPPINGS.get(self.scancode)
-        if mapping and mapping['vk'] == self.vk:
-            self.name = mapping['name'][0]
-        else:
-            self.name = f"UNKNOWN_{self.vk}"
-            for sc, data in KEY_MAPPINGS.items():
-                if data['vk'] == self.vk:
-                    self.name = data['name'][0]
-                    break
-
-        if 65 <= self.vk <= 90:
-            self.key = self.vk + 32
-        else:
-            self.key = self.vk
-
-    def __str__(self):
-        unicode_str = repr(self.unicode) if self.unicode else "None"
-        return (f"<Key(name: {self.name}, unicode: {unicode_str}, key: {self.key}, mod: {self.mod}, "
-                f"scancode: {self.scancode}, VK:{self.vk})>")
-
-
-class Listener(threading.Thread):
-    def __init__(self, on_press=None, on_release=None, suppress=False):
-        super().__init__()
-        self.daemon = True
-        self.on_press = on_press
-        self.on_release = on_release
-        self.suppress = suppress
-        self.hook_id = None
-        self._hook_proc_pointer = None
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.stop()
-
-    def run(self):
-        self.thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
-        self._hook_proc_pointer = HOOKPROC(self._hook_proc)
-
-        ctypes.windll.kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
-        ctypes.windll.user32.SetWindowsHookExW.restype = wintypes.HHOOK
-        ctypes.windll.user32.CallNextHookEx.restype = wintypes.LPARAM
-
-        ctypes.windll.kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-        ctypes.windll.user32.SetWindowsHookExW.argtypes = [
-            ctypes.c_int,
-            HOOKPROC,
-            wintypes.HINSTANCE,
-            wintypes.DWORD
-        ]
-        ctypes.windll.user32.CallNextHookEx.argtypes = [
-            wintypes.HHOOK,
-            ctypes.c_int,
-            wintypes.WPARAM,
-            wintypes.LPARAM
-        ]
-
-        h_mod = ctypes.windll.kernel32.GetModuleHandleW(None)
-
-        self.hook_id = ctypes.windll.user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL,
-            self._hook_proc_pointer,
-            h_mod,
-            0
-        )
-
-        if not self.hook_id:
-            print("[Error] Failed to install keyboard hook.")
-            return
-
-        msg = wintypes.MSG()
-        while ctypes.windll.user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) > 0:
-            ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
-            ctypes.windll.user32.DispatchMessageW(ctypes.byref(msg))
-
-        ctypes.windll.user32.UnhookWindowsHookEx(self.hook_id)
-
-    def stop(self):
-        if hasattr(self, 'thread_id'):
-            ctypes.windll.user32.PostThreadMessageW(self.thread_id, 0x0012, 0, 0)
-
-    def _hook_proc(self, nCode, wParam, lParam):
-        if nCode >= 0:
-            kb = ctypes.cast(lParam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
-            vk = kb.vkCode
-            scancode = kb.scanCode
-            user32 = ctypes.windll.user32
-
-            keyboard_state = (ctypes.c_uint8 * 256)()
-            user32.GetKeyboardState(ctypes.byref(keyboard_state))
-
-            is_keydown = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
-
-            is_lshift = bool(user32.GetAsyncKeyState(0xA0) & 0x8000)
-            is_rshift = bool(user32.GetAsyncKeyState(0xA1) & 0x8000)
-            is_lctrl = bool(user32.GetAsyncKeyState(0xA2) & 0x8000)
-            is_rctrl = bool(user32.GetAsyncKeyState(0xA3) & 0x8000)
-            is_lalt = bool(user32.GetAsyncKeyState(0xA4) & 0x8000)
-            is_ralt = bool(user32.GetAsyncKeyState(0xA5) & 0x8000)
-            is_lwin = bool(user32.GetAsyncKeyState(0x5B) & 0x8000)
-            is_rwin = bool(user32.GetAsyncKeyState(0x5C) & 0x8000)
-
-            is_numlock = bool(user32.GetKeyState(0x90) & 1)
-            is_caps = bool(user32.GetKeyState(0x14) & 1)
-
-            if vk in (0x10, 0xA0, 0xA1):
-                if scancode == 0x36 or (kb.flags & 1):
-                    is_rshift = is_keydown
-                else:
-                    is_lshift = is_keydown
-            elif vk in (0x11, 0xA2, 0xA3):
-                if (kb.flags & 1):
-                    is_rctrl = is_keydown
-                else:
-                    is_lctrl = is_keydown
-            elif vk in (0x12, 0xA4, 0xA5):
-                if (kb.flags & 1):
-                    is_ralt = is_keydown
-                else:
-                    is_lalt = is_keydown
-            elif vk == 0x5B:
-                is_lwin = is_keydown
-            elif vk == 0x5C:
-                is_rwin = is_keydown
-
-            keyboard_state[0x10] = 0x80 if (is_lshift or is_rshift) else 0
-            keyboard_state[0x11] = 0x80 if (is_lctrl or is_rctrl) else 0
-            keyboard_state[0x12] = 0x80 if (is_lalt or is_ralt) else 0
-            keyboard_state[0x14] = 1 if is_caps else 0
-            keyboard_state[0x90] = 1 if is_numlock else 0
-
-            mod = 0
-            if is_lshift:  mod |= 1
-            if is_rshift:  mod |= 2
-            if is_lctrl:   mod |= 64
-            if is_rctrl:   mod |= 128
-            if is_lalt:    mod |= 256
-            if is_ralt:    mod |= 512
-            if is_lwin:    mod |= 1024
-            if is_rwin:    mod |= 2048
-            if is_numlock: mod |= 4096
-            if is_caps:    mod |= 8192
-
-            hwnd = user32.GetForegroundWindow()
-            pid = ctypes.c_ulong()
-            thread_id = user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            hkl = user32.GetKeyboardLayout(thread_id)
-
-            buffer = ctypes.create_unicode_buffer(4)
-            result = user32.ToUnicodeEx(vk, scancode, keyboard_state, buffer, 4, 0, hkl)
-
-            if result > 0:
-                unicode_char = buffer.value
-            else:
-                unicode_char = None
-
-            key_obj = Key(vk, scancode, unicode_char, mod, kb.flags)
-
-            if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN) and self.on_press:
-                self.on_press(key_obj)
-            elif wParam in (WM_KEYUP, WM_SYSKEYUP) and self.on_release:
-                self.on_release(key_obj)
-
-            if self.suppress:
-                return 1
-
-        return ctypes.windll.user32.CallNextHookEx(self.hook_id, nCode, wParam, lParam)
+        return bool(user32.GetAsyncKeyState(vk) & 0x8000)

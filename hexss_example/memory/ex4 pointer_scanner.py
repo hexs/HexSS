@@ -12,5 +12,6 @@ while True:
         # filter_cond=lambda x: 0.00001 <= x <= 1
     )
 
-    print(f"Mode: {most_freq_value} | Frequencies: {scanner.value_frequencies}")
+    freq = {hex(a): n for a, n in scanner.value_frequencies.items()}  # {address: จำนวน pointer ที่ชี้มา}
+    print(f"Best: {most_freq_value} | Frequencies: {freq}")
     time.sleep(0.1)

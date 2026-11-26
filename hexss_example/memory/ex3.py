@@ -4,7 +4,6 @@ from hexss import keyboard
 from hexss.memory import Memory
 from hexss.threading import Multithread
 from hexss.constants import *
-from hexss.windows import is_admin, relaunch_as_admin
 
 '''
 fishing_status
@@ -65,11 +64,12 @@ def main(data):
 
     status_addr = status_scanner.get_best_pointer(filter_cond=lambda x: x in [0, 1, 2, 3, 4, 5])
     tension_addr = tension_scanner.get_best_pointer(filter_cond=lambda x: 0.0001 <= x <= 1)
-    is_pull_ptr = status_addr + 4
 
     if status_addr is None or tension_addr is None:
         print("ไม่พบ Address ที่ถูกต้อง กรุณาตรวจสอบ Database")
         return
+
+    is_pull_ptr = status_addr + 4
 
     print(f"ล็อก Address สำเร็จ! Status: {status_addr}, Tension: {tension_addr}")
 
@@ -78,7 +78,7 @@ def main(data):
 
         fishing_status = status_addr.read()
         is_pull_the_hook = is_pull_ptr.read()
-        tension = tension_addr.read(dtype='float')
+        tension = tension_addr.read()
 
         data['status'] = fishing_status
 
@@ -119,10 +119,6 @@ def enable(data):
 
 
 if __name__ == '__main__':
-    print("is_admin (before):", is_admin())
-    relaunch_as_admin()
-    print("is_admin (after):", is_admin())
-
     data = {
         'running': True,
         'started': [],

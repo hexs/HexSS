@@ -42,7 +42,7 @@ class Listener(threading.Thread):
         self._kb.acquire()
         self._acquired = True
         try:
-            self._kb.add_listener(self._handle, suppress=self.suppress, repeat=self.repeat)
+            self._kb.add_listener(self._dispatch_event, suppress=self.suppress, repeat=self.repeat)
         except BaseException:
             self._acquired = False
             self._kb.release()
@@ -56,10 +56,10 @@ class Listener(threading.Thread):
         self._stop_event.set()
         if self._acquired:
             self._acquired = False
-            self._kb.remove_listener(self._handle)
+            self._kb.remove_listener(self._dispatch_event)
             self._kb.release()
 
-    def _handle(self, ev):
+    def _dispatch_event(self, ev):
         if ev.type == KEYDOWN:
             if self.on_press:
                 self.on_press(ev)

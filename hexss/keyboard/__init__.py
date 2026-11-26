@@ -25,8 +25,14 @@ from ._listener import Listener
 _system = platform.system()
 if _system == 'Windows':
     from ._winkeyboard import keyboard as _out
+
+    def set_xkb(*args, **kwargs):
+        """Linux only (no-op on Windows: the keyboard layout comes from the OS)."""
+
+    def set_xkb_group(index):
+        """Linux only (no-op on Windows)."""
 elif _system == 'Linux':
-    from ._nixkeyboard import keyboard as _out
+    from ._nixkeyboard import keyboard as _out, set_xkb, set_xkb_group
 else:
     raise NotImplementedError(f"Currently, {_system} is not supported.")
 
@@ -107,6 +113,7 @@ __all__ = [
     'press', 'release', 'send', 'write', 'is_pressed',
     'start', 'stop', 'get', 'wait', 'clear', 'add_listener', 'remove_listener',
     'get_layout', 'get_mods', 'get_pressed',
+    'set_xkb', 'set_xkb_group',
     'KeyEvent', 'Layout', 'Listener', 'Keyboard',
     'KEYDOWN', 'KEYUP', 'SPECIAL',
     'MOD_NONE', 'MOD_LSHIFT', 'MOD_RSHIFT', 'MOD_SHIFT', 'MOD_LCTRL', 'MOD_RCTRL', 'MOD_CTRL',

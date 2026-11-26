@@ -77,7 +77,7 @@ class EventDevice:
                 self._input_file = open(self.path, 'rb')
             except PermissionError as e:
                 raise PermissionError(
-                    f"Permission denied ({self.path}). You must run as root to access global events."
+                    f"Permission denied ({self.path}). Run as root or add your user to the 'input' group."
                 ) from e
 
             def try_close():
@@ -193,5 +193,38 @@ def aggregate_devices(type_name, create_uinput=True):
 
 
 def ensure_root():
+    """(เดิม) บังคับ root — ยังเก็บไว้เพื่อความเข้ากันได้ แต่ไลบรารีนี้ไม่เรียกใช้แล้ว"""
     if os.geteuid() != 0:
         raise PermissionError('You must be root to use this library on Linux.')
+
+
+def ensure_input_access(type_name='keyboard'):
+    """ต้องอ่าน /dev/input/event* ของคีย์บอร์ดได้อย่างน้อย 1 ตัว (root หรือผู้ใช้ในกลุ่ม input)"""
+    if os.geteuid() == 0:
+        return
+    devices = list(list_devices_from_proc(type_name)) or list(list_devices_from_by_id(type_name))
+    if not devices or any(os.access(d.path, os.R_OK) for d in devices):
+        return          # ไม่มีอุปกรณ์เลย: ให้ผู้เรียกแจ้ง "No keyboard input devices found" เอง
+    raise PermissionError(
+        "No permission to read /dev/input/event*. Run as root, or add your user to the 'input' group:\n"
+        "    sudo usermod -aG input $USER    (แล้ว logout/login ใหม่)"
+    )
+
+
+def ensure_uinput_access():
+    """ต้องเขียน /dev/uinput ได้ (root หรือมี udev rule ให้กลุ่ม input)"""
+    if os.geteuid() == 0:
+        return
+    if not os.path.exists('/dev/uinput'):
+        raise FileNotFoundError(
+            "/dev/uinput not found. Load the module first:\n"
+            "    sudo modprobe uinput"
+        )
+    if not os.access('/dev/uinput', os.W_OK):
+        raise PermissionError(
+            "No permission to write /dev/uinput. Run as root, or allow the 'input' group:\n"
+            "    echo 'KERNEL==\"uinput\", MODE=\"0660\", GROUP=\"input\", OPTIONS+=\"static_node=uinput\"' "
+            "| sudo tee /etc/udev/rules.d/99-uinput.rules\n"
+            "    echo uinput | sudo tee /etc/modules-load.d/uinput.conf\n"
+            "    sudo udevadm control --reload-rules && sudo udevadm trigger"
+        )

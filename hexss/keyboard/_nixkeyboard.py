@@ -1,9 +1,9 @@
 """Linux
 
 ส่วนส่งปุ่ม (class keyboard)  : uinput — คงพฤติกรรมเดิม (แก้การแมป ; - = [ ] ... ที่เคยผิด)
-ส่วนรับปุ่ม (class Backend)   : evdev -> RawKey  (ตอนนี้ layout/ตัวอักษรเป็น US อย่างเดียว —
-                                 รองรับภาษาไทยบน Linux ต้องต่อ xkbcommon เพิ่ม ดู README)
-ต้องรันด้วย root
+ส่วนรับปุ่ม (class Backend)   : evdev -> RawKey  layout/ตัวอักษรได้จาก libxkbcommon (ดู _xkb.py)
+                                 ถ้าใช้ libxkbcommon ไม่ได้ จะถอยกลับไปใช้ตาราง US (en-US)
+สิทธิ์: root หรือผู้ใช้ในกลุ่ม input (+ udev rule สำหรับ /dev/uinput ถ้าต้องส่งปุ่ม) — ดู README
 """
 import fcntl
 import struct
@@ -11,6 +11,7 @@ import threading
 import time
 import traceback
 import warnings
+import weakref
 from queue import Empty
 
 from ._nixcommon import (
@@ -18,11 +19,13 @@ from ._nixcommon import (
     EV_SYN,
     VIRTUAL_KEYBOARD_NAME,
     aggregate_devices,
-    ensure_root,
+    ensure_input_access,
+    ensure_uinput_access,
     event_bin_format,
     make_uinput,
 )
 from .events import Layout, RawKey
+from ._xkb import XkbConfig, XkbMirror, detect_config
 from .key_mappings import (
     CHAR_TO_KEY,
     MOD_NUMLOCK,
@@ -64,6 +67,28 @@ REV_E0_MAP = {v: k for k, v in E0_MAP.items()}
 
 KEY_LEFTSHIFT = 42
 _EN_US = Layout(0, 0x0409, "en-US")
+
+_xkb_override = None                 # XkbConfig ที่ผู้ใช้กำหนดเองด้วย set_xkb()
+_backends = weakref.WeakSet()
+
+
+def set_xkb(layout=None, variant=None, options=None, model=None, rules=None):
+    """บอกไลบรารีว่า desktop ใช้ layout อะไร เมื่อการตรวจอัตโนมัติไม่ตรง (เฉพาะ Linux)
+
+        set_xkb("us,th", options="grp:alt_shift_toggle")
+
+    เรียกโดยไม่ใส่อะไรเลย = ยกเลิก กลับไปตรวจอัตโนมัติ
+    """
+    global _xkb_override
+    _xkb_override = XkbConfig(rules, model, layout, variant, options, "set_xkb()") if layout else None
+    for backend in list(_backends):
+        backend.reload_xkb()
+
+
+def set_xkb_group(index: int):
+    """บังคับ layout ปัจจุบัน (0 = layout แรกใน set_xkb) ใช้ซิงก์เมื่อเปิดโปรแกรมขณะอยู่ภาษาอื่น"""
+    for backend in list(_backends):
+        backend.set_group(index)
 
 
 def linux_code(scancode: int) -> int:
@@ -112,7 +137,7 @@ class keyboard:
     def _get_uinput(cls):
         with cls._lock:
             if cls._uinput_device is None:
-                ensure_root()
+                ensure_uinput_access()
                 cls._uinput_device = make_uinput()
             return cls._uinput_device
 
@@ -209,11 +234,14 @@ class Backend:
         self._stop = threading.Event()
         self._on_raw = None
         self._toggle = 0
+        self._xkb = None
+        self._xkb_failed = False
+        _backends.add(self)
 
     def start(self, on_raw) -> None:
         if self._thread:
             return
-        ensure_root()
+        ensure_input_access()
         if self._device is None:
             device = aggregate_devices('keyboard', create_uinput=False)
             if device is None:
@@ -223,6 +251,9 @@ class Backend:
             self._virtual = {d.path for d in getattr(device, 'devices', []) if d.name == VIRTUAL_KEYBOARD_NAME}
         self._drain()
         self._toggle = _read_initial_toggle_mods(self._device)
+        self._reset_xkb()
+        if self._xkb is not None:
+            self._xkb.set_locks(bool(self._toggle & MOD_CAPSLOCK), bool(self._toggle & MOD_NUMLOCK))
         self._on_raw = on_raw
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="keyboard-evdev", daemon=True)
@@ -235,6 +266,9 @@ class Backend:
         self._stop.set()
         t.join(timeout=1)
         self._thread = None
+        if self._xkb is not None:
+            self._xkb.close()
+            self._xkb = None
 
     def _drain(self) -> None:
         """ทิ้ง event ที่ค้างในคิวระหว่างที่หยุดอยู่ (reader thread ของ evdev อ่านต่อเนื่องตลอด)"""
@@ -254,6 +288,9 @@ class Backend:
             except Exception:
                 traceback.print_exc()
                 break
+            xkb = self._xkb
+            if xkb is not None and type_val == EV_KEY and code < 0x100 and value in (0, 1):
+                xkb.update(code, value == 1)          # ป้อนกดครั้งแรก/ปล่อย (ไม่ป้อนตอนกดค้าง)
             raw = raw_from_event(type_val, code, value, path in self._virtual)
             if raw is None:
                 continue
@@ -263,11 +300,58 @@ class Backend:
                 traceback.print_exc()
 
     # ---------------------------------------------------------- layout
+    def _make_xkb(self):
+        config = _xkb_override or detect_config()
+        try:
+            return XkbMirror(config)
+        except Exception as e:
+            self._xkb_failed = True
+            warnings.warn(f"ใช้ libxkbcommon ไม่ได้ ({e}) — ถอยกลับไปใช้ตาราง US (layout เป็น en-US เสมอ)",
+                          RuntimeWarning, stacklevel=2)
+            return None
+
+    def _reset_xkb(self) -> None:
+        old, self._xkb_failed = self._xkb, False
+        self._xkb = self._make_xkb()
+        if old is not None:
+            old.close()
+
+    def _ensure_xkb(self):
+        if self._xkb is None and not self._xkb_failed:
+            self._xkb = self._make_xkb()
+        return self._xkb
+
+    def reload_xkb(self) -> None:
+        """ใช้ค่าจาก set_xkb() ใหม่ (ถ้ากำลังทำงานอยู่จะรีเซ็ต state ของ layout)"""
+        if self._thread:
+            self._reset_xkb()
+            if self._xkb is not None:
+                self._xkb.set_locks(bool(self._toggle & MOD_CAPSLOCK), bool(self._toggle & MOD_NUMLOCK))
+        elif self._xkb is not None:
+            self._xkb.close()
+            self._xkb = None
+            self._xkb_failed = False
+
+    def set_group(self, index: int) -> None:
+        xkb = self._ensure_xkb()
+        if xkb is not None:
+            xkb.set_group(index)
+
     def get_layout(self) -> Layout:
-        return _EN_US
+        xkb = self._ensure_xkb()
+        return xkb.layout() if xkb is not None else _EN_US
 
     def translate(self, vk, scancode, shift, ctrl, alt, caps, hkl) -> str:
+        xkb = self._xkb
+        if xkb is not None:
+            return xkb.text(linux_code(scancode))     # state ของ xkb รู้ Shift/CapsLock/layout เองอยู่แล้ว
         return us_char(scancode, shift, caps)
+
+    def unmodified_char(self, vk, scancode, hkl) -> str:
+        xkb = self._xkb
+        if xkb is not None:
+            return xkb.base_char(linux_code(scancode), group=hkl)
+        return us_char(scancode)
 
     def toggle_state(self) -> int:
         return self._toggle

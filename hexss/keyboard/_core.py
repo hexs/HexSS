@@ -13,6 +13,7 @@ backend (Windows / Linux) ส่ง RawKey เข้ามา แล้ว core 
     stop()
     get_layout() -> Layout
     translate(vk, scancode, shift, ctrl, alt, caps, hkl) -> str
+    unmodified_char(vk, scancode, hkl) -> str   (ไม่บังคับ) ตัวอักษรตอนไม่กด modifier ใน layout hkl
     toggle_state() -> int         MOD_NUMLOCK | MOD_CAPSLOCK | MOD_SCROLLLOCK ตอนนี้
     is_down(scancode) -> bool | None
 """
@@ -173,8 +174,12 @@ class Keyboard:
         cache_key = (layout.hkl, raw.scancode)
         key = self._keycache.get(cache_key)
         if key is None:
-            ch = self._backend.translate(
-                raw.vk, raw.scancode, False, False, False, False, layout.hkl)
+            base_char = getattr(self._backend, 'unmodified_char', None)
+            if base_char is not None:
+                ch = base_char(raw.vk, raw.scancode, layout.hkl)
+            else:
+                ch = self._backend.translate(
+                    raw.vk, raw.scancode, False, False, False, False, layout.hkl)
             key = ord(ch) if len(ch) == 1 else SPECIAL | raw.scancode
             self._keycache[cache_key] = key
         return key
